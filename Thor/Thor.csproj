@@ -44,8 +44,15 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Logger.cs" />
+    <Compile Include="Mjonir.cs" />
+    <Compile Include="NativeHelper.cs" />
     <Compile Include="Thor.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="WorthyAbility.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>copy "$(TargetPath)" "D:\Steam\steamapps\common\Grand Theft Auto V\scripts" /y</PostBuildEvent>
+  </PropertyGroup>
 </Project>
