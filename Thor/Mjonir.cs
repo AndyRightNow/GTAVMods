@@ -13,15 +13,19 @@ namespace Thor
 {
     class Mjonir
     {
+        private static float MOVE_FULL_VELOCITY_MULTIPLIER = 200.0f;
+        private static float MOVE_HALF_VELOCITY_MULTIPLIER = 90.0f;
+        private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 60.0f;
+        private static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
+        private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
+        private static float SIZE_SCALE = 1.0f;
         private static Mjonir instance;
         private Rope weaponObject;
-        private float sizeScale;
         private int weaponHash;
         private Vector3 weaponSpawnPos;
 
         private Mjonir()
         {
-            sizeScale = 2.0f;
             weaponHash = (int)GTA.Native.WeaponHash.Hammer;
             weaponSpawnPos = new Vector3(0.0f, 0.0f, 2000.0f);
         }
@@ -80,7 +84,7 @@ namespace Thor
             Function.Call(
                 Hash.SET_OBJECT_PHYSICS_PARAMS,
                 newWeaponObject,
-                10000000000.0f,
+                100000000000.0f,
                 -1,
                 0.0f,
                 0.0f,
@@ -130,7 +134,7 @@ namespace Thor
                     weaponSpawnPos.Y,
                     weaponSpawnPos.Z,
                     false,
-                    sizeScale
+                    SIZE_SCALE
                 );
 
                 weaponObject = InitializeWeaponObject(weaponObject);
@@ -147,10 +151,30 @@ namespace Thor
             }
         }
 
-        public void MoveToCoordWithPhysics(Vector3 newPosition)
+        public void MoveToCoordWithPhysics(Vector3 newPosition, bool slowDownIfClose)
         {
-            Function.Call(Hash.SET_ENTITY_COORDS_NO_OFFSET, weaponObject, newPosition.X, newPosition.Y, newPosition.Z, 0, 0, 0);
-            weaponObject = ActivateWeaponPhysics(weaponObject);
+            Vector3 moveDirection = (newPosition - Position).Normalized;
+            if (slowDownIfClose)
+            {
+                float distanceBetweenNewPosAndCurPos = (newPosition - Position).Length();
+
+                if (distanceBetweenNewPosAndCurPos <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
+                {
+                    NativeHelper.SetEntityVelocity(weaponObject, moveDirection * MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER);
+                }
+                else if (distanceBetweenNewPosAndCurPos <= HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
+                {
+                    NativeHelper.SetEntityVelocity(weaponObject, moveDirection * MOVE_HALF_VELOCITY_MULTIPLIER);
+                }
+                else
+                {
+                    NativeHelper.SetEntityVelocity(weaponObject, moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER);
+                }
+            }
+            else
+            {
+                NativeHelper.SetEntityVelocity(weaponObject, moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER);
+            }
         }
     }
 }

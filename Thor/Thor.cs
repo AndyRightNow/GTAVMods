@@ -31,11 +31,14 @@ namespace Thor
 
         void OnTick(Object sender, EventArgs e)
         {
-            UI.ShowSubtitle(String.Format("Mjonir position {0}", hammer.Position));
-            Game.DisableControlThisFrame(0, GTA.Control.Reload);
-            if (Game.IsControlPressed(0, GTA.Control.Reload))
+            //UI.ShowSubtitle(String.Format("Mjonir position {0}, Game play camera center {1}", hammer.Position, GameplayCamera.Direction));
+            if (Game.IsKeyPressed(Keys.H))
             {
                 ability.CallForMjonir();
+            }
+            else if (Game.IsKeyPressed(Keys.B))
+            {
+                ability.CallForMjonir(true, Wait);
             }
 
             if (Game.IsControlPressed(0, GTA.Control.Aim))
@@ -44,7 +47,7 @@ namespace Thor
 
                 if (Game.IsKeyPressed(Keys.T))
                 {
-                    ability.ThrowMjonir();
+                    ability.ThrowMjonir(Wait);
                 }
             }
         }
