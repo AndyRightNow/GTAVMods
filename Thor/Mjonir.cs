@@ -18,15 +18,14 @@ namespace Thor
         private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 60.0f;
         private static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
-        private static float SIZE_SCALE = 1.0f;
         private static Mjonir instance;
-        private Rope weaponObject;
-        private int weaponHash;
+        private Entity weaponObject;
+        private WeaponHash weaponHash;
         private Vector3 weaponSpawnPos;
 
         private Mjonir()
         {
-            weaponHash = (int)GTA.Native.WeaponHash.Hammer;
+            weaponHash = WeaponHash.Hammer;
             weaponSpawnPos = new Vector3(0.0f, 0.0f, 2000.0f);
         }
 
@@ -45,7 +44,7 @@ namespace Thor
             }
         }
 
-        public int WeaponHash
+        public WeaponHash WeaponHash
         {
             get
             {
@@ -53,7 +52,7 @@ namespace Thor
             }
         }
 
-        public Rope WeaponObject
+        public Entity WeaponObject
         {
             get
             {
@@ -78,7 +77,7 @@ namespace Thor
             }
         }
 
-        private Rope ActivateWeaponPhysics(Rope newWeaponObject)
+        private Entity ActivateWeaponPhysics(Entity newWeaponObject)
         {
             Function.Call(Hash.ACTIVATE_PHYSICS, newWeaponObject);
             Function.Call(
@@ -98,20 +97,18 @@ namespace Thor
             return newWeaponObject;
         }
 
-        private Rope InitializeWeaponObject(Rope newWeaponObject)
+        private Entity InitializeWeaponObject(Entity newWeaponObject)
         {
             newWeaponObject = ActivateWeaponPhysics(newWeaponObject);
 
-            Blip weaponBlip = Function.Call<Blip>(Hash.ADD_BLIP_FOR_ENTITY, newWeaponObject);
-            Function.Call(Hash.SET_BLIP_AS_FRIENDLY, weaponBlip, true);
-            Function.Call(Hash.BEGIN_TEXT_COMMAND_SET_BLIP_NAME, "STRING");
-            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, "Mjonir");
-            Function.Call(Hash.END_TEXT_COMMAND_SET_BLIP_NAME, weaponBlip);
+            Blip weaponBlip = newWeaponObject.AddBlip();
+            weaponBlip.IsFriendly = true;
+            weaponBlip.Name = "Mjonir";
 
             return newWeaponObject;
         }
 
-        public void Init(bool asWeaponOfPlayer, Wait waitFunc)
+        public void Init(bool asWeaponOfPlayer)
         {
             if (weaponObject != null)
             {
@@ -120,21 +117,10 @@ namespace Thor
 
             try
             {
-                Function.Call(Hash.REQUEST_WEAPON_ASSET, weaponHash);
-                while (!Function.Call<bool>(Hash.HAS_WEAPON_ASSET_LOADED, weaponHash))
-                {
-                    waitFunc(0);
-                }
-
-                weaponObject = Function.Call<Rope>(
-                    Hash.CREATE_WEAPON_OBJECT,
-                    weaponHash,
+                weaponObject = NativeHelper.CreateWeaponObject(
+                    (WeaponHash)weaponHash,
                     1,
-                    weaponSpawnPos.X,
-                    weaponSpawnPos.Y,
-                    weaponSpawnPos.Z,
-                    false,
-                    SIZE_SCALE
+                    weaponSpawnPos
                 );
 
                 weaponObject = InitializeWeaponObject(weaponObject);
@@ -160,20 +146,20 @@ namespace Thor
 
                 if (distanceBetweenNewPosAndCurPos <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
                 {
-                    NativeHelper.SetEntityVelocity(weaponObject, moveDirection * MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER);
+                    weaponObject.Velocity = moveDirection * MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER;
                 }
                 else if (distanceBetweenNewPosAndCurPos <= HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
                 {
-                    NativeHelper.SetEntityVelocity(weaponObject, moveDirection * MOVE_HALF_VELOCITY_MULTIPLIER);
+                    weaponObject.Velocity = moveDirection * MOVE_HALF_VELOCITY_MULTIPLIER;
                 }
                 else
                 {
-                    NativeHelper.SetEntityVelocity(weaponObject, moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER);
+                    weaponObject.Velocity = moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
                 }
             }
             else
             {
-                NativeHelper.SetEntityVelocity(weaponObject, moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER);
+                weaponObject.Velocity = moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
             }
         }
     }

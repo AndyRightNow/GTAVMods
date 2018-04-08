@@ -11,10 +11,12 @@ namespace Thor
 {
     class WorthyAbility
     {
-        private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 1.0f;
+        private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 5.0f;
         private static int CALLING_FOR_MJONIR_ANIMATION_DURATION = 650;
-        private static int HAMMER_HOLDING_HAND_ID = (int)Bone.PH_R_Hand;
+        private static int CATCHING_MJONIR_ANIMATION_DURATION = 250;
+        private static Bone HAMMER_HOLDING_HAND_ID = Bone.PH_R_Hand;
         private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
+        private static float ANIMATION_ANGLE_RANGE_STEP = 45.0f;
         private static Vector3 THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
 
         private static WorthyAbility instance;
@@ -51,23 +53,48 @@ namespace Thor
 
         private bool HasHammer()
         {
-            return Function.Call<bool>(Hash.HAS_PED_GOT_WEAPON, attachedPed, hammer.WeaponHash, 0);
+            return attachedPed.Weapons.HasWeapon(hammer.WeaponHash);
         }
 
         private bool IsHoldingHammer()
         {
-            return HasHammer() && Function.Call<int>(Hash.GET_SELECTED_PED_WEAPON, attachedPed) == hammer.WeaponHash;
+            return HasHammer() && attachedPed.Weapons.Current.Hash == hammer.WeaponHash;
         }
 
-        public void CallForMjonir(bool shootUpwardFirst = false, Mjonir.Wait waitFn = null)
+        public void CallForMjonir(bool shootUpwardFirst = false)
         {
+            Vector3 rightHandBonePos = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
+            Vector3 fromHammerToPedHand = rightHandBonePos - hammer.Position;
+
+            float distanceBetweenHammerToPedHand = Math.Abs(fromHammerToPedHand.Length());
+            if (distanceBetweenHammerToPedHand <= MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND)
+            {
+                Function.Call(Hash.GIVE_WEAPON_OBJECT_TO_PED, hammer.WeaponObject, attachedPed);
+                AnimationActions randomCatchingAction = Utilities.Random.PickOne(
+                    new List<AnimationActions>
+                    {
+                        AnimationActions.CatchingMjonir1,
+                        AnimationActions.CatchingMjonir2,
+                        AnimationActions.CatchingMjonir3
+                    }.ToArray()
+                );
+                string catchDictName = NativeHelper.GetAnimationDictNameByAction(randomCatchingAction);
+                string catchAnimName = NativeHelper.GetAnimationNameByAction(randomCatchingAction);
+                NativeHelper.PlayPlayerAnimation(
+                    attachedPed,
+                    catchDictName,
+                    catchAnimName,
+                    AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
+                    CATCHING_MJONIR_ANIMATION_DURATION
+                );
+                Script.Wait(50);
+                return;
+            }
+
             AnimationActions randomCallingAction = Utilities.Random.PickOne(
                 new List<AnimationActions>
                 {
-                    AnimationActions.CallingForMjonir,
-                    AnimationActions.CallingForMjonir1,
-                    AnimationActions.CallingForMjonir2,
-                    AnimationActions.CallingForMjonir3
+                    AnimationActions.CallingForMjonir
                 }.ToArray()
             );
             string dictName = NativeHelper.GetAnimationDictNameByAction(randomCallingAction);
@@ -86,63 +113,82 @@ namespace Thor
                 AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
                 CALLING_FOR_MJONIR_ANIMATION_DURATION
             );
-            Vector3 rightHandBonePos = Function.Call<Vector3>(Hash.GET_PED_BONE_COORDS, attachedPed, HAMMER_HOLDING_HAND_ID, 0.0f, 0.0f, 0.0f);
-            Vector3 fromHammerToPedHand = rightHandBonePos - hammer.Position;
+            Script.Wait(50);
 
-            float distanceBetweenHammerToPedHand = Math.Abs(fromHammerToPedHand.Length());
-            if (distanceBetweenHammerToPedHand <= MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND)
+            if (shootUpwardFirst)
             {
-                Function.Call(Hash.GIVE_WEAPON_OBJECT_TO_PED, hammer.WeaponObject, attachedPed);
-                return;
-            }
-
-            if (shootUpwardFirst && waitFn != null)
-            {
-                NativeHelper.SetEntityVelocity(hammer.WeaponObject, new Vector3(0.0f, 0.0f, 1000.0f));
-                waitFn(500);
+                hammer.WeaponObject.Velocity = new Vector3(0.0f, 0.0f, 1000.0f);
+                Script.Wait(500);
             }
 
             hammer.MoveToCoordWithPhysics(rightHandBonePos, true);
         }
 
-        public void ClearCallingForMjonirAnimations()
-        {
-            string dictName = NativeHelper.GetAnimationDictNameByAction(AnimationActions.CallingForMjonir);
-            string animName = NativeHelper.GetAnimationNameByAction(AnimationActions.CallingForMjonir);
-
-            NativeHelper.ClearPlayerAnimation(attachedPed, dictName, animName);
-        }
-
-        public void ThrowMjonir(Mjonir.Wait waitFn)
+        public void ThrowMjonir()
         {
             if (!IsHoldingHammer())
             {
                 return;
             }
-            AnimationActions randomAction = Utilities.Random.PickOne(
-                new List<AnimationActions> 
+            var animationActionList = new List<AnimationActions>
                 {
                     AnimationActions.ThrowHammer1,
                     AnimationActions.ThrowHammer2,
                     AnimationActions.ThrowHammer3,
                     AnimationActions.ThrowHammer4,
                     AnimationActions.ThrowHammer5
-                }.ToArray()
+                }.ToArray();
+            AnimationActions randomAction = Utilities.Random.PickOne(animationActionList);
+            float angleBetweenPedForwardAndCamDirection = Vector2.SignedAngle(
+                new Vector2(attachedPed.ForwardVector.X, attachedPed.ForwardVector.Y),
+                new Vector2(GameplayCamera.Direction.X, GameplayCamera.Direction.Y)
             );
+            bool toLeft = angleBetweenPedForwardAndCamDirection < 0;
+            angleBetweenPedForwardAndCamDirection = Math.Abs(angleBetweenPedForwardAndCamDirection);
+
+            bool useDefaultAnimation = angleBetweenPedForwardAndCamDirection < ANIMATION_ANGLE_RANGE_STEP &&
+                angleBetweenPedForwardAndCamDirection >= 0;
+            if (!useDefaultAnimation)
+            {
+                randomAction = Utilities.Random.PickOneIf(animationActionList, NativeHelper.DoesAnimationActionHaveAngles);
+            }
+
+            UI.ShowSubtitle(String.Format("Angle {0}, animation action {1}, to {2}", angleBetweenPedForwardAndCamDirection, randomAction, toLeft ? "left" : "right"));
             string dictName = NativeHelper.GetAnimationDictNameByAction(randomAction);
             string animName = NativeHelper.GetAnimationNameByAction(randomAction);
+            int animationDurationSubtraction = 0;
+            if (!useDefaultAnimation)
+            {
+                string animationAngle = "180";
+                if (angleBetweenPedForwardAndCamDirection >= ANIMATION_ANGLE_RANGE_STEP &&
+                    angleBetweenPedForwardAndCamDirection < ANIMATION_ANGLE_RANGE_STEP * 3)
+                {
+                    animationAngle = "90";
+                    animationDurationSubtraction = 400;
+                }
+
+                if (animationAngle == "180" && !toLeft)
+                {
+                    animationDurationSubtraction = 200;
+                }
+                
+                animName = animName.Replace("_0", "_" + (toLeft ? "+" : "-") + animationAngle);
+            }
+            UI.ShowSubtitle(String.Format("{0} {1}", randomAction, animName));
             NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 dictName,
                 animName,
-                attachedPed.IsWalking || attachedPed.IsSprinting || attachedPed.IsRunning ? 
+                attachedPed.IsWalking || attachedPed.IsSprinting || attachedPed.IsRunning ?
                     AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation :
-                    AnimationFlags.None
+                    AnimationFlags.None,
+                -1,
+                false
             );
-            waitFn(NativeHelper.GetAnimationWaitTimeByAction(randomAction));
-            hammer.WeaponObject = Function.Call<Rope>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
-            Function.Call(Hash.REMOVE_WEAPON_FROM_PED, attachedPed, hammer.WeaponHash);
-            NativeHelper.SetEntityVelocity(hammer.WeaponObject, GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION);
+            Script.Wait(NativeHelper.GetAnimationWaitTimeByAction(randomAction) - animationDurationSubtraction);
+            hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
+            attachedPed.Weapons.Remove(hammer.WeaponHash);
+            hammer.WeaponObject.Velocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;
         }
     }
 }

@@ -22,6 +22,27 @@ namespace Thor
 
                 return arr[randomIndex];
             }
+
+            public static T PickOneIf<T>(T[] arr, Func<T, bool> predicate)
+            {
+                if (arr == null || arr.Length == 0)
+                {
+                    return default(T);
+                }
+
+                List<T> arrThatMeetPredicate = new List<T>();
+                foreach (var el in arr)
+                {
+                    if (predicate(el))
+                    {
+                        arrThatMeetPredicate.Add(el);
+                    }
+                }
+
+                int randomIndex = new System.Random().Next(0, arrThatMeetPredicate.Count);
+
+                return arrThatMeetPredicate[randomIndex];
+            }
         }
     }
 }
