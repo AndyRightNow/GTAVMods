@@ -3,9 +3,6 @@ using GTA.Math;
 using GTA.Native;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Thor
 {
@@ -153,10 +150,8 @@ namespace Thor
                 randomAction = Utilities.Random.PickOneIf(animationActionList, NativeHelper.DoesAnimationActionHaveAngles);
             }
 
-            UI.ShowSubtitle(String.Format("Angle {0}, animation action {1}, to {2}", angleBetweenPedForwardAndCamDirection, randomAction, toLeft ? "left" : "right"));
             string dictName = NativeHelper.GetAnimationDictNameByAction(randomAction);
             string animName = NativeHelper.GetAnimationNameByAction(randomAction);
-            int animationDurationSubtraction = 0;
             if (!useDefaultAnimation)
             {
                 string animationAngle = "180";
@@ -164,17 +159,11 @@ namespace Thor
                     angleBetweenPedForwardAndCamDirection < ANIMATION_ANGLE_RANGE_STEP * 3)
                 {
                     animationAngle = "90";
-                    animationDurationSubtraction = 400;
-                }
-
-                if (animationAngle == "180" && !toLeft)
-                {
-                    animationDurationSubtraction = 200;
                 }
                 
                 animName = animName.Replace("_0", "_" + (toLeft ? "+" : "-") + animationAngle);
             }
-            UI.ShowSubtitle(String.Format("{0} {1}", randomAction, animName));
+            UI.ShowSubtitle(String.Format("{0}: {1}", dictName, animName));
             NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 dictName,
@@ -185,7 +174,7 @@ namespace Thor
                 -1,
                 false
             );
-            Script.Wait(NativeHelper.GetAnimationWaitTimeByAction(randomAction) - animationDurationSubtraction);
+            Script.Wait(NativeHelper.GetAnimationWaitTimeByAction(randomAction));
             hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
             attachedPed.Weapons.Remove(hammer.WeaponHash);
             hammer.WeaponObject.Velocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;

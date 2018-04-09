@@ -1,15 +1,7 @@
 ﻿using GTA;
 using GTA.Native;
 using System;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Reflection;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using System.ComponentModel;
-using GTA.Math;
 
 namespace Thor
 {
@@ -31,7 +23,6 @@ namespace Thor
 
         void OnTick(Object sender, EventArgs e)
         {
-            //UI.ShowSubtitle(String.Format("Mjonir position {0}, Game play camera center {1}", hammer.Position, GameplayCamera.Direction));
             if (Game.IsKeyPressed(Keys.H))
             {
                 ability.CallForMjonir();

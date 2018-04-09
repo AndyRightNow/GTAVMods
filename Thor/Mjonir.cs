@@ -118,7 +118,7 @@ namespace Thor
             try
             {
                 weaponObject = NativeHelper.CreateWeaponObject(
-                    (WeaponHash)weaponHash,
+                    weaponHash,
                     1,
                     weaponSpawnPos
                 );

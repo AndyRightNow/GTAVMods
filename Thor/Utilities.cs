@@ -7,7 +7,7 @@ using GTA;
 
 namespace Thor
 {
-    class Utilities
+    public class Utilities
     {
         public class Random
         {
