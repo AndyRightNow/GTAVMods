@@ -19,10 +19,12 @@ namespace Thor
         private static WorthyAbility instance;
         private Ped attachedPed;
         private Mjonir hammer;
+        private bool isHammerAttackingTargets;
 
         private WorthyAbility()
         {
             hammer = Mjonir.Instance;
+            isHammerAttackingTargets = false;
         }
 
         public static WorthyAbility Instance
@@ -53,7 +55,7 @@ namespace Thor
             return attachedPed.Weapons.HasWeapon(hammer.WeaponHash);
         }
 
-        private bool IsHoldingHammer()
+        public bool IsHoldingHammer()
         {
             return HasHammer() && attachedPed.Weapons.Current.Hash == hammer.WeaponHash;
         }
@@ -84,7 +86,7 @@ namespace Thor
                     AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
                     CATCHING_MJONIR_ANIMATION_DURATION
                 );
-                Script.Wait(50);
+                Script.Wait(1);
                 return;
             }
 
@@ -118,7 +120,31 @@ namespace Thor
                 Script.Wait(500);
             }
 
-            hammer.MoveToCoordWithPhysics(rightHandBonePos, true);
+            hammer.MoveToCoord(rightHandBonePos, true);
+        }
+
+        public void ThrowMjonir(ref HashSet<Entity> targets)
+        {
+            if (targets.Count == 0)
+            {
+                isHammerAttackingTargets = false;
+                ThrowMjonir();
+                return;
+            }
+
+            if (isHammerAttackingTargets)
+            {
+                hammer.MoveToTargets(ref targets);
+                return;
+            }
+
+            if (targets.Count > 0)
+            {
+                isHammerAttackingTargets = true;
+                PlayThrowHammerAnimation();
+                ThrowHammerOut(false);
+                hammer.MoveToTargets(ref targets);
+            }
         }
 
         public void ThrowMjonir()
@@ -127,6 +153,19 @@ namespace Thor
             {
                 return;
             }
+            PlayThrowHammerAnimation();
+            ThrowHammerOut();
+        }
+
+        private void ThrowHammerOut(bool hasInitialVelocity = true)
+        {
+            hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
+            attachedPed.Weapons.Remove(hammer.WeaponHash);
+            hammer.WeaponObject.Velocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;
+        }
+
+        private void PlayThrowHammerAnimation()
+        {
             var animationActionList = new List<AnimationActions>
                 {
                     AnimationActions.ThrowHammer1,
@@ -160,10 +199,9 @@ namespace Thor
                 {
                     animationAngle = "90";
                 }
-                
+
                 animName = animName.Replace("_0", "_" + (toLeft ? "+" : "-") + animationAngle);
             }
-            UI.Notify(String.Format("{0}: {1}", dictName, animName));
             NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 dictName,
@@ -175,9 +213,6 @@ namespace Thor
                 false
             );
             Script.Wait(NativeHelper.GetAnimationWaitTimeByDictNameAndAnimName(dictName, animName));
-            hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
-            attachedPed.Weapons.Remove(hammer.WeaponHash);
-            hammer.WeaponObject.Velocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;
         }
     }
 }

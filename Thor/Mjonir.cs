@@ -137,7 +137,29 @@ namespace Thor
             }
         }
 
-        public void MoveToCoordWithPhysics(Vector3 newPosition, bool slowDownIfClose)
+        public void MoveToTargets(ref HashSet<Entity> targets)
+        {
+            if (targets.Count == 0)
+            {
+                return;
+            }
+
+            var nextTarget = targets.First();
+
+            Vector3 moveDirection = (nextTarget.Position - Position).Normalized;
+            float distanceBetweenHammerAndNextTarget = (nextTarget.Position - Position).Length();
+
+            if (distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
+            {
+                targets.Remove(nextTarget);
+            }
+            else
+            {
+                weaponObject.Velocity = moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
+            }
+        }
+
+        public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose)
         {
             Vector3 moveDirection = (newPosition - Position).Normalized;
             if (slowDownIfClose)

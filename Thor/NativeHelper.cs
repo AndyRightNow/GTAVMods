@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Drawing;
 
 namespace Thor
 {
@@ -22,7 +23,7 @@ namespace Thor
         CatchingMjonir3
     }
 
-    class NativeHelper
+    public static class NativeHelper
     {
         private static string[] AnimationDictNames = (new List<string>
         {
@@ -89,7 +90,7 @@ namespace Thor
                         "small_melee_wpn_long_range_0", 1000
                     },
                     {
-                        "small_melee_wpn_long_range_+90", 1000
+                        "small_melee_wpn_long_range_+90", 700
                     },
                     {
                         "small_melee_wpn_long_range_+180", 1000
@@ -205,6 +206,11 @@ namespace Thor
             new WeaponAsset((WeaponHash)weaponHash).Request(3000);
 
             return Function.Call<Entity>(Hash.CREATE_WEAPON_OBJECT, (int)weaponHash, amountCount, position.X, position.Y, position.Z, showWorldModel, heading);
+        }
+
+        public static void DrawLine(Vector3 start, Vector3 end, Color color)
+        {
+            Function.Call(Hash.DRAW_LINE, start.X, start.Y, start.Z, end.X, end.Y, end.Z, color.R, color.G, color.B, color.A);
         }
     }
 }
