@@ -21,10 +21,10 @@ namespace Thor
         CatchingMjonir2,
         CatchingMjonir3
     }
-    
+
     class NativeHelper
     {
-        private static string[] AnimationDictNames = (new List<string> 
+        private static string[] AnimationDictNames = (new List<string>
         {
             "combat@aim_variations@1h@gang",
             "anim@melee@machete@streamed_core@",
@@ -48,28 +48,117 @@ namespace Thor
             "outro_hi_r_corner_short",
             "fire_variation_e"
         }).ToArray();
-        private static int[] AnimationWaitTime = (new List<int>
+        private static Dictionary<string, Dictionary<string, int>> AnimationWaitTime = new Dictionary<string, Dictionary<string, int>>()
         {
-            0,
-            800,
-            900,
-            600,
-            1000,
-            1000,
-            0,
-            0,
-            0
-        }).ToArray();
-        private static AnimationActions[] AnimationWithAngles = (new List<AnimationActions>
+            {
+                "combat@aim_variations@1h@gang",
+                new Dictionary<string, int>() { }
+            },
+            {
+                "anim@melee@machete@streamed_core@",
+                new Dictionary<string, int>()
+                {
+                    {
+                        "small_melee_wpn_short_range_0", 800
+                    },
+                    {
+                        "plyr_walking_attack_a", 1000
+                    }
+                }
+            },
+            {
+                "melee@small_wpn@streamed_core_fps",
+                new Dictionary<string, int>()
+                {
+                    {
+                        "small_melee_wpn_short_range_0", 600
+                    },
+                    {
+                        "small_melee_wpn_short_range_+90", 600
+                    },
+                    {
+                        "small_melee_wpn_short_range_+180", 500
+                    },
+                    {
+                        "small_melee_wpn_short_range_-90", 400
+                    },
+                    {
+                        "small_melee_wpn_short_range_-180", 800
+                    },
+                    {
+                        "small_melee_wpn_long_range_0", 1000
+                    },
+                    {
+                        "small_melee_wpn_long_range_+90", 1000
+                    },
+                    {
+                        "small_melee_wpn_long_range_+180", 1000
+                    },
+                    {
+                        "small_melee_wpn_long_range_-90", 700
+                    },
+                    {
+                        "small_melee_wpn_long_range_-180", 800
+                    }
+                }
+            },
+            {
+                "melee@small_wpn@streamed_core",
+                new Dictionary<string, int>()
+                {
+                    {
+                        "small_melee_wpn_long_range_0", 1000
+                    },
+                    {
+                        "small_melee_wpn_long_range_+90", 600
+                    },
+                    {
+                        "small_melee_wpn_long_range_+180", 1100
+                    },
+                    {
+                        "small_melee_wpn_long_range_-90", 700
+                    },
+                    {
+                        "small_melee_wpn_long_range_-180", 800
+                    }
+                }
+            },
+            {
+                "guard_reactions",
+                new Dictionary<string, int>() { }
+            },
+            {
+                "cover@weapon@1h",
+                new Dictionary<string, int>() { }
+            },
+            {
+                "combat@fire_variations@1h@gang",
+                new Dictionary<string, int>() { }
+            }
+        };
+        private static bool[] AnimationWithAngles = (new List<bool>
         {
-            AnimationActions.ThrowHammer3,
-            AnimationActions.ThrowHammer4,
-            AnimationActions.ThrowHammer5
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+            false,
+            false,
+            false
         }).ToArray();
 
-        public static int GetAnimationWaitTimeByAction(AnimationActions action)
+        public static int GetAnimationWaitTimeByDictNameAndAnimName(string dictName, string animName)
         {
-            return AnimationWaitTime[(int)action];
+            if (AnimationWaitTime.ContainsKey(dictName) &&
+                AnimationWaitTime[dictName].ContainsKey(animName))
+            {
+                return AnimationWaitTime[dictName][animName];
+            }
+
+            return 0;
+
         }
 
         public static string GetAnimationDictNameByAction(AnimationActions action)
@@ -84,7 +173,7 @@ namespace Thor
 
         public static bool DoesAnimationActionHaveAngles(AnimationActions action)
         {
-            return AnimationWithAngles.Contains(action);
+            return AnimationWithAngles[(int)action];
         }
 
         public static void ClearPlayerAnimation(Ped ped, string dictName, string animName)

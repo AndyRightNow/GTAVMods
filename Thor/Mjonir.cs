@@ -133,7 +133,7 @@ namespace Thor
             catch (Exception e)
             {
                 UI.Notify("~r~Error occured when initializing Mjonir. Please see the log file for more imformation.");
-                Logger.Log("ERROR", e.Message);
+                Logger.Log("ERROR", e.ToString());
             }
         }
 

@@ -14,6 +14,10 @@ namespace Thor
         {
             var datetime = DateTime.Now;
             string logPath = Path.ChangeExtension(Assembly.GetExecutingAssembly().Location, ".log");
+            if (!File.Exists(logPath))
+            {
+                File.WriteAllText(logPath, String.Empty);
+            }
 
             try
             {

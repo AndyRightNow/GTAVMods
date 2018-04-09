@@ -1,4 +1,5 @@
 ﻿using GTA;
+using GTA.Math;
 using GTA.Native;
 using System;
 using System.Windows.Forms;
@@ -16,22 +17,19 @@ namespace Thor
             Interval = 0;
 
             hammer = Mjonir.Instance;
-            hammer.Init(false);
             ability = WorthyAbility.Instance;
             ability.ApplyOn(Game.Player.Character);
         }
 
         void OnTick(Object sender, EventArgs e)
         {
-            if (Game.IsKeyPressed(Keys.H))
-            {
-                ability.CallForMjonir();
-            }
-            else if (Game.IsKeyPressed(Keys.B))
-            {
-                ability.CallForMjonir(true);
-            }
+            hammer.Init(false);
+            InitializeCallingForMjonir();
+            InitializeThrowingMjonir();
+        }
 
+        private void InitializeThrowingMjonir()
+        {
             if (Game.IsControlPressed(0, GTA.Control.Aim))
             {
                 UI.ShowHudComponentThisFrame(HudComponent.Reticle);
@@ -41,13 +39,18 @@ namespace Thor
                     ability.ThrowMjonir();
                 }
             }
-            float angleBetweenPlayerForwardAndCamDirection = Function.Call<float>(
-                Hash.GET_ANGLE_BETWEEN_2D_VECTORS,
-                Game.Player.Character.ForwardVector.X,
-                Game.Player.Character.ForwardVector.Y,
-                GameplayCamera.Direction.X,
-                GameplayCamera.Direction.Y
-            );
+        }
+
+        private void InitializeCallingForMjonir()
+        {
+            if (Game.IsKeyPressed(Keys.H))
+            {
+                ability.CallForMjonir();
+            }
+            else if (Game.IsKeyPressed(Keys.B))
+            {
+                ability.CallForMjonir(true);
+            }
         }
 
         void OnKeyDown(Object sender, KeyEventArgs e)

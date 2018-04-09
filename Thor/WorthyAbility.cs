@@ -136,7 +136,7 @@ namespace Thor
                     AnimationActions.ThrowHammer5
                 }.ToArray();
             AnimationActions randomAction = Utilities.Random.PickOne(animationActionList);
-            float angleBetweenPedForwardAndCamDirection = Vector2.SignedAngle(
+            float angleBetweenPedForwardAndCamDirection = Utilities.Math.Angle(
                 new Vector2(attachedPed.ForwardVector.X, attachedPed.ForwardVector.Y),
                 new Vector2(GameplayCamera.Direction.X, GameplayCamera.Direction.Y)
             );
@@ -163,7 +163,7 @@ namespace Thor
                 
                 animName = animName.Replace("_0", "_" + (toLeft ? "+" : "-") + animationAngle);
             }
-            UI.ShowSubtitle(String.Format("{0}: {1}", dictName, animName));
+            UI.Notify(String.Format("{0}: {1}", dictName, animName));
             NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 dictName,
@@ -174,7 +174,7 @@ namespace Thor
                 -1,
                 false
             );
-            Script.Wait(NativeHelper.GetAnimationWaitTimeByAction(randomAction));
+            Script.Wait(NativeHelper.GetAnimationWaitTimeByDictNameAndAnimName(dictName, animName));
             hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
             attachedPed.Weapons.Remove(hammer.WeaponHash);
             hammer.WeaponObject.Velocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;
