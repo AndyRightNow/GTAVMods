@@ -58,6 +58,7 @@ namespace Thor
 
             attachedPed = ped;
             attachedPed.CanSufferCriticalHits = false;
+            attachedPed.CanRagdoll = true;
             Function.Call(Hash.SET_ENTITY_CAN_BE_DAMAGED, attachedPed, false);
         }
 
@@ -65,19 +66,46 @@ namespace Thor
         {
             if (IsHoldingHammer())
             {
+                HandleFlying();
                 CollectTargets();
                 HandleThrowingMjonir();
             }
             else
             {
+                attachedPed.CanRagdoll = true;
                 HandleCallingForMjonir();
                 if (targets.Count > 0 && isHammerAttackingTargets)
                 {
                     isHammerAttackingTargets = hammer.MoveToTargets(ref targets);
                 }
             }
+
             DrawMarkersOnTargets();
-            NativeHelper.DrawLine(attachedPed.Position, hammer.Position, Color.Red);
+            DrawLineToHammer();
+        }
+
+        private void HandleFlying()
+        {
+            if (Game.IsControlPressed(0, GTA.Control.Sprint) &&
+                Game.IsControlPressed(0, GTA.Control.Jump))
+            {
+                attachedPed.CanRagdoll = true;
+                UI.ShowSubtitle("here");
+                Function.Call(Hash.SET_PED_TO_RAGDOLL, attachedPed, 2, 1000, 3, 0, 0, 0);
+                attachedPed.Weapons.CurrentWeaponObject.Velocity = new Vector3(0.0f, 0.0f, 50.0f);
+            }
+            else
+            {
+                attachedPed.CanRagdoll = false;
+            }
+        }
+
+        private void DrawLineToHammer()
+        {
+            if (hammer.WeaponObject.Exists())
+            {
+                NativeHelper.DrawLine(attachedPed.Position, hammer.Position, Color.Red);
+            }
         }
 
         private void HandleCallingForMjonir()

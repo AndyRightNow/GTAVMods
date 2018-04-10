@@ -153,7 +153,6 @@ namespace Thor
 
             Vector3 moveDirection = (nextTarget.Position - Position).Normalized;
             float distanceBetweenHammerAndNextTarget = (nextTarget.Position - Position).Length();
-            UI.ShowSubtitle(String.Format("Distance {0}", distanceBetweenHammerAndNextTarget));
             
             if (NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET ||
                 NativeHelper.IsVehicle(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET)

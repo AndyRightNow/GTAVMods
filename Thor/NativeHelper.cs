@@ -222,5 +222,10 @@ namespace Thor
         {
             return Function.Call<bool>(Hash.IS_ENTITY_A_VEHICLE, entity);
         }
+
+        public static void SetPedWeaponVisible(Ped ped, bool visible)
+        {
+            Function.Call(Hash.SET_PED_CURRENT_WEAPON_VISIBLE, ped, visible, 0, 0, 0);
+        }
     }
 }
