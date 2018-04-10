@@ -18,11 +18,13 @@ namespace Thor
         private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 60.0f;
         private static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
+        private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.3f;
+        private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 3f;
         private static Mjonir instance;
         private Entity weaponObject;
         private WeaponHash weaponHash;
         private Vector3 weaponSpawnPos;
-
+        
         private Mjonir()
         {
             weaponHash = WeaponHash.Hammer;
@@ -60,6 +62,8 @@ namespace Thor
             }
             set
             {
+                weaponObject.Detach();
+                weaponObject.Delete();
                 weaponObject = InitializeWeaponObject(value);
             }
         }
@@ -137,26 +141,31 @@ namespace Thor
             }
         }
 
-        public void MoveToTargets(ref HashSet<Entity> targets)
+        public bool MoveToTargets(ref HashSet<Entity> targets)
         {
             if (targets.Count == 0)
             {
-                return;
+                weaponObject.Velocity = Vector3.Zero;
+                return false;
             }
 
             var nextTarget = targets.First();
 
             Vector3 moveDirection = (nextTarget.Position - Position).Normalized;
             float distanceBetweenHammerAndNextTarget = (nextTarget.Position - Position).Length();
-
-            if (distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
+            UI.ShowSubtitle(String.Format("Distance {0}", distanceBetweenHammerAndNextTarget));
+            
+            if (NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET ||
+                NativeHelper.IsVehicle(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET)
             {
                 targets.Remove(nextTarget);
             }
             else
             {
-                weaponObject.Velocity = moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
+                weaponObject.Velocity = moveDirection * MOVE_HALF_VELOCITY_MULTIPLIER;
             }
+
+            return true;
         }
 
         public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose)

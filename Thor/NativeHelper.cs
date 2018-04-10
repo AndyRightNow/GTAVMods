@@ -212,5 +212,15 @@ namespace Thor
         {
             Function.Call(Hash.DRAW_LINE, start.X, start.Y, start.Z, end.X, end.Y, end.Z, color.R, color.G, color.B, color.A);
         }
+
+        public static bool IsPed(Entity entity)
+        {
+            return Function.Call<bool>(Hash.IS_ENTITY_A_PED, entity);
+        }
+
+        public static bool IsVehicle(Entity entity)
+        {
+            return Function.Call<bool>(Hash.IS_ENTITY_A_VEHICLE, entity);
+        }
     }
 }
