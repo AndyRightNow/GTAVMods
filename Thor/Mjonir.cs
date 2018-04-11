@@ -112,6 +112,11 @@ namespace Thor
             return newWeaponObject;
         }
 
+        public void ShowParticleFx()
+        {
+            NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
+        }
+
         public void Init(bool asWeaponOfPlayer)
         {
             if (weaponObject != null)
@@ -165,6 +170,14 @@ namespace Thor
             }
 
             return true;
+        }
+
+        public bool IsMoving
+        {
+            get
+            {
+                return weaponObject != null && weaponObject.Exists() && weaponObject.Velocity.Length() > 0;
+            }
         }
 
         public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose)

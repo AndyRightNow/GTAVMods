@@ -18,6 +18,8 @@ namespace Thor
         private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
         private static float ANIMATION_ANGLE_RANGE_STEP = 45.0f;
         private static float RAY_CAST_MAX_DISTANCE = 10000.0f;
+        private static float FLY_UPWARD_VELOCITY = 50.0f;
+        private static float FLY_HORIZONTAL_VELOCITY_LEVEL_1 = 70.0f;
         private static int MAX_TARGET_COUNT = 15;
         private static Vector3 THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
 
@@ -57,13 +59,12 @@ namespace Thor
             }
 
             attachedPed = ped;
-            attachedPed.CanSufferCriticalHits = false;
             attachedPed.CanRagdoll = true;
-            Function.Call(Hash.SET_ENTITY_CAN_BE_DAMAGED, attachedPed, false);
         }
 
         public void OnTick()
         {
+            SetInvincible();
             if (IsHoldingHammer())
             {
                 HandleFlying();
@@ -72,6 +73,10 @@ namespace Thor
             }
             else
             {
+                if (hammer.IsMoving)
+                {
+                    hammer.ShowParticleFx();
+                }
                 attachedPed.CanRagdoll = true;
                 HandleCallingForMjonir();
                 if (targets.Count > 0 && isHammerAttackingTargets)
@@ -84,15 +89,45 @@ namespace Thor
             DrawLineToHammer();
         }
 
+        private void SetInvincible()
+        {
+            attachedPed.CanSufferCriticalHits = false;
+            Function.Call(Hash.SET_ENTITY_CAN_BE_DAMAGED, attachedPed, false);
+            attachedPed.IsInvincible = true;
+            attachedPed.Health = attachedPed.MaxHealth;
+            attachedPed.Armor = 100;
+            attachedPed.AlwaysDiesOnLowHealth = false;
+        }
+
         private void HandleFlying()
         {
-            if (Game.IsControlPressed(0, GTA.Control.Sprint) &&
-                Game.IsControlPressed(0, GTA.Control.Jump))
+            GameplayCamera.ClampYaw(-180.0f, 180.0f);
+            GameplayCamera.ClampPitch(-180.0f, 180.0f);
+            var velocity = Vector3.Zero;
+
+            if (Game.IsKeyPressed(Keys.J))
             {
+                velocity.Z = FLY_UPWARD_VELOCITY;
+            }
+            if (attachedPed.IsInAir)
+            {
+                if (Game.IsControlPressed(0, GTA.Control.ScriptPadUp))
+                {
+                    velocity += GameplayCamera.Direction * FLY_HORIZONTAL_VELOCITY_LEVEL_1;
+                }
+            }
+            if (Game.IsControlPressed(0, GTA.Control.Sprint))
+            {
+                velocity += velocity;
+            }
+
+            if (velocity.Length() > 0)
+            {
+                GameplayCamera.StopShaking();
+                GameplayCamera.ShakeAmplitude = 0;
                 attachedPed.CanRagdoll = true;
-                UI.ShowSubtitle("here");
                 Function.Call(Hash.SET_PED_TO_RAGDOLL, attachedPed, 2, 1000, 3, 0, 0, 0);
-                attachedPed.Weapons.CurrentWeaponObject.Velocity = new Vector3(0.0f, 0.0f, 50.0f);
+                attachedPed.Weapons.CurrentWeaponObject.Velocity = velocity;
             }
             else
             {

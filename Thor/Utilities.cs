@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using GTA;
 
 namespace Thor
 {
-    public class Utilities
+    public static class Utilities
     {
-        public class Random
+        public static class Random
         {
             public static T PickOne<T>(T[] arr)
             {
@@ -45,7 +46,7 @@ namespace Thor
             }
         }
 
-        public class Math
+        public static class Math
         {
             public static float Angle(GTA.Math.Vector2 v1, GTA.Math.Vector2 v2)
             {
