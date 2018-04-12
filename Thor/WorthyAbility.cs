@@ -25,7 +25,7 @@ namespace Thor
 
         private static WorthyAbility instance;
         private Ped attachedPed;
-        private Mjonir hammer;
+        private Mjolnir hammer;
         private bool isHammerAttackingTargets;
         private bool isCollectingTargets;
         private HashSet<Entity> targets;
@@ -34,7 +34,7 @@ namespace Thor
         {
             isCollectingTargets = false;
             targets = new HashSet<Entity>();
-            hammer = Mjonir.Instance;
+            hammer = Mjolnir.Instance;
             isHammerAttackingTargets = false;
         }
 
@@ -69,7 +69,7 @@ namespace Thor
             {
                 HandleFlying();
                 CollectTargets();
-                HandleThrowingMjonir();
+                HandleThrowingMjolnir();
             }
             else
             {
@@ -78,7 +78,7 @@ namespace Thor
                     hammer.ShowParticleFx();
                 }
                 attachedPed.CanRagdoll = true;
-                HandleCallingForMjonir();
+                HandleCallingForMjolnir();
                 if (targets.Count > 0 && isHammerAttackingTargets)
                 {
                     isHammerAttackingTargets = hammer.MoveToTargets(ref targets);
@@ -143,19 +143,19 @@ namespace Thor
             }
         }
 
-        private void HandleCallingForMjonir()
+        private void HandleCallingForMjolnir()
         {
             if (Game.IsKeyPressed(Keys.H))
             {
-                CallForMjonir();
+                CallForMjolnir();
             }
             else if (Game.IsKeyPressed(Keys.B))
             {
-                CallForMjonir(true);
+                CallForMjolnir(true);
             }
         }
 
-        private void HandleThrowingMjonir()
+        private void HandleThrowingMjolnir()
         {
             if (Game.IsControlPressed(0, GTA.Control.Aim))
             {
@@ -163,7 +163,7 @@ namespace Thor
 
                 if (Game.IsKeyPressed(Keys.T))
                 {
-                    ThrowMjonir(ref targets);
+                    ThrowMjolnir(ref targets);
                     isCollectingTargets = false;
                 }
             }
@@ -222,7 +222,7 @@ namespace Thor
             return HasHammer() && attachedPed.Weapons.Current.Hash == hammer.WeaponHash;
         }
 
-        public void CallForMjonir(bool shootUpwardFirst = false)
+        public void CallForMjolnir(bool shootUpwardFirst = false)
         {
             isHammerAttackingTargets = false;
             targets.Clear();
@@ -236,9 +236,9 @@ namespace Thor
                 AnimationActions randomCatchingAction = Utilities.Random.PickOne(
                     new List<AnimationActions>
                     {
-                        AnimationActions.CatchingMjonir1,
-                        AnimationActions.CatchingMjonir2,
-                        AnimationActions.CatchingMjonir3
+                        AnimationActions.CatchingMjolnir1,
+                        AnimationActions.CatchingMjolnir2,
+                        AnimationActions.CatchingMjolnir3
                     }.ToArray()
                 );
                 string catchDictName = NativeHelper.GetAnimationDictNameByAction(randomCatchingAction);
@@ -257,7 +257,7 @@ namespace Thor
             AnimationActions randomCallingAction = Utilities.Random.PickOne(
                 new List<AnimationActions>
                 {
-                    AnimationActions.CallingForMjonir
+                    AnimationActions.CallingForMjolnir
                 }.ToArray()
             );
             string dictName = NativeHelper.GetAnimationDictNameByAction(randomCallingAction);
@@ -287,7 +287,7 @@ namespace Thor
             hammer.MoveToCoord(rightHandBonePos, true);
         }
 
-        public void ThrowMjonir(ref HashSet<Entity> targets)
+        public void ThrowMjolnir(ref HashSet<Entity> targets)
         {
             if (!IsHoldingHammer())
             {
@@ -297,7 +297,7 @@ namespace Thor
             if (targets.Count == 0)
             {
                 isHammerAttackingTargets = false;
-                ThrowMjonir();
+                ThrowMjolnir();
                 return;
             }
 
@@ -310,7 +310,7 @@ namespace Thor
             }
         }
 
-        public void ThrowMjonir()
+        public void ThrowMjolnir()
         {
             if (!IsHoldingHammer())
             {

@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace Thor
 {
-    class Mjonir
+    class Mjolnir
     {
         private static float MOVE_FULL_VELOCITY_MULTIPLIER = 200.0f;
         private static float MOVE_HALF_VELOCITY_MULTIPLIER = 90.0f;
@@ -20,12 +20,12 @@ namespace Thor
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.3f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 3f;
-        private static Mjonir instance;
+        private static Mjolnir instance;
         private Entity weaponObject;
         private WeaponHash weaponHash;
         private Vector3 weaponSpawnPos;
         
-        private Mjonir()
+        private Mjolnir()
         {
             weaponHash = WeaponHash.Hammer;
             weaponSpawnPos = new Vector3(0.0f, 0.0f, 2000.0f);
@@ -33,13 +33,13 @@ namespace Thor
 
         public delegate void Wait(int ms);
 
-        public static Mjonir Instance
+        public static Mjolnir Instance
         {
             get
             {
                 if (instance == null)
                 {
-                    instance = new Mjonir();
+                    instance = new Mjolnir();
                 }
 
                 return instance;
@@ -107,7 +107,7 @@ namespace Thor
 
             Blip weaponBlip = newWeaponObject.AddBlip();
             weaponBlip.IsFriendly = true;
-            weaponBlip.Name = "Mjonir";
+            weaponBlip.Name = "Mjolnir";
 
             return newWeaponObject;
         }
@@ -141,7 +141,7 @@ namespace Thor
             }
             catch (Exception e)
             {
-                UI.Notify("~r~Error occured when initializing Mjonir. Please see the log file for more imformation.");
+                UI.Notify("~r~Error occured when initializing Mjolnir. Please see the log file for more imformation.");
                 Logger.Log("ERROR", e.ToString());
             }
         }

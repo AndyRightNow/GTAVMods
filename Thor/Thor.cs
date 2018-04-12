@@ -6,7 +6,7 @@ namespace Thor
 {
     public class Thor : Script
     {
-        private Mjonir hammer;
+        private Mjolnir hammer;
         private WorthyAbility ability;
 
         public Thor()
@@ -14,7 +14,7 @@ namespace Thor
             Tick += OnTick;
             Interval = 0;
 
-            hammer = Mjonir.Instance;
+            hammer = Mjolnir.Instance;
             ability = WorthyAbility.Instance;
             ability.ApplyOn(Game.Player.Character);
         }
