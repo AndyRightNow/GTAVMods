@@ -52,6 +52,11 @@ namespace Thor
             {
                 return Convert.ToSingle(System.Math.Atan2(v1.X * v2.Y - v1.Y * v2.X, GTA.Math.Vector2.Dot(v1, v2)) * 180 / System.Math.PI);
             }
+
+            public static float HorizontalLength(GTA.Math.Vector3 v)
+            {
+                return Convert.ToSingle(System.Math.Sqrt(v.X * v.X + v.Y * v.Y));
+            }
         }
     }
 }

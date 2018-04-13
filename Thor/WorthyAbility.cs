@@ -20,6 +20,7 @@ namespace Thor
         private static float RAY_CAST_MAX_DISTANCE = 10000.0f;
         private static float FLY_UPWARD_VELOCITY = 50.0f;
         private static float FLY_HORIZONTAL_VELOCITY_LEVEL_1 = 70.0f;
+        private static int FLY_WITH_THROWN_HAMMER_MAX_TIME = 3000;
         private static int MAX_TARGET_COUNT = 15;
         private static Vector3 THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
 
@@ -28,6 +29,12 @@ namespace Thor
         private Mjonir hammer;
         private bool isHammerAttackingTargets;
         private bool isCollectingTargets;
+        private bool hasJustSetEndOfFlyingInitialVelocity;
+        private bool isFlyingWithThrownHammer;
+        private Vector3 flyWithThrownHammerDirection;
+        private int flyWithThrownHammerStartTime;
+        private Vector3 previousPedVelocity;
+        private bool isFlying;
         private HashSet<Entity> targets;
 
         private WorthyAbility()
@@ -36,6 +43,12 @@ namespace Thor
             targets = new HashSet<Entity>();
             hammer = Mjonir.Instance;
             isHammerAttackingTargets = false;
+            previousPedVelocity = Vector3.Zero;
+            isFlying = false;
+            hasJustSetEndOfFlyingInitialVelocity = false;
+            isFlyingWithThrownHammer = false;
+            flyWithThrownHammerDirection = Vector3.Zero;
+            flyWithThrownHammerStartTime = 0;
         }
 
         public static WorthyAbility Instance
@@ -97,6 +110,11 @@ namespace Thor
             attachedPed.Health = attachedPed.MaxHealth;
             attachedPed.Armor = 100;
             attachedPed.AlwaysDiesOnLowHealth = false;
+            attachedPed.IsBulletProof = true;
+            attachedPed.IsCollisionProof = true;
+            attachedPed.IsExplosionProof = true;
+            attachedPed.IsFireProof = true;
+            attachedPed.IsMeleeProof = true;
         }
 
         private void HandleFlying()
@@ -104,6 +122,20 @@ namespace Thor
             GameplayCamera.ClampYaw(-180.0f, 180.0f);
             GameplayCamera.ClampPitch(-180.0f, 180.0f);
             var velocity = Vector3.Zero;
+
+            if (isFlyingWithThrownHammer)
+            {
+                int endTime = flyWithThrownHammerStartTime + FLY_WITH_THROWN_HAMMER_MAX_TIME;
+
+                if (Game.GameTime < endTime)
+                {
+                    velocity += flyWithThrownHammerDirection * FLY_HORIZONTAL_VELOCITY_LEVEL_1 * 3;
+                }
+                else
+                {
+                    isFlyingWithThrownHammer = false;
+                }
+            }
 
             if (Game.IsKeyPressed(Keys.J))
             {
@@ -120,19 +152,36 @@ namespace Thor
             {
                 velocity += velocity;
             }
+            if (isFlying)
+            {
+                hasJustSetEndOfFlyingInitialVelocity = false;
+                previousPedVelocity = attachedPed.Velocity;
+            }
 
             if (velocity.Length() > 0)
             {
+                isFlying = true;
                 GameplayCamera.StopShaking();
                 GameplayCamera.ShakeAmplitude = 0;
-                attachedPed.CanRagdoll = true;
-                Function.Call(Hash.SET_PED_TO_RAGDOLL, attachedPed, 2, 1000, 3, 0, 0, 0);
+                SetAttachedPedToRagdoll();
                 attachedPed.Weapons.CurrentWeaponObject.Velocity = velocity;
             }
             else
             {
-                attachedPed.CanRagdoll = false;
+                isFlying = false;
+                attachedPed.CanRagdoll = !attachedPed.IsInAir;
+                if (!isFlying && !hasJustSetEndOfFlyingInitialVelocity)
+                {
+                    attachedPed.Velocity = previousPedVelocity;
+                    hasJustSetEndOfFlyingInitialVelocity = true;
+                }
             }
+        }
+
+        private void SetAttachedPedToRagdoll()
+        {
+            attachedPed.CanRagdoll = true;
+            NativeHelper.SetPedToRagdoll(attachedPed, RagdollType.WideLegs, 2, 1000);
         }
 
         private void DrawLineToHammer()
@@ -166,6 +215,15 @@ namespace Thor
                     ThrowMjonir(ref targets);
                     isCollectingTargets = false;
                 }
+                else if (Game.IsKeyPressed(Keys.U))
+                {
+                    isCollectingTargets = false;
+                    ThrowAndFlyWithMjolnir();
+                }
+            }
+            else if (Game.IsKeyPressed(Keys.Y))
+            {
+                ThrowHammerOut(false);
             }
         }
 
@@ -287,6 +345,19 @@ namespace Thor
             hammer.MoveToCoord(rightHandBonePos, true);
         }
 
+        public void ThrowAndFlyWithMjolnir()
+        {
+            if (!IsHoldingHammer())
+            {
+                return;
+            }
+            PlayThrowHammerAnimation(GameplayCamera.Direction);
+            SetAttachedPedToRagdoll();
+            isFlyingWithThrownHammer = true;
+            flyWithThrownHammerDirection = GameplayCamera.Direction;
+            flyWithThrownHammerStartTime = Game.GameTime;
+        }
+
         public void ThrowMjonir(ref HashSet<Entity> targets)
         {
             if (!IsHoldingHammer())
@@ -324,7 +395,11 @@ namespace Thor
         {
             hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
             attachedPed.Weapons.Remove(hammer.WeaponHash);
-            hammer.WeaponObject.Velocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;
+            if (hasInitialVelocity)
+            {
+                var hammerVelocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;
+                hammer.WeaponObject.Velocity = hammerVelocity;
+            }
         }
 
         private void PlayThrowHammerAnimation(Vector3 directionToTurnTo)
@@ -369,7 +444,7 @@ namespace Thor
                 attachedPed,
                 dictName,
                 animName,
-                attachedPed.IsWalking || attachedPed.IsSprinting || attachedPed.IsRunning ?
+                attachedPed.IsWalking || attachedPed.IsSprinting || attachedPed.IsRunning || attachedPed.IsInAir ?
                     AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation :
                     AnimationFlags.None,
                 -1,

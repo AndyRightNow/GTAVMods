@@ -23,6 +23,14 @@ namespace Thor
         CatchingMjonir3
     }
 
+    public enum RagdollType
+    {
+        Normal = 0,
+        StiffLegs = 1,
+        NarrowLegs = 2,
+        WideLegs = 3,
+    }
+
     public static class NativeHelper
     {
         private static string[] AnimationDictNames = (new List<string>
@@ -240,6 +248,37 @@ namespace Thor
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
             Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, effectSetName);
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, boneIndex, scale, 0, 0, 0);
+        }
+
+        public static void SetObjectPhysicsParams(
+            Entity entity,
+            float mass,
+            float gravity = -1,
+            float dragCoefficient1 = 0.0f,
+            float dragCoefficient2 = 0.0f,
+            float dragCoefficient3 = 0.0f,
+            float rotationDragCoefficient1 = 0.0f,
+            float rotationDragCoefficient2 = 0.0f,
+            float rotationDragCoefficient3 = 0.0f)
+        {
+            Function.Call(
+                Hash.SET_OBJECT_PHYSICS_PARAMS,
+                entity,
+                mass,
+                gravity,
+                dragCoefficient1,
+                dragCoefficient2,
+                dragCoefficient3,
+                rotationDragCoefficient1,
+                rotationDragCoefficient2,
+                rotationDragCoefficient3,
+                0.0f
+            );
+        }
+
+        public static void SetPedToRagdoll(Ped ped, RagdollType ragdollType, int timeToStayInRagdoll, int timeToStandUp)
+        {
+            Function.Call(Hash.SET_PED_TO_RAGDOLL, ped, timeToStayInRagdoll, timeToStandUp, (int)ragdollType, 0, 0, 0);
         }
     }
 }

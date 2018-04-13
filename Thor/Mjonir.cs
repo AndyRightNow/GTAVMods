@@ -20,6 +20,7 @@ namespace Thor
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.3f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 3f;
+        private static float WEAPON_MASS = 100000000000.0f;
         private static Mjonir instance;
         private Entity weaponObject;
         private WeaponHash weaponHash;
@@ -30,8 +31,6 @@ namespace Thor
             weaponHash = WeaponHash.Hammer;
             weaponSpawnPos = new Vector3(0.0f, 0.0f, 2000.0f);
         }
-
-        public delegate void Wait(int ms);
 
         public static Mjonir Instance
         {
@@ -64,7 +63,10 @@ namespace Thor
             {
                 weaponObject.Detach();
                 weaponObject.Delete();
-                weaponObject = InitializeWeaponObject(value);
+                if (value != null)
+                {
+                    weaponObject = InitializeWeaponObject(value);
+                }
             }
         }
 
@@ -84,20 +86,7 @@ namespace Thor
         private Entity ActivateWeaponPhysics(Entity newWeaponObject)
         {
             Function.Call(Hash.ACTIVATE_PHYSICS, newWeaponObject);
-            Function.Call(
-                Hash.SET_OBJECT_PHYSICS_PARAMS,
-                newWeaponObject,
-                100000000000.0f,
-                -1,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.0f,
-                0.0f
-            );
-
+            NativeHelper.SetObjectPhysicsParams(newWeaponObject, WEAPON_MASS);
             return newWeaponObject;
         }
 
@@ -178,6 +167,18 @@ namespace Thor
             {
                 return weaponObject != null && weaponObject.Exists() && weaponObject.Velocity.Length() > 0;
             }
+        }
+
+        public void MoveTowardDirection(Vector3 direction, int startTime, int maxTime)
+        {
+            int endTime = startTime + maxTime;
+
+            if (Game.GameTime >= endTime)
+            {
+                return;
+            }
+
+            weaponObject.Velocity = direction * MOVE_FULL_VELOCITY_MULTIPLIER;
         }
 
         public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose)
