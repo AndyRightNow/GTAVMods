@@ -12,15 +12,15 @@ namespace Thor
 {
     public enum AnimationActions
     {
-        CallingForMjonir = 0,
+        CallingForMjolnir = 0,
         ThrowHammer1 = 1,
         ThrowHammer2 = 2,
         ThrowHammer3 = 3,
         ThrowHammer4 = 4,
         ThrowHammer5 = 5,
-        CatchingMjonir1,
-        CatchingMjonir2,
-        CatchingMjonir3
+        CatchingMjolnir1,
+        CatchingMjolnir2,
+        CatchingMjolnir3
     }
 
     public enum RagdollType
