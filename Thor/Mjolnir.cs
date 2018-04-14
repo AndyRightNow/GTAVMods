@@ -61,8 +61,11 @@ namespace Thor
             }
             set
             {
-                weaponObject.Detach();
-                weaponObject.Delete();
+                if (weaponObject != null)
+                {
+                    weaponObject.Detach();
+                    weaponObject.Delete();
+                }
                 if (value != null)
                 {
                     weaponObject = InitializeWeaponObject(value);
@@ -92,6 +95,11 @@ namespace Thor
 
         private Entity InitializeWeaponObject(Entity newWeaponObject)
         {
+            if (newWeaponObject == null)
+            {
+                return null;
+            }
+
             newWeaponObject = ActivateWeaponPhysics(newWeaponObject);
 
             Blip weaponBlip = newWeaponObject.AddBlip();
@@ -106,7 +114,7 @@ namespace Thor
             NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
         }
 
-        public void Init(bool asWeaponOfPlayer)
+        public void Init(Ped attachedPed)
         {
             if (weaponObject != null)
             {
@@ -122,11 +130,6 @@ namespace Thor
                 );
 
                 weaponObject = InitializeWeaponObject(weaponObject);
-
-                if (asWeaponOfPlayer)
-                {
-                    Function.Call(Hash.GIVE_WEAPON_OBJECT_TO_PED, weaponObject, Game.Player.Character);
-                }
             }
             catch (Exception e)
             {
@@ -137,6 +140,10 @@ namespace Thor
 
         public bool MoveToTargets(ref HashSet<Entity> targets)
         {
+            if (weaponObject == null)
+            {
+                return false;
+            }
             if (targets.Count == 0)
             {
                 weaponObject.Velocity = Vector3.Zero;
@@ -171,6 +178,10 @@ namespace Thor
 
         public void MoveTowardDirection(Vector3 direction, int startTime, int maxTime)
         {
+            if (weaponObject == null)
+            {
+                return;
+            }
             int endTime = startTime + maxTime;
 
             if (Game.GameTime >= endTime)
@@ -183,6 +194,10 @@ namespace Thor
 
         public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose)
         {
+            if (weaponObject == null)
+            {
+                return;
+            }
             Vector3 moveDirection = (newPosition - Position).Normalized;
             if (slowDownIfClose)
             {

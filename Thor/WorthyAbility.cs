@@ -20,7 +20,9 @@ namespace Thor
         private static float RAY_CAST_MAX_DISTANCE = 10000.0f;
         private static float FLY_UPWARD_VELOCITY = 50.0f;
         private static float FLY_HORIZONTAL_VELOCITY_LEVEL_1 = 70.0f;
-        private static int FLY_WITH_THROWN_HAMMER_MAX_TIME = 3000;
+        private static int FLY_WITH_THROWN_HAMMER_MAX_TIME = 2000;
+        private static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 100.0f;
+        private static float HAMMER_HIT_FORCE = 250.0f;
         private static int MAX_TARGET_COUNT = 15;
         private static Vector3 THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
 
@@ -64,9 +66,26 @@ namespace Thor
             }
         }
 
+        public bool IsAttachedToPed
+        {
+            get
+            {
+                return attachedPed != null;
+            }
+        }
+
+        public void RemoveAbility()
+        {
+            if (HasHammer())
+            {
+                ThrowHammerOut(false);
+            }
+            attachedPed = null;
+        }
+
         public void ApplyOn(Ped ped)
         {
-            if (attachedPed != null)
+            if (IsAttachedToPed)
             {
                 return;
             }
@@ -78,14 +97,22 @@ namespace Thor
         public void OnTick()
         {
             SetInvincible();
+
             if (IsHoldingHammer())
             {
                 HandleFlying();
                 CollectTargets();
                 HandleThrowingMjolnir();
+                HandleHammerMeleeForces();
+                DrawMarkersOnTargets();
             }
             else
             {
+                if (!HasHammer())
+                {
+                    hammer.Init(attachedPed);
+                }
+
                 if (hammer.IsMoving)
                 {
                     hammer.ShowParticleFx();
@@ -96,10 +123,34 @@ namespace Thor
                 {
                     isHammerAttackingTargets = hammer.MoveToTargets(ref targets);
                 }
+
+                DrawLineToHammer();
+            }
+        }
+
+        private void HandleHammerMeleeForces()
+        {
+            Ped[] closestPeds = World.GetNearbyPeds(attachedPed, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY);
+            Vehicle[] closestVehicles = World.GetNearbyVehicles(attachedPed, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY);
+
+            foreach (var ped in closestPeds)
+            {
+                if (ped.HasBeenDamagedBy(attachedPed))
+                {
+                    NativeHelper.SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
+                    ped.ApplyForce(attachedPed.ForwardVector * HAMMER_HIT_FORCE);
+                    Function.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, ped);
+                }
             }
 
-            DrawMarkersOnTargets();
-            DrawLineToHammer();
+            foreach (var veh in closestVehicles)
+            {
+                if (veh.HasBeenDamagedBy(attachedPed))
+                {
+                    veh.ApplyForce(attachedPed.ForwardVector * HAMMER_HIT_FORCE, Vector3.Zero, ForceType.MaxForceRot);
+                    Function.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, veh);
+                }
+            }
         }
 
         private void SetInvincible()
@@ -119,6 +170,7 @@ namespace Thor
 
         private void HandleFlying()
         {
+            
             GameplayCamera.ClampYaw(-180.0f, 180.0f);
             GameplayCamera.ClampPitch(-180.0f, 180.0f);
             var velocity = Vector3.Zero;
@@ -129,7 +181,7 @@ namespace Thor
 
                 if (Game.GameTime < endTime)
                 {
-                    velocity += flyWithThrownHammerDirection * FLY_HORIZONTAL_VELOCITY_LEVEL_1 * 3;
+                    velocity += flyWithThrownHammerDirection * FLY_HORIZONTAL_VELOCITY_LEVEL_1 * 2;
                 }
                 else
                 {
@@ -186,7 +238,7 @@ namespace Thor
 
         private void DrawLineToHammer()
         {
-            if (hammer.WeaponObject.Exists())
+            if (hammer.WeaponObject != null && hammer.WeaponObject.Exists())
             {
                 NativeHelper.DrawLine(attachedPed.Position, hammer.Position, Color.Red);
             }
@@ -272,7 +324,7 @@ namespace Thor
 
         private bool HasHammer()
         {
-            return attachedPed.Weapons.HasWeapon(hammer.WeaponHash);
+            return IsAttachedToPed && attachedPed.Weapons.HasWeapon(hammer.WeaponHash);
         }
 
         public bool IsHoldingHammer()
@@ -321,7 +373,7 @@ namespace Thor
             string dictName = NativeHelper.GetAnimationDictNameByAction(randomCallingAction);
             string animName = NativeHelper.GetAnimationNameByAction(randomCallingAction);
 
-            if (attachedPed == null ||
+            if (!IsAttachedToPed ||
                 HasHammer())
             {
                 return;
@@ -393,7 +445,10 @@ namespace Thor
 
         private void ThrowHammerOut(bool hasInitialVelocity = true)
         {
-            hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
+            if (IsHoldingHammer())
+            {
+                hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
+            }
             attachedPed.Weapons.Remove(hammer.WeaponHash);
             if (hasInitialVelocity)
             {
