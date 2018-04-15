@@ -94,16 +94,24 @@ namespace Thor
             attachedPed.CanRagdoll = true;
         }
 
+        public Mjolnir Hammer
+        {
+            get
+            {
+                return hammer;
+            }
+        }
+
         public void OnTick()
         {
             SetInvincible();
+            HandleMeleeForces();
 
             if (IsHoldingHammer())
             {
                 HandleFlying();
                 CollectTargets();
                 HandleThrowingMjolnir();
-                HandleHammerMeleeForces();
                 DrawMarkersOnTargets();
             }
             else
@@ -128,8 +136,13 @@ namespace Thor
             }
         }
 
-        private void HandleHammerMeleeForces()
+        private void HandleMeleeForces()
         {
+            if (attachedPed.IsInVehicle())
+            {
+                return;
+            }
+
             Ped[] closestPeds = World.GetNearbyPeds(attachedPed, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY);
             Vehicle[] closestVehicles = World.GetNearbyVehicles(attachedPed, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY);
 

@@ -1,4 +1,5 @@
 ﻿using GTA;
+using GTA.Math;
 using GTA.Native;
 using System;
 using System.Windows.Forms;
@@ -9,7 +10,6 @@ namespace Thor
     {
         private WorthyAbility ability;
         private int previousPedHash;
-        private bool hasJustTransferredAbility;
 
         public Thor()
         {
@@ -18,18 +18,17 @@ namespace Thor
             
             ability = WorthyAbility.Instance;
             ability.ApplyOn(Game.Player.Character);
-            previousPedHash = 0;
-            hasJustTransferredAbility = false;
+            previousPedHash = -1;
         }
 
         void OnTick(Object sender, EventArgs e)
         {
-            if (Game.Player.Character != null &&
+            if (previousPedHash != -1 &&
+                Game.Player.Character != null &&
                 Game.Player.Character.GetHashCode() != previousPedHash &&
                 ability.IsAttachedToPed)
             {
                 ability.RemoveAbility();
-                hasJustTransferredAbility = true;
             }
 
             previousPedHash = Game.Player.Character.GetHashCode();
@@ -42,6 +41,15 @@ namespace Thor
             {
                 ability.ApplyOn(Game.Player.Character);
             }
+
+            if (Game.IsKeyPressed(Keys.X))
+            {
+                Test();
+            }
+        }
+
+        private void Test()
+        {
         }
 
         void OnKeyDown(Object sender, KeyEventArgs e)
