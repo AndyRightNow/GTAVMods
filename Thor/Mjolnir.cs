@@ -16,10 +16,11 @@ namespace Thor
         private static float MOVE_FULL_VELOCITY_MULTIPLIER = 200.0f;
         private static float MOVE_HALF_VELOCITY_MULTIPLIER = 90.0f;
         private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 60.0f;
+        private static float MOVE_TO_TARGET_VELOCITY_MULTIPLIER = 75.0f;
         private static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.3f;
-        private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 3f;
+        private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 2f;
         private static float WEAPON_MASS = 100000000000.0f;
         private static Mjolnir instance;
         private Entity weaponObject;
@@ -154,15 +155,15 @@ namespace Thor
 
             Vector3 moveDirection = (nextTarget.Position - Position).Normalized;
             float distanceBetweenHammerAndNextTarget = (nextTarget.Position - Position).Length();
-            
-            if (NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET ||
-                NativeHelper.IsVehicle(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET)
+
+            if ((NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET) ||
+                (NativeHelper.IsVehicle(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET))
             {
                 targets.Remove(nextTarget);
             }
             else
             {
-                weaponObject.Velocity = moveDirection * MOVE_HALF_VELOCITY_MULTIPLIER;
+                weaponObject.Velocity = moveDirection * MOVE_TO_TARGET_VELOCITY_MULTIPLIER;
             }
 
             return true;
