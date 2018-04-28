@@ -20,7 +20,11 @@ namespace Thor
         ThrowHammer5 = 5,
         CatchingMjolnir1,
         CatchingMjolnir2,
-        CatchingMjolnir3
+        CatchingMjolnir3,
+        AirDashAttack1,
+        AirDashAttack2,
+        AirDashAttack3,
+        AirDashAttack4
     }
 
     public enum RagdollType
@@ -43,7 +47,11 @@ namespace Thor
             "melee@small_wpn@streamed_core",
             "guard_reactions",
             "cover@weapon@1h",
-            "combat@fire_variations@1h@gang"
+            "combat@fire_variations@1h@gang",
+            "melee@small_wpn@streamed_core_fps",
+            "melee@knife@streamed_core",
+            "melee@small_wpn@streamed_core",
+            "melee@small_wpn@streamed_core"
         }).ToArray();
         private static string[] AnimationNames = (new List<string>
         {
@@ -55,7 +63,11 @@ namespace Thor
             "small_melee_wpn_long_range_0",
             "1hand_right_trans",
             "outro_hi_r_corner_short",
-            "fire_variation_e"
+            "fire_variation_e",
+            "ground_attack_on_spot",
+            "ground_attack_on_spot",
+            "ground_attack_0",
+            "ground_attack_on_spot"
         }).ToArray();
         private static Dictionary<string, Dictionary<string, int>> AnimationWaitTime = new Dictionary<string, Dictionary<string, int>>()
         {
@@ -192,7 +204,7 @@ namespace Thor
 
         public static void PlayPlayerAnimation(Ped ped, string dictName, string animName, AnimationFlags flag, int duration = -1, bool checkIsPlaying = true)
         {
-            if (checkIsPlaying && Function.Call<bool>(Hash.IS_ENTITY_PLAYING_ANIM, ped, dictName, animName, 3))
+            if (checkIsPlaying && IsEntityPlayingAnim(ped, dictName, animName))
             {
                 return;
             }
@@ -201,7 +213,18 @@ namespace Thor
             {
                 Function.Call(Hash.REQUEST_ANIM_DICT, dictName);
             }
+
             Function.Call(Hash.TASK_PLAY_ANIM, ped, dictName, animName, 8.0f, 1.0f, duration, (int)flag, -8.0f, 0, 0, 0);
+        }
+
+        public static bool IsEntityPlayingAnim(Entity ent, string dictName, string animName)
+        {
+            Function.Call(Hash.REQUEST_ANIM_DICT, dictName);
+            if (!Function.Call<bool>(Hash.HAS_ANIM_DICT_LOADED, dictName))
+            {
+                Function.Call(Hash.REQUEST_ANIM_DICT, dictName);
+            }
+            return Function.Call<bool>(Hash.IS_ENTITY_PLAYING_ANIM, ent, dictName, animName, 3);
         }
 
         public static void SetEntityVelocity(InputArgument entity, Vector3 velocity)

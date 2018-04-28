@@ -19,8 +19,9 @@ namespace Thor
         private static float MOVE_TO_TARGET_VELOCITY_MULTIPLIER = 75.0f;
         private static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
-        private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.3f;
+        private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.5f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 2f;
+        private static float APPLY_FORCE_RADIUS = 1.0f;
         private static float WEAPON_MASS = 100000000000.0f;
         private static Mjolnir instance;
         private Entity weaponObject;
@@ -113,6 +114,32 @@ namespace Thor
         public void ShowParticleFx()
         {
             NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
+        }
+
+        public void ApplyForcesToNearbyEntities()
+        {
+            if (weaponObject == null ||
+                !weaponObject.Exists() ||
+                !IsMoving)
+            {
+                return;
+            }
+
+            var entities = World.GetNearbyEntities(weaponObject.Position, APPLY_FORCE_RADIUS);
+
+            foreach (var ent in entities)
+            {
+                if (ent != Game.Player.Character &&
+                    ent != weaponObject)
+                {
+                    ent.ApplyForce(weaponObject.Velocity);
+                    if (Function.Call<bool>(Hash.IS_ENTITY_A_PED, ent))
+                    {
+                        Ped ped = (Ped) ent;
+                        ped.ApplyDamage(100);
+                    }
+                }
+            }
         }
 
         public void Init(Ped attachedPed)

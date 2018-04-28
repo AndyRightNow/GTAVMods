@@ -20,7 +20,7 @@ namespace Thor
             ability = WorthyAbility.Instance;
             ability.ApplyOn(Game.Player.Character);
             previousPedHash = -1;
-            abilityHasBeenTurnedOff = true;
+            abilityHasBeenTurnedOff = false;
         }
 
         void OnTick(Object sender, EventArgs e)
