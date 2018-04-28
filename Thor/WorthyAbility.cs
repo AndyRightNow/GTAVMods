@@ -82,7 +82,7 @@ namespace Thor
 
         public void RemoveAbility()
         {
-            if (HasHammer())
+            if (HasHammer)
             {
                 ThrowHammerOut(false);
             }
@@ -106,9 +106,9 @@ namespace Thor
 
             if (Hammer != null &&
                 Hammer.WeaponObject != null &&
-                !HasHammer())
+                !HasHammer)
             {
-                Hammer.MoveToCoord(attachedPed.Position + new Vector3(0.0f, 0.0f, AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS), true);
+                Hammer.FindWaysToMoveToCoord(attachedPed.Position + new Vector3(0.0f, 0.0f, AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS), true);
             }
         }
 
@@ -117,9 +117,14 @@ namespace Thor
         public void OnTick()
         {
             SetInvincible(true);
-            HandleMeleeForces();
 
-            if (IsHoldingHammer())
+            if (IsHoldingHammer ||
+                attachedPed.Weapons.CurrentWeaponObject == null)
+            {
+                HandleMeleeForces();
+            }
+
+            if (IsHoldingHammer)
             {
                 Function.Call<bool>(Hash.SET_PLAYER_LOCKON_RANGE_OVERRIDE, Game.Player.Handle, 0.0f);
                 HandleFlying();
@@ -197,7 +202,7 @@ namespace Thor
 
         private void InitHammerIfNotExist()
         {
-            if (!HasHammer())
+            if (!HasHammer)
             {
                 Hammer.Init(attachedPed);
             }
@@ -418,14 +423,20 @@ namespace Thor
             }
         }
 
-        private bool HasHammer()
+        private bool HasHammer
         {
-            return IsAttachedToPed && attachedPed.Weapons.HasWeapon(Hammer.WeaponHash);
+            get
+            {
+                return IsAttachedToPed && attachedPed.Weapons.HasWeapon(Hammer.WeaponHash);
+            }
         }
 
-        public bool IsHoldingHammer()
+        public bool IsHoldingHammer
         {
-            return HasHammer() && attachedPed.Weapons.Current.Hash == Hammer.WeaponHash;
+            get
+            {
+                return HasHammer && attachedPed.Weapons.Current.Hash == Hammer.WeaponHash;
+            }
         }
 
         public void CallForMjolnir(bool shootUpwardFirst = false)
@@ -471,7 +482,7 @@ namespace Thor
             string animName = NativeHelper.GetAnimationNameByAction(randomCallingAction);
 
             if (!IsAttachedToPed ||
-                HasHammer())
+                HasHammer)
             {
                 return;
             }
@@ -491,12 +502,12 @@ namespace Thor
                 Script.Wait(500);
             }
 
-            Hammer.MoveToCoord(rightHandBonePos, true);
+            Hammer.FindWaysToMoveToCoord(rightHandBonePos, true);
         }
 
         public void ThrowAndFlyWithMjolnir()
         {
-            if (!IsHoldingHammer())
+            if (!IsHoldingHammer)
             {
                 return;
             }
@@ -509,7 +520,7 @@ namespace Thor
 
         public void ThrowMjolnir(ref HashSet<Entity> targets)
         {
-            if (!IsHoldingHammer())
+            if (!IsHoldingHammer)
             {
                 return;
             }
@@ -532,7 +543,7 @@ namespace Thor
 
         public void ThrowMjolnir()
         {
-            if (!IsHoldingHammer())
+            if (!IsHoldingHammer)
             {
                 return;
             }
@@ -542,7 +553,7 @@ namespace Thor
 
         private void ThrowHammerOut(bool hasInitialVelocity = true)
         {
-            if (IsHoldingHammer())
+            if (IsHoldingHammer)
             {
                 Hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
             }

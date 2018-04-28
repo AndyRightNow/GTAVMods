@@ -220,33 +220,130 @@ namespace Thor
             weaponObject.Velocity = direction * MOVE_FULL_VELOCITY_MULTIPLIER;
         }
 
-        public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose)
+        public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose, Vector3 blendInVelocity)
         {
             if (weaponObject == null)
             {
                 return;
             }
             Vector3 moveDirection = (newPosition - Position).Normalized;
+            var velocity = blendInVelocity;
             if (slowDownIfClose)
             {
                 float distanceBetweenNewPosAndCurPos = (newPosition - Position).Length();
 
                 if (distanceBetweenNewPosAndCurPos <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
                 {
-                    weaponObject.Velocity = moveDirection * MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER;
+                    velocity  += moveDirection * MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER;
                 }
                 else if (distanceBetweenNewPosAndCurPos <= HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
                 {
-                    weaponObject.Velocity = moveDirection * MOVE_HALF_VELOCITY_MULTIPLIER;
+                    velocity += moveDirection * MOVE_HALF_VELOCITY_MULTIPLIER;
                 }
                 else
                 {
-                    weaponObject.Velocity = moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
+                    velocity += moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
                 }
             }
             else
             {
-                weaponObject.Velocity = moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
+                velocity += moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
+            }
+
+            weaponObject.Velocity = velocity;
+        }
+
+        public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose)
+        {
+            var currentWeaponPos = weaponObject.Position;
+            var raycastToTarget = World.Raycast(currentWeaponPos, newPosition, IntersectOptions.Map);
+            var raycastDistance = 100.0f;
+            var raycastMoveStep = 1.0f;
+            var closeCompareDelta = 5.0f;
+
+            if (raycastToTarget.DitHitAnything)
+            {
+                var velocity = Vector3.Zero;
+
+                var raycastUp = World.Raycast(currentWeaponPos, new Vector3(0.0f, 0.0f, 100.0f), IntersectOptions.Map);
+                if (raycastUp.DitHitAnything)
+                {
+                    UI.ShowSubtitle("Here");
+                    var topLeftPos = currentWeaponPos + new Vector3(-raycastDistance, raycastDistance, 0.0f);
+                    var topRightPos = currentWeaponPos + new Vector3(raycastDistance, raycastDistance, 0.0f);
+                    var bottomLeftPos = currentWeaponPos + new Vector3(-raycastDistance, -raycastDistance, 0.0f);
+                    var bottomRightPos = currentWeaponPos + new Vector3(raycastDistance, -raycastDistance, 0.0f);
+                    var foundDirection = false;
+                    var currentRaycastTarget = topLeftPos;
+                    // Top left to top right
+                    while (!Utilities.Math.CloseTo(currentRaycastTarget.X, topRightPos.X, closeCompareDelta))
+                    {
+                        currentRaycastTarget.X += raycastMoveStep;
+                        var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
+                        if (!raycast.DitHitAnything)
+                        {
+                            foundDirection = true;
+                            velocity += (currentRaycastTarget - currentWeaponPos).Normalized * MOVE_FULL_VELOCITY_MULTIPLIER;
+                            break;
+                        }
+                    }
+
+                    // Top right to bottom right
+                    if (!foundDirection)
+                    {
+                        while (!Utilities.Math.CloseTo(currentRaycastTarget.Y, bottomRightPos.Y, closeCompareDelta))
+                        {
+                            currentRaycastTarget.Y -= raycastMoveStep;
+                            var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
+                            if (!raycast.DitHitAnything)
+                            {
+                                foundDirection = true;
+                                velocity += (currentRaycastTarget - currentWeaponPos).Normalized * MOVE_FULL_VELOCITY_MULTIPLIER;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Bottom right to bottom left
+                    if (!foundDirection)
+                    {
+                        while (!Utilities.Math.CloseTo(currentRaycastTarget.X, bottomLeftPos.X, closeCompareDelta))
+                        {
+                            currentRaycastTarget.X -= raycastMoveStep;
+                            var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
+                            if (!raycast.DitHitAnything)
+                            {
+                                foundDirection = true;
+                                velocity += (currentRaycastTarget - currentWeaponPos).Normalized * MOVE_FULL_VELOCITY_MULTIPLIER;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Bottom left to top left
+                    if (!foundDirection)
+                    {
+                        while (!Utilities.Math.CloseTo(currentRaycastTarget.Y, topLeftPos.Y, closeCompareDelta))
+                        {
+                            currentRaycastTarget.Y += raycastMoveStep;
+                            var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
+                            if (!raycast.DitHitAnything)
+                            {
+                                foundDirection = true;
+                                velocity += (currentRaycastTarget - currentWeaponPos).Normalized * MOVE_FULL_VELOCITY_MULTIPLIER;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                velocity += Vector3.WorldUp * MOVE_FULL_VELOCITY_MULTIPLIER;
+
+                MoveToCoord(newPosition, slowDownIfClose, velocity);
+            }
+            else
+            {
+                MoveToCoord(newPosition, slowDownIfClose, Vector3.Zero);
             }
         }
     }

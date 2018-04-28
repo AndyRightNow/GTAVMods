@@ -57,6 +57,11 @@ namespace Thor
             {
                 return Convert.ToSingle(System.Math.Sqrt(v.X * v.X + v.Y * v.Y));
             }
+
+            public static bool CloseTo(float source, float target, float delta)
+            {
+                return source <= target + delta && source >= target - delta;
+            }
         }
     }
 }
