@@ -13,10 +13,9 @@ namespace Thor
 {
     class Mjolnir
     {
-        private static float MOVE_FULL_VELOCITY_MULTIPLIER = 200.0f;
-        private static float MOVE_HALF_VELOCITY_MULTIPLIER = 90.0f;
+        private static float MOVE_FULL_VELOCITY_MULTIPLIER = 150.0f;
+        private static float MOVE_HALF_VELOCITY_MULTIPLIER = 80.0f;
         private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 60.0f;
-        private static float MOVE_TO_TARGET_VELOCITY_MULTIPLIER = 75.0f;
         private static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.5f;
@@ -113,6 +112,7 @@ namespace Thor
 
         public void ShowParticleFx()
         {
+            NativeHelper.PlayThunderFx(weaponObject);
             NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
         }
 
@@ -180,7 +180,6 @@ namespace Thor
 
             var nextTarget = targets.First();
 
-            Vector3 moveDirection = (nextTarget.Position - Position).Normalized;
             float distanceBetweenHammerAndNextTarget = (nextTarget.Position - Position).Length();
 
             if ((NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET) ||
@@ -190,7 +189,7 @@ namespace Thor
             }
             else
             {
-                weaponObject.Velocity = moveDirection * MOVE_TO_TARGET_VELOCITY_MULTIPLIER;
+                FindWaysToMoveToCoord(nextTarget.Position, false);
             }
 
             return true;
@@ -220,6 +219,24 @@ namespace Thor
             weaponObject.Velocity = direction * MOVE_FULL_VELOCITY_MULTIPLIER;
         }
 
+        private float GetVelocityByDistance(Vector3 newPosition, Vector3 curPosition)
+        {
+            float distanceBetweenNewPosAndCurPos = (newPosition - curPosition).Length();
+
+            if (distanceBetweenNewPosAndCurPos <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
+            {
+                return MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER;
+            }
+            else if (distanceBetweenNewPosAndCurPos <= HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
+            {
+                return MOVE_HALF_VELOCITY_MULTIPLIER;
+            }
+            else
+            {
+                return MOVE_FULL_VELOCITY_MULTIPLIER;
+            }
+        }
+
         public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose, Vector3 blendInVelocity)
         {
             if (weaponObject == null)
@@ -230,20 +247,7 @@ namespace Thor
             var velocity = blendInVelocity;
             if (slowDownIfClose)
             {
-                float distanceBetweenNewPosAndCurPos = (newPosition - Position).Length();
-
-                if (distanceBetweenNewPosAndCurPos <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
-                {
-                    velocity  += moveDirection * MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER;
-                }
-                else if (distanceBetweenNewPosAndCurPos <= HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
-                {
-                    velocity += moveDirection * MOVE_HALF_VELOCITY_MULTIPLIER;
-                }
-                else
-                {
-                    velocity += moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
-                }
+                velocity += moveDirection * GetVelocityByDistance(newPosition, Position);
             }
             else
             {
@@ -253,7 +257,7 @@ namespace Thor
             weaponObject.Velocity = velocity;
         }
 
-        public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose)
+        public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose, bool canShootUpward = true)
         {
             var currentWeaponPos = weaponObject.Position;
             var raycastToTarget = World.Raycast(currentWeaponPos, newPosition, IntersectOptions.Map);
@@ -269,6 +273,7 @@ namespace Thor
                 if (raycastUp.DitHitAnything)
                 {
                     UI.ShowSubtitle("Here");
+                    
                     var topLeftPos = currentWeaponPos + new Vector3(-raycastDistance, raycastDistance, 0.0f);
                     var topRightPos = currentWeaponPos + new Vector3(raycastDistance, raycastDistance, 0.0f);
                     var bottomLeftPos = currentWeaponPos + new Vector3(-raycastDistance, -raycastDistance, 0.0f);
@@ -283,8 +288,6 @@ namespace Thor
                         if (!raycast.DitHitAnything)
                         {
                             foundDirection = true;
-                            velocity += (currentRaycastTarget - currentWeaponPos).Normalized * MOVE_FULL_VELOCITY_MULTIPLIER;
-                            break;
                         }
                     }
 
@@ -298,8 +301,6 @@ namespace Thor
                             if (!raycast.DitHitAnything)
                             {
                                 foundDirection = true;
-                                velocity += (currentRaycastTarget - currentWeaponPos).Normalized * MOVE_FULL_VELOCITY_MULTIPLIER;
-                                break;
                             }
                         }
                     }
@@ -314,8 +315,6 @@ namespace Thor
                             if (!raycast.DitHitAnything)
                             {
                                 foundDirection = true;
-                                velocity += (currentRaycastTarget - currentWeaponPos).Normalized * MOVE_FULL_VELOCITY_MULTIPLIER;
-                                break;
                             }
                         }
                     }
@@ -330,14 +329,20 @@ namespace Thor
                             if (!raycast.DitHitAnything)
                             {
                                 foundDirection = true;
-                                velocity += (currentRaycastTarget - currentWeaponPos).Normalized * MOVE_FULL_VELOCITY_MULTIPLIER;
-                                break;
                             }
                         }
                     }
+                    
+                    if (foundDirection)
+                    {
+                        velocity += (currentRaycastTarget - currentWeaponPos).Normalized * GetVelocityByDistance(newPosition, currentWeaponPos);
+                    }
                 }
 
-                velocity += Vector3.WorldUp * MOVE_FULL_VELOCITY_MULTIPLIER;
+                if (canShootUpward)
+                {
+                    velocity += Vector3.WorldUp * GetVelocityByDistance(newPosition, currentWeaponPos);
+                }
 
                 MoveToCoord(newPosition, slowDownIfClose, velocity);
             }

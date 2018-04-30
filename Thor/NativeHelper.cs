@@ -21,10 +21,10 @@ namespace Thor
         CatchingMjolnir1,
         CatchingMjolnir2,
         CatchingMjolnir3,
-        AirDashAttack1,
-        AirDashAttack2,
-        AirDashAttack3,
-        AirDashAttack4
+        GroundAttack1,
+        GroundAttack2,
+        GroundAttack3,
+        GroundAttack4
     }
 
     public enum RagdollType
@@ -266,11 +266,11 @@ namespace Thor
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY, effect, entity, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
         }
 
-        public static void PlayParticleFx(string effectSetName, string effect, Ped ped, int boneIndex, float scale = 1.0f)
+        public static void PlayParticleFx(string effectSetName, string effect, Ped ped, Bone boneId, float scale = 1.0f)
         {
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
             Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, effectSetName);
-            Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, boneIndex, scale, 0, 0, 0);
+            Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, ped.GetBoneIndex(boneId), scale, 0, 0, 0);
         }
 
         public static void SetObjectPhysicsParams(
@@ -302,6 +302,16 @@ namespace Thor
         public static void SetPedToRagdoll(Ped ped, RagdollType ragdollType, int timeToStayInRagdoll, int timeToStandUp)
         {
             Function.Call(Hash.SET_PED_TO_RAGDOLL, ped, timeToStayInRagdoll, timeToStandUp, (int)ragdollType, 0, 0, 0);
+        }
+
+        public static void PlayThunderFx(Entity ent, float scale = 1.0f)
+        {
+            PlayParticleFx("core", "ent_dst_elec_fire_sp", ent, scale);
+        }
+
+        public static void PlayThunderFx(Ped ped, Bone boneId, float scale = 1.0f)
+        {
+            PlayParticleFx("core", "ent_dst_elec_fire_sp", ped, boneId, scale);
         }
     }
 }

@@ -18,14 +18,14 @@ namespace Thor
         private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
         private static float AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS = 2000.0f;
         private static float ANIMATION_ANGLE_RANGE_STEP = 45.0f;
-        private static float RAY_CAST_MAX_DISTANCE = 10000.0f;
+        private static float RAY_CAST_MAX_DISTANCE = 100000.0f;
         private static float FLY_UPWARD_VELOCITY = 50.0f;
         private static float FLY_HORIZONTAL_VELOCITY_LEVEL_1 = 70.0f;
         private static float AIR_DASH_ATTACK_LANDING_VELOCITY = 200.0f;
         private static int FLY_WITH_THROWN_HAMMER_MAX_TIME = 2000;
         private static float FLY_SPRINT_VELOCITY_MULTIPLIER = 4f;
         private static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 20.0f;
-        private static float HAMMER_HIT_FORCE = 250.0f;
+        private static float MELEE_HIT_FORCE = 550.0f;
         private static int MAX_TARGET_COUNT = 15;
         private static Vector3 THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
 
@@ -42,6 +42,7 @@ namespace Thor
         private bool isFlying;
         private HashSet<Entity> targets;
         private bool isInAirDashAttack;
+        private int previousPlayFxTime;
 
         private WorthyAbility()
         {
@@ -57,6 +58,7 @@ namespace Thor
             flyWithThrownHammerStartTime = 0;
             shouldHammerReturnToPed = false;
             isInAirDashAttack = false;
+            previousPlayFxTime = 0;
         }
 
         public static WorthyAbility Instance
@@ -116,7 +118,17 @@ namespace Thor
 
         public void OnTick()
         {
+            if (attachedPed == null)
+            {
+                return;
+            }
+
             SetInvincible(true);
+            if (Game.GameTime - previousPlayFxTime >= 1000)
+            {
+                NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_L_Hand, 1.1f);
+                previousPlayFxTime = Game.GameTime;
+            }
 
             if (IsHoldingHammer ||
                 attachedPed.Weapons.CurrentWeaponObject == null)
@@ -126,6 +138,11 @@ namespace Thor
 
             if (IsHoldingHammer)
             {
+                if (Game.GameTime - previousPlayFxTime >= 1000)
+                {
+                    NativeHelper.PlayThunderFx(attachedPed.Weapons.CurrentWeaponObject);
+                    previousPlayFxTime = Game.GameTime;
+                }
                 Function.Call<bool>(Hash.SET_PLAYER_LOCKON_RANGE_OVERRIDE, Game.Player.Handle, 0.0f);
                 HandleFlying();
                 HandleAirDashAttack();
@@ -136,12 +153,19 @@ namespace Thor
             else
             {
                 Hammer.ApplyForcesToNearbyEntities();
-                attachedPed.CanRagdoll = true;
                 InitHammerIfNotExist();
                 ShowHammerPFX();
                 HandleCallingForMjolnir();
                 HandleAttackingTargets();
                 DrawLineToHammer();
+            }
+        }
+
+        private void HandleSuperJump()
+        {
+            if (Game.IsControlJustReleased(0, GTA.Control.Jump) && !attachedPed.IsInAir)
+            {
+                attachedPed.Velocity = attachedPed.Velocity + new Vector3(0.0f, 0.0f, 10.0f);
             }
         }
 
@@ -218,7 +242,8 @@ namespace Thor
 
         private void HandleMeleeForces()
         {
-            if (attachedPed.IsInVehicle())
+            if (attachedPed.IsInVehicle() ||
+                !attachedPed.IsInMeleeCombat)
             {
                 return;
             }
@@ -231,7 +256,7 @@ namespace Thor
                 if (ped.HasBeenDamagedBy(attachedPed))
                 {
                     NativeHelper.SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
-                    ped.ApplyForce(attachedPed.ForwardVector * HAMMER_HIT_FORCE);
+                    ped.ApplyForce(attachedPed.ForwardVector * MELEE_HIT_FORCE);
                     ped.ApplyDamage(100);
                     Function.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, ped);
                 }
@@ -239,15 +264,9 @@ namespace Thor
 
             foreach (var veh in closestVehicles)
             {
-                var lastVeh = attachedPed.LastVehicle;
-                if (lastVeh != null && veh == lastVeh)
-                {
-                    continue;
-                }
-
                 if (veh.HasBeenDamagedBy(attachedPed))
                 {
-                    veh.ApplyForce(attachedPed.ForwardVector * HAMMER_HIT_FORCE, Vector3.Zero, ForceType.MaxForceRot);
+                    veh.ApplyForce(attachedPed.ForwardVector * MELEE_HIT_FORCE, Vector3.Zero, ForceType.MaxForceRot);
                     Function.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, veh);
                 }
             }
@@ -317,6 +336,18 @@ namespace Thor
                 Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
                 SetAttachedPedToRagdoll();
                 attachedPed.Weapons.CurrentWeaponObject.Velocity = velocity;
+
+                var nearbyEntities = World.GetNearbyEntities(attachedPed.Position, 5.0f);
+                foreach (var ent in nearbyEntities)
+                {
+                    if (ent != attachedPed &&
+                        ent != attachedPed.Weapons.CurrentWeaponObject &&
+                        (attachedPed.IsTouching(ent) ||
+                        attachedPed.Weapons.CurrentWeaponObject.IsTouching(ent)))
+                    {
+                        ent.ApplyForce(velocity);
+                    }
+                }
             }
             else
             {
@@ -328,7 +359,6 @@ namespace Thor
                     hasJustSetEndOfFlyingInitialVelocity = true;
                 }
             }
-
         }
 
         private void SetAttachedPedToRagdoll()
