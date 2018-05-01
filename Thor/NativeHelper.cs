@@ -24,7 +24,13 @@ namespace Thor
         GroundAttack1,
         GroundAttack2,
         GroundAttack3,
-        GroundAttack4
+        GroundAttack4,
+        SummonThunder
+    }
+
+    public enum ParticleEffects
+    {
+        Thunder
     }
 
     public enum RagdollType
@@ -37,6 +43,7 @@ namespace Thor
 
     public static class NativeHelper
     {
+        private static float MELEE_HIT_FORCE = 550.0f;
         private static string[] AnimationDictNames = (new List<string>
         {
             "combat@aim_variations@1h@gang",
@@ -51,7 +58,8 @@ namespace Thor
             "melee@small_wpn@streamed_core_fps",
             "melee@knife@streamed_core",
             "melee@small_wpn@streamed_core",
-            "melee@small_wpn@streamed_core"
+            "melee@small_wpn@streamed_core",
+            "anim@mp_fm_event@intro"
         }).ToArray();
         private static string[] AnimationNames = (new List<string>
         {
@@ -67,7 +75,8 @@ namespace Thor
             "ground_attack_on_spot",
             "ground_attack_on_spot",
             "ground_attack_0",
-            "ground_attack_on_spot"
+            "ground_attack_on_spot",
+            "beast_transform"
         }).ToArray();
         private static Dictionary<string, Dictionary<string, int>> AnimationWaitTime = new Dictionary<string, Dictionary<string, int>>()
         {
@@ -170,6 +179,15 @@ namespace Thor
             false
         }).ToArray();
 
+        private static string[] ParticleEffectSetNames = (new List<string>
+        {
+            "core"
+        }).ToArray();
+        private static string[] ParticleEffectNames = (new List<string>
+        {
+            "ent_dst_elec_fire_sp"
+        }).ToArray();
+
         public static int GetAnimationWaitTimeByDictNameAndAnimName(string dictName, string animName)
         {
             if (AnimationWaitTime.ContainsKey(dictName) &&
@@ -190,6 +208,16 @@ namespace Thor
         public static string GetAnimationNameByAction(AnimationActions action)
         {
             return AnimationNames[(int)action];
+        }
+
+        public static string GetParticleSetName(ParticleEffects fx)
+        {
+            return ParticleEffectSetNames[(int)fx];
+        }
+
+        public static string GetParticleName(ParticleEffects fx)
+        {
+            return ParticleEffectNames[(int)fx];
         }
 
         public static bool DoesAnimationActionHaveAngles(AnimationActions action)
@@ -273,6 +301,13 @@ namespace Thor
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, ped.GetBoneIndex(boneId), scale, 0, 0, 0);
         }
 
+        public static void PlayParticleFx(string effectSetName, string effect, Vector3 pos, float scale = 1.0f)
+        {
+            Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
+            Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, effectSetName);
+            Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_AT_COORD, effect, pos.X, pos.Y, pos.Z, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
+        }
+
         public static void SetObjectPhysicsParams(
             Entity entity,
             float mass,
@@ -306,12 +341,29 @@ namespace Thor
 
         public static void PlayThunderFx(Entity ent, float scale = 1.0f)
         {
-            PlayParticleFx("core", "ent_dst_elec_fire_sp", ent, scale);
+            PlayParticleFx(GetParticleSetName(ParticleEffects.Thunder), GetParticleName(ParticleEffects.Thunder), ent, scale);
         }
 
         public static void PlayThunderFx(Ped ped, Bone boneId, float scale = 1.0f)
         {
-            PlayParticleFx("core", "ent_dst_elec_fire_sp", ped, boneId, scale);
+            PlayParticleFx(GetParticleSetName(ParticleEffects.Thunder), GetParticleName(ParticleEffects.Thunder), ped, boneId, scale);
+        }
+
+        public static void PlayThunderFx(Vector3 pos, float scale = 1.0f)
+        {
+            PlayParticleFx(GetParticleSetName(ParticleEffects.Thunder), GetParticleName(ParticleEffects.Thunder), pos, scale);
+        }
+
+        public static void ApplyForcesAndDamages(Entity ent, Vector3 direction)
+        {
+            if (Function.Call<bool>(Hash.IS_ENTITY_A_PED, ent))
+            {
+                var ped = (Ped)ent;
+                NativeHelper.SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
+                ped.ApplyDamage(100);
+            }
+            ent.ApplyForce(direction * MELEE_HIT_FORCE);
+            Function.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, ent);
         }
     }
 }

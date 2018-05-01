@@ -21,16 +21,26 @@ namespace Thor
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.5f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 2f;
         private static float APPLY_FORCE_RADIUS = 1.0f;
+        private static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
         private static float WEAPON_MASS = 100000000000.0f;
         private static Mjolnir instance;
         private Entity weaponObject;
         private WeaponHash weaponHash;
         private Vector3 weaponSpawnPos;
-        
+        private Utilities.Timer hammerFxTimer;
+
         private Mjolnir()
         {
             weaponHash = WeaponHash.Hammer;
             weaponSpawnPos = new Vector3(0.0f, 0.0f, 2000.0f);
+        }
+
+        public void OnTick()
+        {
+            if (hammerFxTimer != null)
+            {
+                hammerFxTimer.OnTick();
+            }
         }
 
         public static Mjolnir Instance
@@ -70,6 +80,11 @@ namespace Thor
                 if (value != null)
                 {
                     weaponObject = InitializeWeaponObject(value);
+                    hammerFxTimer = new Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS,
+                    () =>
+                    {
+                        NativeHelper.PlayThunderFx(weaponObject);
+                    });
                 }
             }
         }
@@ -113,7 +128,10 @@ namespace Thor
         public void ShowParticleFx()
         {
             NativeHelper.PlayThunderFx(weaponObject);
-            NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
+            if (IsMoving)
+            {
+                NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
+            }
         }
 
         public void ApplyForcesToNearbyEntities()
@@ -157,7 +175,7 @@ namespace Thor
                     weaponSpawnPos
                 );
 
-                weaponObject = InitializeWeaponObject(weaponObject);
+                WeaponObject = weaponObject;
             }
             catch (Exception e)
             {
@@ -272,8 +290,6 @@ namespace Thor
                 var raycastUp = World.Raycast(currentWeaponPos, new Vector3(0.0f, 0.0f, 100.0f), IntersectOptions.Map);
                 if (raycastUp.DitHitAnything)
                 {
-                    UI.ShowSubtitle("Here");
-                    
                     var topLeftPos = currentWeaponPos + new Vector3(-raycastDistance, raycastDistance, 0.0f);
                     var topRightPos = currentWeaponPos + new Vector3(raycastDistance, raycastDistance, 0.0f);
                     var bottomLeftPos = currentWeaponPos + new Vector3(-raycastDistance, -raycastDistance, 0.0f);
@@ -283,6 +299,7 @@ namespace Thor
                     // Top left to top right
                     while (!Utilities.Math.CloseTo(currentRaycastTarget.X, topRightPos.X, closeCompareDelta))
                     {
+                        Script.Wait(1);
                         currentRaycastTarget.X += raycastMoveStep;
                         var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
                         if (!raycast.DitHitAnything)
@@ -296,6 +313,7 @@ namespace Thor
                     {
                         while (!Utilities.Math.CloseTo(currentRaycastTarget.Y, bottomRightPos.Y, closeCompareDelta))
                         {
+                            Script.Wait(1);
                             currentRaycastTarget.Y -= raycastMoveStep;
                             var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
                             if (!raycast.DitHitAnything)
@@ -310,6 +328,7 @@ namespace Thor
                     {
                         while (!Utilities.Math.CloseTo(currentRaycastTarget.X, bottomLeftPos.X, closeCompareDelta))
                         {
+                            Script.Wait(1);
                             currentRaycastTarget.X -= raycastMoveStep;
                             var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
                             if (!raycast.DitHitAnything)
@@ -324,6 +343,7 @@ namespace Thor
                     {
                         while (!Utilities.Math.CloseTo(currentRaycastTarget.Y, topLeftPos.Y, closeCompareDelta))
                         {
+                            Script.Wait(1);
                             currentRaycastTarget.Y += raycastMoveStep;
                             var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
                             if (!raycast.DitHitAnything)

@@ -62,6 +62,38 @@ namespace Thor
             {
                 return source <= target + delta && source >= target - delta;
             }
+
+            public static bool CloseTo(GTA.Math.Vector3 from, GTA.Math.Vector3 to, float delta)
+            {
+                return (from - to).Length() <= delta;
+            }
+        }
+
+        public class Timer
+        {
+            private int startGameTime;
+            private int interval;
+            private int previouslyFiredGameTime;
+            private TimerHandler handler;
+
+            public delegate void TimerHandler();
+
+            public Timer(int interval, TimerHandler handler)
+            {
+                this.interval = interval;
+                this.handler = handler;
+                startGameTime = Game.GameTime;
+                previouslyFiredGameTime = startGameTime;
+            }
+
+            public void OnTick()
+            {
+                if (Game.GameTime - previouslyFiredGameTime >= interval)
+                {
+                    this.handler();
+                    previouslyFiredGameTime = Game.GameTime;
+                }
+            }
         }
     }
 }
