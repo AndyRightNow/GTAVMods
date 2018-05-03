@@ -162,8 +162,8 @@ namespace Thor
             }
             else
             {
-                Hammer.ApplyForcesToNearbyEntities();
                 InitHammerIfNotExist();
+                Hammer.ApplyForcesToNearbyEntities();
                 ShowHammerPFX();
                 HandleCallingForMjolnir();
                 HandleAttackingTargets();
@@ -193,7 +193,10 @@ namespace Thor
 
         private void PlayThunderFx()
         {
-            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_L_Hand, 1.1f);
+            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_L_Forearm);
+            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_R_Forearm);
+            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_L_Thigh);
+            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_R_Thigh);
             if (IsHoldingHammer)
             {
                 NativeHelper.PlayThunderFx(attachedPed.Weapons.CurrentWeaponObject, 0.5f);
@@ -251,7 +254,7 @@ namespace Thor
         {
             if (!HasHammer)
             {
-                Hammer.Init(attachedPed);
+                Hammer.Init(null);
             }
         }
 

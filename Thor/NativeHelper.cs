@@ -298,7 +298,7 @@ namespace Thor
         {
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
             Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, effectSetName);
-            Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, ped.GetBoneIndex(boneId), scale, 0, 0, 0);
+            Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, (int)boneId, scale, 0, 0, 0);
         }
 
         public static void PlayParticleFx(string effectSetName, string effect, Vector3 pos, float scale = 1.0f)
