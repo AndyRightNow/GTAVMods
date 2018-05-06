@@ -31,6 +31,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="DeveloperConsole">
+      <HintPath>lib\DeveloperConsole.dll</HintPath>
+    </Reference>
     <Reference Include="ScriptHookVDotNet2">
       <HintPath>lib\ScriptHookVDotNet2.dll</HintPath>
     </Reference>
@@ -46,12 +49,15 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Line.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="Mjolnir.cs" />
     <Compile Include="NativeHelper.cs" />
+    <Compile Include="ParticleFxLooped.cs" />
     <Compile Include="Thor.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Thunder.cs" />
+    <Compile Include="ThunderSegment.cs" />
     <Compile Include="Utilities.cs" />
     <Compile Include="WorthyAbility.cs" />
   </ItemGroup>

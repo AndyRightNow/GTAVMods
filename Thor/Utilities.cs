@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 using GTA;
+using GTA.Math;
 
 namespace Thor
 {
@@ -44,16 +41,44 @@ namespace Thor
 
                 return arrThatMeetPredicate[randomIndex];
             }
+
+            public static System.Random SystemRandomInstance = new System.Random();
+
+            public static int RandomNegation()
+            {
+                return SystemRandomInstance.Next(0, 2) > 0 ? 1 : -1;
+            }
+
+            public static float NextFloat(bool allowNegative = true)
+            {
+                return Convert.ToSingle(SystemRandomInstance.NextDouble()) * (allowNegative ? RandomNegation() : 1.0f);
+            }
         }
 
         public static class Math
         {
-            public static float Angle(GTA.Math.Vector2 v1, GTA.Math.Vector2 v2)
+            public static Vector3 DirectionToRotation(Vector3 dir, float roll = 0.0f)
             {
-                return Convert.ToSingle(System.Math.Atan2(v1.X * v2.Y - v1.Y * v2.X, GTA.Math.Vector2.Dot(v1, v2)) * 180 / System.Math.PI);
+                dir = dir.Normalized;
+                Vector3 rot;
+                rot.Z = - RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(dir.X, dir.Y)));
+                Vector3 vec = new Vector3(dir.Z, new Vector3(dir.X, dir.Y, 0.0f).Length(), 0.0f).Normalized;
+                rot.X = RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(vec.X, vec.Y)));
+                rot.Y = roll;
+                return rot;
             }
 
-            public static float HorizontalLength(GTA.Math.Vector3 v)
+            public static float RadiansToDegrees(float radians)
+            {
+                return radians * 57.2958f;
+            }
+
+            public static float Angle(Vector2 v1, Vector2 v2)
+            {
+                return Convert.ToSingle(System.Math.Atan2(v1.X * v2.Y - v1.Y * v2.X, Vector2.Dot(v1, v2)) * 180 / System.Math.PI);
+            }
+
+            public static float HorizontalLength(Vector3 v)
             {
                 return Convert.ToSingle(System.Math.Sqrt(v.X * v.X + v.Y * v.Y));
             }
@@ -63,9 +88,34 @@ namespace Thor
                 return source <= target + delta && source >= target - delta;
             }
 
-            public static bool CloseTo(GTA.Math.Vector3 from, GTA.Math.Vector3 to, float delta)
+            public static bool CloseTo(Vector3 from, Vector3 to, float delta)
             {
                 return (from - to).Length() <= delta;
+            }
+
+            public static Vector3 RandomVectorPerpendicularTo(Vector3 target, bool normalized = true)
+            {
+
+                var rand = Random.SystemRandomInstance;
+                float x = Random.NextFloat(), y = Random.NextFloat(), z = 0.0f;
+
+                if (target.Z == 0.0f)
+                {
+                    z = Random.NextFloat();
+                    
+                    if (target.Y != 0.0f)
+                    {
+                        y = -(target.X * x / target.Y);   
+                    }
+                }
+                else
+                {
+                    z = -((target.X * x + target.Y * y) / target.Z);
+                }
+
+                var result = new Vector3(x, y, z);
+
+                return normalized ? result.Normalized : result;
             }
         }
 
@@ -94,6 +144,14 @@ namespace Thor
                     previouslyFiredGameTime = Game.GameTime;
                 }
             }
+        }
+
+        public static void Swap<T>(ref T lhs, ref T rhs)
+        {
+            T temp;
+            temp = lhs;
+            lhs = rhs;
+            rhs = temp;
         }
     }
 }

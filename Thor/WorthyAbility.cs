@@ -12,7 +12,6 @@ namespace Thor
     class WorthyAbility
     {
         private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 2.0f;
-        private static int CALLING_FOR_MJONIR_ANIMATION_DURATION = 650;
         private static int CATCHING_MJONIR_ANIMATION_DURATION = 250;
         private static Bone HAMMER_HOLDING_HAND_ID = Bone.PH_R_Hand;
         private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
@@ -24,6 +23,7 @@ namespace Thor
         private static float AIR_DASH_ATTACK_LANDING_VELOCITY = 200.0f;
         private static int FLY_WITH_THROWN_HAMMER_MAX_TIME = 2000;
         private static float FLY_SPRINT_VELOCITY_MULTIPLIER = 4f;
+        private static float SLOW_DOWN_TIME_SCALE = 0.1f;
         private static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 20.0f;
         private static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
         private static int MAX_TARGET_COUNT = 15;
@@ -44,6 +44,7 @@ namespace Thor
         private bool isInAirDashAttack;
         private Utilities.Timer pedFxTimer;
         private bool hasSummonedThunder;
+        private Entity grabbedEntity;
 
         private WorthyAbility()
         {
@@ -61,6 +62,7 @@ namespace Thor
             isInAirDashAttack = false;
             pedFxTimer = null;
             hasSummonedThunder = false;
+            grabbedEntity = null;
         }
 
         public static WorthyAbility Instance
@@ -134,11 +136,13 @@ namespace Thor
             }
 
             SetInvincible(true);
+            HandleTimeScaleChange();
             if (pedFxTimer != null)
             {
                 pedFxTimer.OnTick();
             }
             Hammer.OnTick();
+            HandleGrabbing();
 
             if (IsHoldingHammer ||
                 attachedPed.Weapons.CurrentWeaponObject == null)
@@ -167,7 +171,53 @@ namespace Thor
                 ShowHammerPFX();
                 HandleCallingForMjolnir();
                 HandleAttackingTargets();
-                DrawLineToHammer();
+            }
+        }
+
+        private void HandleGrabbing()
+        {
+            if (Game.IsKeyPressed(Keys.G))
+            {
+                if (grabbedEntity != null)
+                {
+                    if (NativeHelper.IsPed(grabbedEntity))
+                    {
+                        Ped ped = (Ped)grabbedEntity;
+                        ped.CanRagdoll = true;
+                        NativeHelper.SetPedToRagdoll((Ped)grabbedEntity, RagdollType.Normal, 100, 100);
+                    }
+
+                    grabbedEntity.SetNoCollision(attachedPed, true);
+                    return;
+                }
+
+                var raycastForward = World.Raycast(attachedPed.Position, attachedPed.ForwardVector, 1000.0f, NativeHelper.IntersectAllObjects);
+
+                if (raycastForward.DitHitEntity)
+                {
+                    var nearbyEnts = World.GetNearbyEntities(attachedPed.Position, 5.0f);
+
+                    foreach (var ent in nearbyEnts)
+                    {
+                        if (ent != attachedPed &&
+                            ent != attachedPed.Weapons.CurrentWeaponObject &&
+                            raycastForward.HitEntity == ent)
+                        {
+                            grabbedEntity = ent;
+                            grabbedEntity.AttachTo(attachedPed, attachedPed.GetBoneIndex(Bone.PH_L_Hand));
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (grabbedEntity != null)
+                {
+                    grabbedEntity.Detach();
+                    grabbedEntity.SetNoCollision(attachedPed, false);
+                    grabbedEntity = null;
+                    return;
+                }
             }
         }
 
@@ -224,6 +274,18 @@ namespace Thor
                 {
                     attachedPed.Velocity = new Vector3(0.0f, 0.0f, -AIR_DASH_ATTACK_LANDING_VELOCITY);
                 }
+            }
+        }
+
+        private void HandleTimeScaleChange()
+        {
+            if (isCollectingTargets)
+            {
+                Game.TimeScale = SLOW_DOWN_TIME_SCALE;
+            }
+            else
+            {
+                Game.TimeScale = 1.0f;
             }
         }
 
@@ -288,7 +350,7 @@ namespace Thor
                 {
                     continue;
                 }
-                var isPed = Function.Call<bool>(Hash.IS_ENTITY_A_PED, ent);
+                var isPed = NativeHelper.IsPed(ent);
 
                 if (hasSummonedThunder && isPed && ((Ped)ent).IsInCombatAgainst(attachedPed))
                 {
@@ -410,14 +472,6 @@ namespace Thor
             NativeHelper.SetPedToRagdoll(attachedPed, RagdollType.WideLegs, 2, 1000);
         }
 
-        private void DrawLineToHammer()
-        {
-            if (Hammer.WeaponObject != null && Hammer.WeaponObject.Exists())
-            {
-                NativeHelper.DrawLine(attachedPed.Position, Hammer.Position, Color.Red);
-            }
-        }
-
         private void HandleCallingForMjolnir()
         {
             if (Game.IsKeyPressed(Keys.H))
@@ -458,8 +512,11 @@ namespace Thor
             if (Game.IsControlPressed(0, GTA.Control.Aim))
             {
                 isCollectingTargets = true;
-                var result = World.Raycast(attachedPed.Position, GameplayCamera.Direction, RAY_CAST_MAX_DISTANCE, IntersectOptions.Everything);
-                NativeHelper.DrawLine(attachedPed.Position, attachedPed.Position + GameplayCamera.Direction * RAY_CAST_MAX_DISTANCE, Color.Black);
+                var result = World.Raycast(
+                    GameplayCamera.Position + GameplayCamera.Direction * 10.0f,
+                    GameplayCamera.Position + GameplayCamera.Direction * RAY_CAST_MAX_DISTANCE,
+                    NativeHelper.IntersectAllObjects
+                );
                 if (targets.Count < MAX_TARGET_COUNT &&
                     result.DitHitEntity &&
                     IsValidHitEntity(result.HitEntity))
@@ -564,10 +621,8 @@ namespace Thor
                 attachedPed,
                 dictName,
                 animName,
-                AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
-                CALLING_FOR_MJONIR_ANIMATION_DURATION
+                AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation
             );
-            Script.Wait(1);
 
             if (shootUpwardFirst)
             {

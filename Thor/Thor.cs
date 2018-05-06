@@ -1,6 +1,5 @@
 ﻿using GTA;
-using GTA.Math;
-using GTA.Native;
+using DeveloperConsole;
 using System;
 using System.Windows.Forms;
 
@@ -11,6 +10,7 @@ namespace Thor
         private WorthyAbility ability;
         private int previousPedHash;
         private bool abilityHasBeenTurnedOff;
+        private DeveloperConsole.DeveloperConsole dc;
 
         public Thor()
         {

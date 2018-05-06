@@ -142,10 +142,12 @@ namespace Thor
 
         public void ShowParticleFx()
         {
-            NativeHelper.PlayThunderFx(weaponObject);
             if (IsMoving)
             {
                 NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
+                var fxDirection = -weaponObject.Velocity.Normalized;
+                var speed = Function.Call<float>(Hash.GET_ENTITY_SPEED, weaponObject);
+                Thunder.Instance.Shoot(weaponObject.Position, weaponObject.Position + fxDirection * speed * 0.08f, -1, -1, false);
             }
         }
 
@@ -166,7 +168,7 @@ namespace Thor
                     ent != weaponObject)
                 {
                     ent.ApplyForce(weaponObject.Velocity);
-                    if (Function.Call<bool>(Hash.IS_ENTITY_A_PED, ent))
+                    if (NativeHelper.IsPed(ent))
                     {
                         Ped ped = (Ped) ent;
                         ped.ApplyDamage(100);
@@ -300,81 +302,6 @@ namespace Thor
             if (raycastToTarget.DitHitAnything)
             {
                 var velocity = Vector3.Zero;
-
-                //var raycastDistance = 100.0f;
-                //var raycastMoveStep = 1.0f;
-                //var closeCompareDelta = 5.0f;
-                //var raycastUp = World.Raycast(currentWeaponPos, new Vector3(0.0f, 0.0f, 100.0f), IntersectOptions.Map);
-                //if (raycastUp.DitHitAnything)
-                //{
-                //    var topLeftPos = currentWeaponPos + new Vector3(-raycastDistance, raycastDistance, 0.0f);
-                //    var topRightPos = currentWeaponPos + new Vector3(raycastDistance, raycastDistance, 0.0f);
-                //    var bottomLeftPos = currentWeaponPos + new Vector3(-raycastDistance, -raycastDistance, 0.0f);
-                //    var bottomRightPos = currentWeaponPos + new Vector3(raycastDistance, -raycastDistance, 0.0f);
-                //    var foundDirection = false;
-                //    var currentRaycastTarget = topLeftPos;
-                //    // Top left to top right
-                //    while (!Utilities.Math.CloseTo(currentRaycastTarget.X, topRightPos.X, closeCompareDelta))
-                //    {
-                //        Script.Wait(1);
-                //        currentRaycastTarget.X += raycastMoveStep;
-                //        var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
-                //        if (!raycast.DitHitAnything)
-                //        {
-                //            foundDirection = true;
-                //        }
-                //    }
-
-                //    // Top right to bottom right
-                //    if (!foundDirection)
-                //    {
-                //        while (!Utilities.Math.CloseTo(currentRaycastTarget.Y, bottomRightPos.Y, closeCompareDelta))
-                //        {
-                //            Script.Wait(1);
-                //            currentRaycastTarget.Y -= raycastMoveStep;
-                //            var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
-                //            if (!raycast.DitHitAnything)
-                //            {
-                //                foundDirection = true;
-                //            }
-                //        }
-                //    }
-
-                //    // Bottom right to bottom left
-                //    if (!foundDirection)
-                //    {
-                //        while (!Utilities.Math.CloseTo(currentRaycastTarget.X, bottomLeftPos.X, closeCompareDelta))
-                //        {
-                //            Script.Wait(1);
-                //            currentRaycastTarget.X -= raycastMoveStep;
-                //            var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
-                //            if (!raycast.DitHitAnything)
-                //            {
-                //                foundDirection = true;
-                //            }
-                //        }
-                //    }
-
-                //    // Bottom left to top left
-                //    if (!foundDirection)
-                //    {
-                //        while (!Utilities.Math.CloseTo(currentRaycastTarget.Y, topLeftPos.Y, closeCompareDelta))
-                //        {
-                //            Script.Wait(1);
-                //            currentRaycastTarget.Y += raycastMoveStep;
-                //            var raycast = World.Raycast(currentWeaponPos, currentRaycastTarget, IntersectOptions.Map);
-                //            if (!raycast.DitHitAnything)
-                //            {
-                //                foundDirection = true;
-                //            }
-                //        }
-                //    }
-
-                //    if (foundDirection)
-                //    {
-                //        velocity += (currentRaycastTarget - currentWeaponPos).Normalized * GetVelocityByDistance(newPosition, currentWeaponPos);
-                //    }
-                //}
 
                 if (canShootUpward)
                 {

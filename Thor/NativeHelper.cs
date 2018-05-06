@@ -287,25 +287,40 @@ namespace Thor
             Function.Call(Hash.SET_PED_CURRENT_WEAPON_VISIBLE, ped, visible, 0, 0, 0);
         }
 
-        public static void PlayParticleFx(string effectSetName, string effect, Entity entity, float scale = 1.0f)
+        private static void BeforePlayingParticleFx(string effectSetName)
         {
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
             Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, effectSetName);
+        }
+
+        public static void PlayParticleFx(string effectSetName, string effect, Entity entity, float scale = 1.0f)
+        {
+            BeforePlayingParticleFx(effectSetName);
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY, effect, entity, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
         }
 
         public static void PlayParticleFx(string effectSetName, string effect, Ped ped, Bone boneId, float scale = 1.0f)
         {
-            Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
-            Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, effectSetName);
+            BeforePlayingParticleFx(effectSetName);
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, (int)boneId, scale, 0, 0, 0);
         }
 
-        public static void PlayParticleFx(string effectSetName, string effect, Vector3 pos, float scale = 1.0f)
+        public static void PlayParticleFx(string effectSetName, string effect, Vector3 pos, Vector3 rot, float scale = 1.0f)
         {
-            Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
-            Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, effectSetName);
-            Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_AT_COORD, effect, pos.X, pos.Y, pos.Z, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
+            BeforePlayingParticleFx(effectSetName);
+            Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_AT_COORD, effect, pos.X, pos.Y, pos.Z, rot.X, rot.Y, rot.Z, scale, 0, 0, 0);
+        }
+
+        public static int PlayParticleFxLooped(string effectSetName, string effect, Ped ped, Bone boneId, float scale = 1.0f)
+        {
+            BeforePlayingParticleFx(effectSetName);
+            return Function.Call<int>(Hash.START_PARTICLE_FX_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, (int)boneId, scale, 0, 0, 0);
+        }
+
+        public static int PlayParticleFxLooped(string effectSetName, string effect, Vector3 pos, Vector3 rot, float scale = 1.0f)
+        {
+            BeforePlayingParticleFx(effectSetName);
+            return Function.Call<int>(Hash.START_PARTICLE_FX_LOOPED_AT_COORD, effect, pos.X, pos.Y, pos.Z, rot.X, rot.Y, rot.Z, scale, 0, 0, 0);
         }
 
         public static void SetObjectPhysicsParams(
@@ -351,19 +366,40 @@ namespace Thor
 
         public static void PlayThunderFx(Vector3 pos, float scale = 1.0f)
         {
-            PlayParticleFx(GetParticleSetName(ParticleEffects.Thunder), GetParticleName(ParticleEffects.Thunder), pos, scale);
+            PlayParticleFx(GetParticleSetName(ParticleEffects.Thunder), GetParticleName(ParticleEffects.Thunder), pos, Vector3.Zero, scale);
         }
 
         public static void ApplyForcesAndDamages(Entity ent, Vector3 direction)
         {
-            if (Function.Call<bool>(Hash.IS_ENTITY_A_PED, ent))
+            if (IsPed(ent) && ent != Game.Player.Character)
             {
                 var ped = (Ped)ent;
-                NativeHelper.SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
+                SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
                 ped.ApplyDamage(100);
             }
             ent.ApplyForce(direction * MELEE_HIT_FORCE);
             Function.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, ent);
+        }
+
+        public static void DrawLines(ref List<Line> lines)
+        {
+            foreach (var line in lines)
+            {
+                line.Draw();
+            }
+        }
+
+        public static void DrawBox(Vector3 a, Vector3 b, Color col)
+        {
+            Function.Call(Hash.DRAW_BOX, a.X, a.Y, a.Z, b.X, b.Y, b.Z, col.R, col.G, col.B, col.A);
+        }
+
+        public static IntersectOptions IntersectAllObjects
+        {
+            get
+            {
+                return (IntersectOptions)(2 | 4 | 8 | 16);
+            }
         }
     }
 }
