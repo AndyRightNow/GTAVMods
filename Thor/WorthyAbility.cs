@@ -44,7 +44,7 @@ namespace Thor
         private bool isInAirDashAttack;
         private Utilities.Timer pedFxTimer;
         private bool hasSummonedThunder;
-        private Entity grabbedEntity;
+        private bool isInPoweredJump;
 
         private WorthyAbility()
         {
@@ -62,7 +62,7 @@ namespace Thor
             isInAirDashAttack = false;
             pedFxTimer = null;
             hasSummonedThunder = false;
-            grabbedEntity = null;
+            isInPoweredJump = false;
         }
 
         public static WorthyAbility Instance
@@ -142,7 +142,8 @@ namespace Thor
                 pedFxTimer.OnTick();
             }
             Hammer.OnTick();
-            HandleGrabbing();
+            HandleMovement();
+            HandleLightningAutoAttack(20.0f);
 
             if (IsHoldingHammer ||
                 attachedPed.Weapons.CurrentWeaponObject == null)
@@ -157,12 +158,13 @@ namespace Thor
 
             if (IsHoldingHammer)
             {
+                World.RenderingCamera = null;
                 Function.Call<bool>(Hash.SET_PLAYER_LOCKON_RANGE_OVERRIDE, Game.Player.Handle, 0.0f);
-                HandleFlying();
                 HandleAirDashAttack();
                 CollectTargets();
                 HandleThrowingMjolnir();
                 DrawMarkersOnTargets();
+                HandleFlying();
             }
             else
             {
@@ -171,54 +173,21 @@ namespace Thor
                 ShowHammerPFX();
                 HandleCallingForMjolnir();
                 HandleAttackingTargets();
+
+                if (Game.IsKeyPressed(Keys.R))
+                {
+                    Hammer.RenderHammerTrackCam();
+                }
+                else
+                {
+                    World.RenderingCamera = null;
+                }
             }
         }
 
-        private void HandleGrabbing()
+        private void HandleMovement()
         {
-            if (Game.IsKeyPressed(Keys.G))
-            {
-                if (grabbedEntity != null)
-                {
-                    if (NativeHelper.IsPed(grabbedEntity))
-                    {
-                        Ped ped = (Ped)grabbedEntity;
-                        ped.CanRagdoll = true;
-                        NativeHelper.SetPedToRagdoll((Ped)grabbedEntity, RagdollType.Normal, 100, 100);
-                    }
-
-                    grabbedEntity.SetNoCollision(attachedPed, true);
-                    return;
-                }
-
-                var raycastForward = World.Raycast(attachedPed.Position, attachedPed.ForwardVector, 1000.0f, NativeHelper.IntersectAllObjects);
-
-                if (raycastForward.DitHitEntity)
-                {
-                    var nearbyEnts = World.GetNearbyEntities(attachedPed.Position, 5.0f);
-
-                    foreach (var ent in nearbyEnts)
-                    {
-                        if (ent != attachedPed &&
-                            ent != attachedPed.Weapons.CurrentWeaponObject &&
-                            raycastForward.HitEntity == ent)
-                        {
-                            grabbedEntity = ent;
-                            grabbedEntity.AttachTo(attachedPed, attachedPed.GetBoneIndex(Bone.PH_L_Hand));
-                        }
-                    }
-                }
-            }
-            else
-            {
-                if (grabbedEntity != null)
-                {
-                    grabbedEntity.Detach();
-                    grabbedEntity.SetNoCollision(attachedPed, false);
-                    grabbedEntity = null;
-                    return;
-                }
-            }
+            Function.Call(Hash.SET_PED_MOVE_RATE_OVERRIDE, attachedPed, 1.3f);
         }
 
         private void SummonThunder()
@@ -229,6 +198,12 @@ namespace Thor
             }
             hasSummonedThunder = true;
 
+            var prevWeather = World.Weather;
+            World.Weather = Weather.ThunderStorm;
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
             NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 NativeHelper.GetAnimationDictNameByAction(AnimationActions.SummonThunder),
@@ -239,6 +214,11 @@ namespace Thor
             PlayThunderFx();
             pedFxTimer = new Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS, PlayThunderFx);
             ApplyForcesAndDamagesOnNearbyEntities(true, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, Vector3.Zero);
+            World.Weather = prevWeather;
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
         }
 
         private void PlayThunderFx()
@@ -339,6 +319,34 @@ namespace Thor
             ApplyForcesAndDamagesOnNearbyEntities(false, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, attachedPed.ForwardVector);
         }
 
+        private void ShootLightningsToEnemy(Ped ped)
+        {
+            if (!hasSummonedThunder)
+            {
+                return;
+            }
+
+            if (ped.IsInCombatAgainst(attachedPed))
+            {
+                Thunder.Instance.Shoot(attachedPed.Position, ped.Position);
+            }
+        }
+
+        private void HandleLightningAutoAttack(float range)
+        {
+            if (!hasSummonedThunder)
+            {
+                return;
+            }
+
+            Ped[] nearbyPeds = World.GetNearbyPeds(attachedPed.Position, range);
+
+            foreach (var ped in nearbyPeds)
+            {
+                ShootLightningsToEnemy(ped);
+            }
+        }
+
         private void ApplyForcesAndDamagesOnNearbyEntities(bool applyToAll, float range, Vector3 forceDirection)
         {
             Entity[] closestEntities = World.GetNearbyEntities(attachedPed.Position, range);
@@ -352,9 +360,9 @@ namespace Thor
                 }
                 var isPed = NativeHelper.IsPed(ent);
 
-                if (hasSummonedThunder && isPed && ((Ped)ent).IsInCombatAgainst(attachedPed))
+                if (isPed)
                 {
-                    Thunder.Instance.Shoot(attachedPed.Position, ent.Position);
+                    ShootLightningsToEnemy((Ped)ent);
                 }
 
                 if (applyToAll || ent.HasBeenDamagedBy(attachedPed))
@@ -398,6 +406,11 @@ namespace Thor
             GameplayCamera.ClampPitch(-180.0f, 180.0f);
             var velocity = Vector3.Zero;
 
+            if (!IsHoldingHammer && !hasSummonedThunder)
+            {
+                return;
+            }
+
             if (isFlyingWithThrownHammer)
             {
                 int endTime = flyWithThrownHammerStartTime + FLY_WITH_THROWN_HAMMER_MAX_TIME;
@@ -438,17 +451,16 @@ namespace Thor
             {
                 isFlying = true;
                 GameplayCamera.StopShaking();
-                Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
                 SetAttachedPedToRagdoll();
                 attachedPed.Weapons.CurrentWeaponObject.Velocity = velocity;
+                Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
 
                 var nearbyEntities = World.GetNearbyEntities(attachedPed.Position, 5.0f);
                 foreach (var ent in nearbyEntities)
                 {
-                    if (ent != attachedPed &&
-                        ent != attachedPed.Weapons.CurrentWeaponObject &&
-                        (attachedPed.IsTouching(ent) ||
-                        attachedPed.Weapons.CurrentWeaponObject.IsTouching(ent)))
+                    if (ent != attachedPed && ent != attachedPed.Weapons.CurrentWeaponObject &&
+                                (attachedPed.IsTouching(ent) ||
+                                attachedPed.Weapons.CurrentWeaponObject.IsTouching(ent)))
                     {
                         ent.ApplyForce(velocity);
                     }

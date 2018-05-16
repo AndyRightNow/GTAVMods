@@ -25,7 +25,10 @@ namespace Thor
         GroundAttack2,
         GroundAttack3,
         GroundAttack4,
-        SummonThunder
+        SummonThunder,
+        NoHammerFlyForward,
+        NoHammerFlyForwardMaxSpeed,
+        NoHammerFlyAscending,
     }
 
     public enum ParticleEffects
@@ -59,7 +62,9 @@ namespace Thor
             "melee@knife@streamed_core",
             "melee@small_wpn@streamed_core",
             "melee@small_wpn@streamed_core",
-            "anim@mp_fm_event@intro"
+            "anim@mp_fm_event@intro",
+            "skydive@freefall",
+            "skydive@freefall"
         }).ToArray();
         private static string[] AnimationNames = (new List<string>
         {
@@ -76,7 +81,9 @@ namespace Thor
             "ground_attack_on_spot",
             "ground_attack_0",
             "ground_attack_on_spot",
-            "beast_transform"
+            "beast_transform",
+            "free_forward_anim",
+            "free_forward"
         }).ToArray();
         private static Dictionary<string, Dictionary<string, int>> AnimationWaitTime = new Dictionary<string, Dictionary<string, int>>()
         {

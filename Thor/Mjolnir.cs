@@ -28,6 +28,7 @@ namespace Thor
         private WeaponHash weaponHash;
         private Vector3 weaponSpawnPos;
         private Utilities.Timer hammerFxTimer;
+        private Camera hammerTrackCam;
 
         private Mjolnir()
         {
@@ -55,6 +56,11 @@ namespace Thor
                 {
                     weaponObject.Velocity = Vector3.Zero;
                 }
+            }
+
+            if (IsMoving)
+            {
+                weaponObject.Rotation = Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f);
             }
         }
 
@@ -175,6 +181,30 @@ namespace Thor
                     }
                 }
             }
+        }
+
+        public void RenderHammerTrackCam()
+        {
+            if (hammerTrackCam != null)
+            {
+                hammerTrackCam.Destroy();
+                hammerTrackCam = null;
+            }
+
+            hammerTrackCam = World.CreateCamera(weaponObject.Position, Vector3.Zero, 50.0f);
+            if (IsMoving)
+            {
+                hammerTrackCam.Position = -weaponObject.Velocity / 15.0f + weaponObject.Position + new Vector3(weaponObject.ForwardVector.Z, 0.0f, weaponObject.ForwardVector.Y) * 2.0f;
+                hammerTrackCam.Shake(CameraShake.SkyDiving, 50.0f);
+            }
+            else
+            {
+                hammerTrackCam.StopShaking();
+            }
+            hammerTrackCam.PointAt(weaponObject);
+
+
+            World.RenderingCamera = hammerTrackCam;
         }
 
         public void Init(Vector3? spawnPos, bool forceReplacingOld = false)
