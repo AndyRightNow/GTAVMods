@@ -358,6 +358,7 @@ namespace Thor
 
         public static void SetPedToRagdoll(Ped ped, RagdollType ragdollType, int timeToStayInRagdoll, int timeToStandUp)
         {
+            ped.CanRagdoll = true;
             Function.Call(Hash.SET_PED_TO_RAGDOLL, ped, timeToStayInRagdoll, timeToStandUp, (int)ragdollType, 0, 0, 0);
         }
 

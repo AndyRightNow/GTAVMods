@@ -29,12 +29,16 @@ namespace Thor
         private Vector3 weaponSpawnPos;
         private Utilities.Timer hammerFxTimer;
         private Camera hammerTrackCam;
+        private bool isBeingSummoned;
+        private Vector3 summoningPedForwardDirection;
 
         private Mjolnir()
         {
             weaponHash = WeaponHash.Hammer;
             weaponSpawnPos = new Vector3(0.0f, 0.0f, 2000.0f);
+            isBeingSummoned = false;
         }
+
 
         public void OnTick()
         {
@@ -42,9 +46,9 @@ namespace Thor
             {
                 hammerFxTimer.OnTick();
             }
-
             if (weaponObject != null && 
                 weaponObject.Exists() &&
+                weaponObject.HeightAboveGround > 1.0f &&
                 weaponObject.Velocity.Length() == 0)
             {
                 weaponObject.Velocity = Vector3.WorldUp;
@@ -58,9 +62,16 @@ namespace Thor
                 }
             }
 
-            if (IsMoving)
+            if (IsMoving && weaponObject.IsInAir)
             {
-                weaponObject.Rotation = Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f);
+                if (isBeingSummoned)
+                {
+                    weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, Utilities.Math.DirectionToRotation(summoningPedForwardDirection), 0.07f);
+                }
+                else
+                {
+                    weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f), 0.5f);
+                }
             }
         }
 
@@ -120,6 +131,16 @@ namespace Thor
                 }
 
                 return Function.Call<Vector3>(Hash.GET_ENTITY_COORDS, weaponObject);
+            }
+        }
+
+        public void SetSummonStatus(bool isSumoning, Ped summoningPed = null)
+        {
+            isBeingSummoned = isSumoning;
+
+            if (isSumoning && summoningPed != null)
+            {
+                summoningPedForwardDirection = summoningPed.ForwardVector;
             }
         }
 
@@ -183,22 +204,30 @@ namespace Thor
             }
         }
 
-        public void RenderHammerTrackCam()
+        public void DestroyHammerTrackCam()
         {
             if (hammerTrackCam != null)
             {
                 hammerTrackCam.Destroy();
                 hammerTrackCam = null;
             }
+        }
 
-            hammerTrackCam = World.CreateCamera(weaponObject.Position, Vector3.Zero, 50.0f);
+        public void RenderHammerTrackCam()
+        {
+            if (hammerTrackCam == null)
+            {
+                hammerTrackCam = World.CreateCamera(weaponObject.Position, Vector3.Zero, 50.0f);
+            }
+            
             if (IsMoving)
             {
                 hammerTrackCam.Position = -weaponObject.Velocity / 15.0f + weaponObject.Position + new Vector3(weaponObject.ForwardVector.Z, 0.0f, weaponObject.ForwardVector.Y) * 2.0f;
-                hammerTrackCam.Shake(CameraShake.SkyDiving, 50.0f);
+                hammerTrackCam.Shake(CameraShake.SkyDiving, 1150.0f);
             }
             else
             {
+                hammerTrackCam.Position = weaponObject.Position + new Vector3(0.0f, 0.0f, 10.0f);
                 hammerTrackCam.StopShaking();
             }
             hammerTrackCam.PointAt(weaponObject);
@@ -283,7 +312,7 @@ namespace Thor
                 return;
             }
 
-            weaponObject.Velocity = direction * MOVE_FULL_VELOCITY_MULTIPLIER;
+            weaponObject.Velocity = weaponObject.Velocity.Normalized + direction * MOVE_FULL_VELOCITY_MULTIPLIER;
         }
 
         private float GetVelocityByDistance(Vector3 newPosition, Vector3 curPosition)
@@ -321,7 +350,7 @@ namespace Thor
                 velocity += moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
             }
 
-            weaponObject.Velocity = velocity;
+            weaponObject.Velocity = weaponObject.Velocity.Normalized + velocity;
         }
 
         public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose, bool canShootUpward = true)
