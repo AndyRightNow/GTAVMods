@@ -13,6 +13,7 @@ namespace Thor
 {
     class Mjolnir
     {
+        private static float HAMMER_ROPE_LENGTH = 0.1f;
         private static float MOVE_FULL_VELOCITY_MULTIPLIER = 150.0f;
         private static float MOVE_HALF_VELOCITY_MULTIPLIER = 80.0f;
         private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 60.0f;
@@ -31,6 +32,10 @@ namespace Thor
         private Camera hammerTrackCam;
         private bool isBeingSummoned;
         private Vector3 summoningPedForwardDirection;
+        private Rope hammerRope;
+        private Ped hammerRopeAttachedPed;
+        private Bone hammerRopeAttachedPedBoneId;
+        private Entity hammerRopeAttachedIntermediateEnt;
 
         private Mjolnir()
         {
@@ -45,6 +50,12 @@ namespace Thor
             if (hammerFxTimer != null)
             {
                 hammerFxTimer.OnTick();
+            }
+            if (hammerRopeAttachedPed != null)
+            {
+                hammerRope.ResetLength(true);
+                hammerRope.Length = HAMMER_ROPE_LENGTH;
+                return;
             }
             if (weaponObject != null && 
                 weaponObject.Exists() &&
@@ -144,6 +155,50 @@ namespace Thor
             }
         }
 
+        public void AttachHammerRopeTo(Ped ped, Bone boneId)
+        {
+            if (weaponObject == null)
+            {
+                return;
+            }
+
+            DetachRope();
+
+            if (hammerRope == null)
+            {
+                hammerRope = World.AddRope(RopeType.Normal, Vector3.Zero, Vector3.Zero, HAMMER_ROPE_LENGTH, 0.0f, false);
+                hammerRope.ActivatePhysics();
+            }
+            if (hammerRopeAttachedIntermediateEnt == null)
+            {
+                var boneCoord = ped.GetBoneCoord(boneId);
+                hammerRopeAttachedIntermediateEnt = NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, boneCoord);
+                hammerRopeAttachedIntermediateEnt.IsVisible = false;
+            }
+
+            weaponObject.Rotation = Utilities.Math.DirectionToRotation(Vector3.WorldNorth);
+            var hammerAttachPos = GetHammerRopeAttachPosition(weaponObject);
+
+            hammerRopeAttachedIntermediateEnt.AttachTo(ped, ped.GetBoneIndex(boneId));
+            hammerRope.AttachEntities(hammerRopeAttachedIntermediateEnt, hammerRopeAttachedIntermediateEnt.Position, weaponObject, hammerAttachPos, HAMMER_ROPE_LENGTH);
+            weaponObject.SetNoCollision(ped, true);
+            hammerRopeAttachedPed = ped;
+            hammerRopeAttachedPedBoneId = boneId;
+
+            NativeHelper.SetObjectPhysicsParams(weaponObject, 1000000.0f);
+        }
+
+        public void DetachRope()
+        {
+            if (hammerRope != null && hammerRopeAttachedPed != null && hammerRopeAttachedIntermediateEnt != null)
+            {
+                hammerRope.DetachEntity(hammerRopeAttachedIntermediateEnt);
+                hammerRopeAttachedPed = null;
+                hammerRopeAttachedIntermediateEnt.Detach();
+            }
+            NativeHelper.SetObjectPhysicsParams(weaponObject, WEAPON_MASS);
+        }
+
         private Entity ActivateWeaponPhysics(Entity newWeaponObject)
         {
             Function.Call(Hash.ACTIVATE_PHYSICS, newWeaponObject);
@@ -161,10 +216,16 @@ namespace Thor
             newWeaponObject = ActivateWeaponPhysics(newWeaponObject);
 
             Blip weaponBlip = newWeaponObject.AddBlip();
+            
             weaponBlip.IsFriendly = true;
             weaponBlip.Name = "Mjolnir";
 
             return newWeaponObject;
+        }
+
+        private Vector3 GetHammerRopeAttachPosition(Entity weaponObject)
+        {
+            return weaponObject.Position + new Vector3(0.0f, 0.0f, -0.1f);
         }
 
         public void ShowParticleFx()

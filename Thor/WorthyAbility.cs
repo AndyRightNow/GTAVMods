@@ -44,6 +44,7 @@ namespace Thor
         private bool isInAirDashAttack;
         private Utilities.Timer pedFxTimer;
         private bool hasSummonedThunder;
+        private bool isHoldingHammerRope;
 
         private WorthyAbility()
         {
@@ -61,6 +62,7 @@ namespace Thor
             isInAirDashAttack = false;
             pedFxTimer = null;
             hasSummonedThunder = false;
+            isHoldingHammerRope = false;
         }
 
         public static WorthyAbility Instance
@@ -164,10 +166,12 @@ namespace Thor
                 HandleThrowingMjolnir();
                 DrawMarkersOnTargets();
                 HandleFlying();
+                HandleDropAndHoldHammerRope();
             }
             else
             {
                 HandleSummoningMjolnir();
+                HandleWhirlingHammer();
                 InitHammerIfNotExist();
                 Hammer.ApplyForcesToNearbyEntities();
                 ShowHammerPFX();
@@ -181,6 +185,22 @@ namespace Thor
                 {
                     World.RenderingCamera = null;
                 }
+            }
+        }
+
+        private void HandleWhirlingHammer()
+        {
+            if (Game.IsKeyPressed(Keys.Z) && isHoldingHammerRope)
+            {
+                Hammer.WeaponObject.Velocity = Vector3.WorldUp * 100.0f;
+            }
+        }
+
+        private void HandleDropAndHoldHammerRope()
+        {
+            if (Game.IsKeyPressed(Keys.Z))
+            {
+                DropAndHoldHammerRope();
             }
         }
 
@@ -409,7 +429,7 @@ namespace Thor
             GameplayCamera.ClampPitch(-180.0f, 180.0f);
             var velocity = Vector3.Zero;
 
-            if (!IsHoldingHammer && !hasSummonedThunder)
+            if (!IsHoldingHammer && !isHoldingHammerRope && !hasSummonedThunder)
             {
                 return;
             }
@@ -586,6 +606,8 @@ namespace Thor
 
         public void SummonMjolnir(bool shootUpwardFirst = false)
         {
+            Hammer.DetachRope();
+            isHoldingHammerRope = false;
             isHammerAttackingTargets = false;
             targets.Clear();
             Vector3 rightHandBonePos = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
@@ -707,6 +729,18 @@ namespace Thor
                 var hammerVelocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;
                 Hammer.WeaponObject.Velocity += hammerVelocity;
             }
+        }
+
+        private void DropAndHoldHammerRope()
+        {
+            if (!IsHoldingHammer)
+            {
+                return;
+            }
+
+            ThrowHammerOut(false);
+            Hammer.AttachHammerRopeTo(attachedPed, HAMMER_HOLDING_HAND_ID);
+            isHoldingHammerRope = true;
         }
 
         private void PlayThrowHammerAnimation(Vector3 directionToTurnTo)
