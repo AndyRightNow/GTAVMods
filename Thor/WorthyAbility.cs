@@ -23,7 +23,7 @@ namespace Thor
         private static float AIR_DASH_ATTACK_LANDING_VELOCITY = 200.0f;
         private static int FLY_WITH_THROWN_HAMMER_MAX_TIME = 2000;
         private static float FLY_SPRINT_VELOCITY_MULTIPLIER = 4f;
-        private static float SLOW_DOWN_TIME_SCALE = 0.1f;
+        private static float SLOW_DOWN_TIME_SCALE = 0.01f;
         private static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 20.0f;
         private static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
         private static int MAX_TARGET_COUNT = 15;
@@ -45,6 +45,7 @@ namespace Thor
         private Utilities.Timer pedFxTimer;
         private bool hasSummonedThunder;
         private bool isHoldingHammerRope;
+        private Plane hammerWhirlingPlane;
 
         private WorthyAbility()
         {
@@ -192,7 +193,11 @@ namespace Thor
         {
             if (Game.IsKeyPressed(Keys.Z) && isHoldingHammerRope)
             {
-                Hammer.WeaponObject.Velocity = Vector3.WorldUp * 100.0f;
+                var boneCoord = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
+
+                hammerWhirlingPlane = new Plane(Vector3.Cross(attachedPed.ForwardVector, Vector3.WorldUp), boneCoord);
+
+                Hammer.Whirl(hammerWhirlingPlane);
             }
         }
 
@@ -325,7 +330,7 @@ namespace Thor
 
         private void ShowHammerPFX()
         {
-            if (Hammer.IsMoving)
+            if (Hammer.IsMoving && !isHoldingHammerRope)
             {
                 Hammer.ShowParticleFx();
             }

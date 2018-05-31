@@ -54,6 +54,7 @@
     <Compile Include="Mjolnir.cs" />
     <Compile Include="NativeHelper.cs" />
     <Compile Include="ParticleFxLooped.cs" />
+    <Compile Include="Plane.cs" />
     <Compile Include="Thor.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Thunder.cs" />

@@ -13,7 +13,7 @@ namespace Thor
 {
     class Mjolnir
     {
-        private static float HAMMER_ROPE_LENGTH = 0.1f;
+        private static float HAMMER_ROPE_LENGTH = 0.19f;
         private static float MOVE_FULL_VELOCITY_MULTIPLIER = 150.0f;
         private static float MOVE_HALF_VELOCITY_MULTIPLIER = 80.0f;
         private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 60.0f;
@@ -84,6 +84,25 @@ namespace Thor
                     weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f), 0.5f);
                 }
             }
+        }
+
+        public void Whirl(Plane hammerWhirlingPlane)
+        {
+            var planeCenter = hammerWhirlingPlane.Center;
+            var hammerPosProjOnPlane =
+                planeCenter +
+                Vector3.ProjectOnPlane(weaponObject.Position - planeCenter, hammerWhirlingPlane.Normal).Normalized *
+                planeCenter.DistanceTo(weaponObject.Position);
+            var velocity = (hammerPosProjOnPlane - weaponObject.Position) * 10.0f;
+
+            weaponObject.Rotation = Utilities.Math.DirectionToRotation(weaponObject.Position - planeCenter) + new Vector3(-90.0f, 0.0f, 0.0f);
+
+            var hammerPosProjOnPlanePlanePoint = hammerWhirlingPlane.GetPlaneCoord(hammerPosProjOnPlane);
+            var perpHammerPosProjOnPlanePlanePoint = new Vector2(-hammerPosProjOnPlanePlanePoint.Y, hammerPosProjOnPlanePlanePoint.X);
+            var perpHammerPosProjOnPlaneWorldPoint = hammerWhirlingPlane.GetWorldCoord(perpHammerPosProjOnPlanePlanePoint);
+            velocity += ((perpHammerPosProjOnPlaneWorldPoint - planeCenter) * 1500.0f);
+            velocity += ((weaponObject.Position - planeCenter) * 500.0f);
+            weaponObject.Velocity = velocity;
         }
 
         public static Mjolnir Instance
@@ -171,8 +190,8 @@ namespace Thor
             }
             if (hammerRopeAttachedIntermediateEnt == null)
             {
-                var boneCoord = ped.GetBoneCoord(boneId);
-                hammerRopeAttachedIntermediateEnt = NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, boneCoord);
+                var planeCenter = ped.GetBoneCoord(boneId);
+                hammerRopeAttachedIntermediateEnt = NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, planeCenter);
                 hammerRopeAttachedIntermediateEnt.IsVisible = false;
             }
 
