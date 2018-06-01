@@ -86,23 +86,75 @@ namespace Thor
             }
         }
 
-        public void Whirl(Plane hammerWhirlingPlane)
+        public Vector3 Velocity
         {
+            set
+            {
+                if (hammerRopeAttachedPed != null)
+                {
+                    hammerRopeAttachedIntermediateEnt.Velocity = value;
+                }
+                else if (weaponObject != null)
+                {
+                    weaponObject.Velocity = value;
+                }
+            }
+            get
+            {
+                if (hammerRopeAttachedPed != null)
+                {
+                    return hammerRopeAttachedIntermediateEnt.Velocity;
+                }
+                else if (weaponObject != null)
+                {
+                    return weaponObject.Velocity;
+                }
+                else
+                {
+                    return Vector3.Zero;
+                }
+            }
+        }
+
+        public void Whirl(Plane hammerWhirlingPlane, bool physically = true, Entity weaponObj = null)
+        {
+            if (weaponObj == null)
+            {
+                weaponObj = weaponObject;
+            }
+
             var planeCenter = hammerWhirlingPlane.Center;
             var hammerPosProjOnPlane =
                 planeCenter +
-                Vector3.ProjectOnPlane(weaponObject.Position - planeCenter, hammerWhirlingPlane.Normal).Normalized *
-                planeCenter.DistanceTo(weaponObject.Position);
-            var velocity = (hammerPosProjOnPlane - weaponObject.Position) * 10.0f;
-
-            weaponObject.Rotation = Utilities.Math.DirectionToRotation(weaponObject.Position - planeCenter) + new Vector3(-90.0f, 0.0f, 0.0f);
-
+                Vector3.ProjectOnPlane(weaponObj.Position - planeCenter, hammerWhirlingPlane.Normal).Normalized *
+                planeCenter.DistanceTo(weaponObj.Position);
             var hammerPosProjOnPlanePlanePoint = hammerWhirlingPlane.GetPlaneCoord(hammerPosProjOnPlane);
             var perpHammerPosProjOnPlanePlanePoint = new Vector2(-hammerPosProjOnPlanePlanePoint.Y, hammerPosProjOnPlanePlanePoint.X);
             var perpHammerPosProjOnPlaneWorldPoint = hammerWhirlingPlane.GetWorldCoord(perpHammerPosProjOnPlanePlanePoint);
-            velocity += ((perpHammerPosProjOnPlaneWorldPoint - planeCenter) * 1500.0f);
-            velocity += ((weaponObject.Position - planeCenter) * 500.0f);
-            weaponObject.Velocity = velocity;
+
+            if (physically)
+            {
+                var velocity = (hammerPosProjOnPlane - weaponObj.Position) * 1.0f;
+
+                RotateToDirection(weaponObj, (weaponObj.Position - planeCenter).Normalized);
+
+                velocity += ((perpHammerPosProjOnPlaneWorldPoint - planeCenter) * 1500.0f);
+                velocity += ((weaponObj.Position - planeCenter) * 500.0f);
+                weaponObj.Velocity = velocity;
+            }
+            else
+            {
+                var nextHammerPos = planeCenter + (hammerPosProjOnPlane - planeCenter).Normalized;
+                var perpHammerPosProjOnPlaneWorldVec = (perpHammerPosProjOnPlaneWorldPoint - hammerPosProjOnPlane).Normalized;
+                nextHammerPos = planeCenter + (nextHammerPos + perpHammerPosProjOnPlaneWorldVec - planeCenter).Normalized * 0.3f;
+                weaponObj.Position = nextHammerPos;
+                RotateToDirection(weaponObj, (nextHammerPos - planeCenter).Normalized);
+            }
+        }
+
+        public void RotateToDirection(Entity weaponObj, Vector3 dir)
+        {
+            weaponObj.Rotation = Utilities.Math.DirectionToRotation(dir) + new Vector3(-90.0f, 0.0f, 0.0f);
         }
 
         public static Mjolnir Instance

@@ -21,14 +21,13 @@ namespace Thor
         CatchingMjolnir1,
         CatchingMjolnir2,
         CatchingMjolnir3,
+        CatchingMjolnir4,
         GroundAttack1,
         GroundAttack2,
         GroundAttack3,
         GroundAttack4,
         SummonThunder,
-        NoHammerFlyForward,
-        NoHammerFlyForwardMaxSpeed,
-        NoHammerFlyAscending,
+        WhirlingHammer,
     }
 
     public enum ParticleEffects
@@ -58,13 +57,13 @@ namespace Thor
             "guard_reactions",
             "cover@weapon@1h",
             "combat@fire_variations@1h@gang",
+            "melee@small_wpn@streamed_core",
             "melee@small_wpn@streamed_core_fps",
             "melee@knife@streamed_core",
             "melee@small_wpn@streamed_core",
             "melee@small_wpn@streamed_core",
             "anim@mp_fm_event@intro",
-            "skydive@freefall",
-            "skydive@freefall"
+            "melee@small_wpn@streamed_core"
         }).ToArray();
         private static string[] AnimationNames = (new List<string>
         {
@@ -77,13 +76,13 @@ namespace Thor
             "1hand_right_trans",
             "outro_hi_r_corner_short",
             "fire_variation_e",
+            "melee_outro",
             "ground_attack_on_spot",
             "ground_attack_on_spot",
             "ground_attack_0",
             "ground_attack_on_spot",
             "beast_transform",
-            "free_forward_anim",
-            "free_forward"
+            "dodge_generic_centre"
         }).ToArray();
         private static Dictionary<string, Dictionary<string, int>> AnimationWaitTime = new Dictionary<string, Dictionary<string, int>>()
         {
@@ -304,6 +303,12 @@ namespace Thor
         {
             BeforePlayingParticleFx(effectSetName);
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY, effect, entity, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
+        }
+
+        public static void PlayParticleFx(string effectSetName, string effect, Entity entity, Vector3 pos, float scale = 1.0f)
+        {
+            BeforePlayingParticleFx(effectSetName);
+            Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY, effect, entity, pos.X, pos.Y, pos.Z, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
         }
 
         public static void PlayParticleFx(string effectSetName, string effect, Ped ped, Bone boneId, float scale = 1.0f)
