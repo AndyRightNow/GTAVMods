@@ -46,7 +46,9 @@ namespace Thor
         private bool hasSummonedThunder;
         private bool isHoldingHammerRope;
         private Plane hammerWhirlingPlane;
-        private Entity hammerUsedForHoveringWhirling;
+        private Plane hammerHoverWhirlingPlane;
+        private Entity hammerUsedForHoveringWhirlingOriginal;
+        private Entity hammerUsedForHoveringWhirlingShown;
         private bool isHoverWhirling;
 
         private WorthyAbility()
@@ -101,10 +103,15 @@ namespace Thor
                 SetInvincible(false);
                 attachedPed = null;
             }
-            if (hammerUsedForHoveringWhirling != null)
+            if (hammerUsedForHoveringWhirlingOriginal != null)
             {
-                hammerUsedForHoveringWhirling.Delete();
-                hammerUsedForHoveringWhirling = null;
+                hammerUsedForHoveringWhirlingOriginal.Delete();
+                hammerUsedForHoveringWhirlingOriginal = null;
+            }
+            if (hammerUsedForHoveringWhirlingShown != null)
+            {
+                hammerUsedForHoveringWhirlingShown.Delete();
+                hammerUsedForHoveringWhirlingShown = null;
             }
 
             if (pedFxTimer != null)
@@ -165,6 +172,7 @@ namespace Thor
             }
             if (IsHoldingHammer)
             {
+                HandleHoverWhirlingHammer();
                 HandleFlying();
                 Hammer.DestroyHammerTrackCam();
                 Hammer.SetSummonStatus(false);
@@ -194,6 +202,19 @@ namespace Thor
                 {
                     World.RenderingCamera = null;
                 }
+            }
+        }
+
+        private void HandleHoverWhirlingHammer()
+        {
+            if (hammerHoverWhirlingPlane == null)
+            {
+                hammerHoverWhirlingPlane = new Plane(Vector3.WorldUp, Vector3.Zero);
+            }
+
+            if (isFlying && isHoverWhirling)
+            {
+                Hammer.Whirl(hammerHoverWhirlingPlane, false, hammerUsedForHoveringWhirlingOriginal);
             }
         }
 
@@ -283,9 +304,9 @@ namespace Thor
             {
                 NativeHelper.PlayThunderFx(attachedPed.Weapons.CurrentWeaponObject, 0.5f);
 
-                if (hammerUsedForHoveringWhirling != null)
+                if (hammerUsedForHoveringWhirlingShown != null)
                 {
-                    NativeHelper.PlayThunderFx(hammerUsedForHoveringWhirling, 0.5f);
+                    NativeHelper.PlayThunderFx(hammerUsedForHoveringWhirlingShown, 0.5f);
                 }
             }
         }
@@ -359,11 +380,17 @@ namespace Thor
 
         private void InitHoverWhirledHammer()
         {
-            if (hammerUsedForHoveringWhirling == null)
+            if (hammerUsedForHoveringWhirlingOriginal == null)
             {
-                hammerUsedForHoveringWhirling = NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero);
-                hammerUsedForHoveringWhirling.Alpha = 0;
-                hammerUsedForHoveringWhirling.SetNoCollision(attachedPed, true);
+                hammerUsedForHoveringWhirlingOriginal = NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero);
+                hammerUsedForHoveringWhirlingOriginal.Alpha = 0;
+                hammerUsedForHoveringWhirlingOriginal.SetNoCollision(attachedPed, true);
+            }
+            if (hammerUsedForHoveringWhirlingShown == null)
+            {
+                hammerUsedForHoveringWhirlingShown = NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero + new Vector3(0.0f, 0.0f, 10.0f));
+                hammerUsedForHoveringWhirlingShown.Alpha = 0;
+                hammerUsedForHoveringWhirlingShown.SetNoCollision(attachedPed, true);
             }
         }
 
@@ -521,22 +548,29 @@ namespace Thor
                 isFlying = true;
                 GameplayCamera.StopShaking();
                 SetAttachedPedToRagdoll();
-                attachedPed.Weapons.CurrentWeaponObject.Velocity += velocity;
                 var velocityAndUpDot = Vector3.Dot(velocity.Normalized, Vector3.WorldUp);
                 if (velocityAndUpDot >= 0.7f &&
                     velocityAndUpDot <= 1.0f)
                 {
-                    SetHeldHammerVisible(false);
-                    Hammer.Whirl(new Plane(velocity.Normalized, hammerHoldingHandCoord + velocity.Normalized * 0.1f), false, hammerUsedForHoveringWhirling);
                     isHoverWhirling = true;
+                    SetHeldHammerVisible(false);
                 }
                 else
                 {
+                    isHoverWhirling = false;
                     SetHeldHammerVisible(true);
                     Hammer.RotateToDirection(attachedPed.Weapons.CurrentWeaponObject, velocity.Normalized);
                     attachedPed.Weapons.CurrentWeaponObject.Position = hammerHoldingHandCoord + velocity.Normalized * 0.3f;
-                    isHoverWhirling = false;
                 }
+                if (isHoverWhirling)
+                {
+                    hammerUsedForHoveringWhirlingShown.Position = 
+                        attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID) + 
+                        (hammerUsedForHoveringWhirlingOriginal.Position - hammerHoverWhirlingPlane.Center) + 
+                        new Vector3(0, 0, 0.1f);
+                    hammerUsedForHoveringWhirlingShown.Rotation = hammerUsedForHoveringWhirlingOriginal.Rotation;
+                }
+                attachedPed.Weapons.CurrentWeaponObject.Velocity += velocity;
                 Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
 
                 var nearbyEntities = World.GetNearbyEntities(attachedPed.Position, 5.0f);
@@ -576,16 +610,16 @@ namespace Thor
                     attachedPed.Weapons.CurrentWeaponObject.Alpha = 0;
                 }
             }
-            if (hammerUsedForHoveringWhirling != null)
+            if (hammerUsedForHoveringWhirlingShown != null)
             {
                 if (toggle)
                 {
-                    hammerUsedForHoveringWhirling.Alpha = 0;
+                    hammerUsedForHoveringWhirlingShown.Alpha = 0;
 
                 }
                 else
                 {
-                    hammerUsedForHoveringWhirling.ResetAlpha();
+                    hammerUsedForHoveringWhirlingShown.ResetAlpha();
                 }
             }
         }
