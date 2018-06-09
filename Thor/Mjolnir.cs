@@ -22,6 +22,7 @@ namespace Thor
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.5f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 2f;
+        private static string SOUND_FILE_WHIRLING_HAMMER = "./scripts/whirling-hammer.wav";
         private static float APPLY_FORCE_RADIUS = 1.0f;
         private static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
         private static float WEAPON_MASS = 100000000000.0f;
@@ -37,12 +38,16 @@ namespace Thor
         private Ped hammerRopeAttachedPed;
         private Bone hammerRopeAttachedPedBoneId;
         private Entity hammerRopeAttachedIntermediateEnt;
+        private NAudio.Wave.WaveOut hammerWhirlingSoundPlayer;
+        private bool isWhirling;
 
         private Mjolnir()
         {
             weaponHash = WeaponHash.Hammer;
             weaponSpawnPos = new Vector3(0.0f, 0.0f, 2000.0f);
             isBeingSummoned = false;
+            hammerWhirlingSoundPlayer = new NAudio.Wave.WaveOut();
+            isWhirling = false;
         }
 
 
@@ -51,6 +56,18 @@ namespace Thor
             if (hammerFxTimer != null)
             {
                 hammerFxTimer.OnTick();
+            }
+            if (isWhirling)
+            {
+                if (hammerWhirlingSoundPlayer.PlaybackState != NAudio.Wave.PlaybackState.Playing)
+                {
+                    hammerWhirlingSoundPlayer.Init(new NAudio.Wave.AudioFileReader(SOUND_FILE_WHIRLING_HAMMER));
+                    hammerWhirlingSoundPlayer.Play();
+                }
+            }
+            else
+            {
+                hammerWhirlingSoundPlayer.Stop();
             }
             if (hammerRopeAttachedPed != null)
             {
@@ -85,6 +102,7 @@ namespace Thor
                     weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f), 0.5f);
                 }
             }
+            isWhirling = false;
         }
 
         public Vector3 Velocity
@@ -117,8 +135,9 @@ namespace Thor
             }
         }
 
-        public void Whirl(Plane hammerWhirlingPlane, bool physically = true, Entity weaponObj = null)
+        public void Whirl(Plane hammerWhirlingPlane, bool physically = true, Entity weaponObj = null, bool lerp = false)
         {
+            isWhirling = true;
             if (weaponObj == null)
             {
                 weaponObj = weaponObject;
@@ -141,7 +160,15 @@ namespace Thor
 
                 velocity += ((perpHammerPosProjOnPlaneWorldPoint - planeCenter) * 1500.0f);
                 velocity += ((weaponObj.Position - planeCenter) * 500.0f);
-                weaponObj.Velocity = velocity;
+                if (lerp)
+                {
+                    var currentVelocity = weaponObj.Velocity;
+                    weaponObj.Velocity = Vector3.Lerp(currentVelocity, velocity, 0.25f);
+                }
+                else
+                {
+                    weaponObj.Velocity = velocity;
+                }
             }
             else
             {

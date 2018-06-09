@@ -153,5 +153,22 @@ namespace Thor
             lhs = rhs;
             rhs = temp;
         }
+
+        public static class Audio
+        {
+            public static void Play(string filename)
+            {
+                var player = new NAudio.Wave.WaveOut();
+                var audio = new NAudio.Wave.AudioFileReader(filename);
+                player.Init(audio);
+                player.Play();
+                player.PlaybackStopped += (object sender, NAudio.Wave.StoppedEventArgs a) => {
+                    player.Dispose();
+                    player = null;
+                    audio.Dispose();
+                    audio = null;
+                };
+            }
+        }
     }
 }

@@ -34,6 +34,9 @@
     <Reference Include="DeveloperConsole">
       <HintPath>lib\DeveloperConsole.dll</HintPath>
     </Reference>
+    <Reference Include="NAudio">
+      <HintPath>lib\NAudio.dll</HintPath>
+    </Reference>
     <Reference Include="ScriptHookVDotNet2">
       <HintPath>lib\ScriptHookVDotNet2.dll</HintPath>
     </Reference>

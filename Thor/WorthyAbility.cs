@@ -6,12 +6,16 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Linq;
+using System.IO;
+using System.Media;
 
 namespace Thor
 {
     class WorthyAbility
     {
+        private static float PLAYER_MOVEMENT_MULTIPLIER = 1.5f;
         private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 2.0f;
+        private static float CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_SOUND = 140.0f;
         private static int CATCHING_MJONIR_ANIMATION_DURATION = 250;
         private static Bone HAMMER_HOLDING_HAND_ID = Bone.PH_R_Hand;
         private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
@@ -27,6 +31,8 @@ namespace Thor
         private static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 20.0f;
         private static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
         private static int MAX_TARGET_COUNT = 15;
+        private static string SOUND_FILE_HAMMER_CLOSE_TO_PLAYER = "./scripts/hammer-close-to-player.wav";
+        private static string SOUND_FILE_CATCH_HAMMER = "./scripts/catch-hammer.wav";
         private static Vector3 THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
 
         private static WorthyAbility instance;
@@ -50,6 +56,8 @@ namespace Thor
         private Entity hammerUsedForHoveringWhirlingOriginal;
         private Entity hammerUsedForHoveringWhirlingShown;
         private bool isHoverWhirling;
+        private NAudio.Wave.WaveOut catchHammerSoundPlayer;
+        private NAudio.Wave.WaveOut hammerCloseToPlayerSoundPlayer;
 
         private WorthyAbility()
         {
@@ -69,6 +77,8 @@ namespace Thor
             hasSummonedThunder = false;
             isHoldingHammerRope = false;
             isHoverWhirling = false;
+            catchHammerSoundPlayer = new NAudio.Wave.WaveOut();
+            hammerCloseToPlayerSoundPlayer = new NAudio.Wave.WaveOut();
         }
 
         public static WorthyAbility Instance
@@ -157,7 +167,6 @@ namespace Thor
             {
                 pedFxTimer.OnTick();
             }
-            Hammer.OnTick();
             HandleMovement();
             HandleLightningAutoAttack(3.0f);
             if (IsHoldingHammer ||
@@ -203,6 +212,7 @@ namespace Thor
                     World.RenderingCamera = null;
                 }
             }
+            Hammer.OnTick();
         }
 
         private void HandleHoverWhirlingHammer()
@@ -256,7 +266,8 @@ namespace Thor
 
         private void HandleMovement()
         {
-            Function.Call(Hash.SET_PED_MOVE_RATE_OVERRIDE, attachedPed, 1.3f);
+            Function.Call(Hash.SET_PED_MOVE_RATE_OVERRIDE, attachedPed, PLAYER_MOVEMENT_MULTIPLIER);
+            Function.Call(Hash.SET_SWIM_MULTIPLIER_FOR_PLAYER, Game.Player, PLAYER_MOVEMENT_MULTIPLIER);
             if (hasSummonedThunder)
             {
                 Function.Call(Hash.SET_SUPER_JUMP_THIS_FRAME, Game.Player);
@@ -546,6 +557,7 @@ namespace Thor
             if (velocity.Length() > 0)
             {
                 isFlying = true;
+                
                 GameplayCamera.StopShaking();
                 SetAttachedPedToRagdoll();
                 var velocityAndUpDot = Vector3.Dot(velocity.Normalized, Vector3.WorldUp);
@@ -736,6 +748,7 @@ namespace Thor
             targets.Clear();
             Vector3 rightHandBonePos = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
             Vector3 fromHammerToPedHand = rightHandBonePos - Hammer.Position;
+            
 
             float distanceBetweenHammerToPedHand = Math.Abs(fromHammerToPedHand.Length());
             if (distanceBetweenHammerToPedHand <= MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND)
@@ -759,9 +772,15 @@ namespace Thor
                     AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
                     CATCHING_MJONIR_ANIMATION_DURATION
                 );
+                PlayCatchHammerSound();
+                hammerCloseToPlayerSoundPlayer.Stop();
                 Script.Wait(1);
                 shouldHammerReturnToPed = false;
                 return;
+            }
+            else if (distanceBetweenHammerToPedHand <= CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_SOUND)
+            {
+                PlayHammerCloseSound();
             }
 
             AnimationActions randomCallingAction = Utilities.Random.PickOne(
@@ -794,6 +813,24 @@ namespace Thor
 
             Hammer.SetSummonStatus(true, attachedPed);
             Hammer.FindWaysToMoveToCoord(rightHandBonePos, true);
+        }
+
+        private void PlayCatchHammerSound()
+        {
+            catchHammerSoundPlayer.Init(new NAudio.Wave.AudioFileReader(SOUND_FILE_CATCH_HAMMER));
+            catchHammerSoundPlayer.Volume = 0.3f;
+            catchHammerSoundPlayer.Play();
+        }
+
+        private void PlayHammerCloseSound()
+        {
+            if (hammerCloseToPlayerSoundPlayer.PlaybackState == NAudio.Wave.PlaybackState.Playing)
+            {
+                return;
+            }
+            hammerCloseToPlayerSoundPlayer.Init(new NAudio.Wave.AudioFileReader(SOUND_FILE_HAMMER_CLOSE_TO_PLAYER));
+            hammerCloseToPlayerSoundPlayer.Volume = 0.3f;
+            hammerCloseToPlayerSoundPlayer.Play();
         }
 
         public void ThrowAndFlyWithMjolnir()
