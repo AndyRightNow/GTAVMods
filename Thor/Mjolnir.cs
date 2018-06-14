@@ -17,7 +17,7 @@ namespace Thor
         private static float HAMMER_ROPE_LENGTH = 0.19f;
         private static float MOVE_FULL_VELOCITY_MULTIPLIER = 150.0f;
         private static float MOVE_HALF_VELOCITY_MULTIPLIER = 80.0f;
-        private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 60.0f;
+        private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 45.0f;
         private static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.5f;
@@ -342,7 +342,8 @@ namespace Thor
         {
             if (weaponObject == null ||
                 !weaponObject.Exists() ||
-                !IsMoving)
+                !IsMoving ||
+                isWhirling)
             {
                 return;
             }
@@ -438,8 +439,10 @@ namespace Thor
 
             float distanceBetweenHammerAndNextTarget = (nextTarget.Position - Position).Length();
 
-            if ((NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET) ||
-                (NativeHelper.IsVehicle(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET))
+            if (nextTarget.Exists() && 
+                nextTarget.Position != Vector3.Zero && 
+                ((NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET) ||
+                (NativeHelper.IsVehicle(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET)))
             {
                 targets.Remove(nextTarget);
             }

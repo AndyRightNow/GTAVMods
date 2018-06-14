@@ -19,9 +19,6 @@ namespace Thor
         ThrowHammer4 = 4,
         ThrowHammer5 = 5,
         CatchingMjolnir1,
-        CatchingMjolnir2,
-        CatchingMjolnir3,
-        CatchingMjolnir4,
         GroundAttack1,
         GroundAttack2,
         GroundAttack3,
@@ -48,15 +45,12 @@ namespace Thor
         private static float MELEE_HIT_FORCE = 550.0f;
         private static string[] AnimationDictNames = (new List<string>
         {
-            "combat@aim_variations@1h@gang",
+            "weapons@first_person@aim_lt@p_m_zero@projectile@misc@sticky_bomb@aim_trans@lt_to_rng",
             "anim@melee@machete@streamed_core@",
             "anim@melee@machete@streamed_core@",
             "melee@small_wpn@streamed_core_fps",
             "melee@small_wpn@streamed_core_fps",
             "melee@small_wpn@streamed_core",
-            "guard_reactions",
-            "cover@weapon@1h",
-            "combat@fire_variations@1h@gang",
             "melee@small_wpn@streamed_core",
             "melee@small_wpn@streamed_core_fps",
             "melee@knife@streamed_core",
@@ -67,16 +61,13 @@ namespace Thor
         }).ToArray();
         private static string[] AnimationNames = (new List<string>
         {
-            "aim_variation_d",
+            "aim_trans_low",
             "small_melee_wpn_short_range_0",
             "plyr_walking_attack_a",
             "small_melee_wpn_short_range_0",
             "small_melee_wpn_long_range_0",
             "small_melee_wpn_long_range_0",
-            "1hand_right_trans",
-            "outro_hi_r_corner_short",
-            "fire_variation_e",
-            "melee_outro",
+            "melee_damage_back",
             "ground_attack_on_spot",
             "ground_attack_on_spot",
             "ground_attack_0",

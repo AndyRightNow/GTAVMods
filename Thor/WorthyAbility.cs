@@ -14,12 +14,12 @@ namespace Thor
     class WorthyAbility
     {
         private static float PLAYER_MOVEMENT_MULTIPLIER = 1.5f;
-        private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 2.0f;
+        private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 1f;
         private static float CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_SOUND = 140.0f;
         private static int CATCHING_MJONIR_ANIMATION_DURATION = 250;
         private static Bone HAMMER_HOLDING_HAND_ID = Bone.PH_R_Hand;
         private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
-        private static float AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS = 2000.0f;
+        private static float AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS = 1000.0f;
         private static float ANIMATION_ANGLE_RANGE_STEP = 45.0f;
         private static float RAY_CAST_MAX_DISTANCE = 100000.0f;
         private static float FLY_UPWARD_VELOCITY = 50.0f;
@@ -557,11 +557,10 @@ namespace Thor
             if (velocity.Length() > 0)
             {
                 isFlying = true;
-                
-                GameplayCamera.StopShaking();
+                GameplayCamera.Shake(CameraShake.MediumExplosion, 0.01f);
                 SetAttachedPedToRagdoll();
                 var velocityAndUpDot = Vector3.Dot(velocity.Normalized, Vector3.WorldUp);
-                if (velocityAndUpDot >= 0.7f &&
+                if (velocityAndUpDot >= 0.85f &&
                     velocityAndUpDot <= 1.0f)
                 {
                     isHoverWhirling = true;
@@ -753,18 +752,15 @@ namespace Thor
             float distanceBetweenHammerToPedHand = Math.Abs(fromHammerToPedHand.Length());
             if (distanceBetweenHammerToPedHand <= MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND)
             {
-                Function.Call(Hash.GIVE_WEAPON_OBJECT_TO_PED, Hammer.WeaponObject, attachedPed);
                 AnimationActions randomCatchingAction = Utilities.Random.PickOne(
                     new List<AnimationActions>
                     {
                         AnimationActions.CatchingMjolnir1,
-                        AnimationActions.CatchingMjolnir2,
-                        AnimationActions.CatchingMjolnir3,
-                        AnimationActions.CatchingMjolnir4
                     }.ToArray()
                 );
                 string catchDictName = NativeHelper.GetAnimationDictNameByAction(randomCatchingAction);
                 string catchAnimName = NativeHelper.GetAnimationNameByAction(randomCatchingAction);
+                Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
                 NativeHelper.PlayPlayerAnimation(
                     attachedPed,
                     catchDictName,
@@ -772,8 +768,11 @@ namespace Thor
                     AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
                     CATCHING_MJONIR_ANIMATION_DURATION
                 );
+                NativeHelper.PlayThunderFx(attachedPed, HAMMER_HOLDING_HAND_ID, 0.8f);
+                Function.Call(Hash.GIVE_WEAPON_OBJECT_TO_PED, Hammer.WeaponObject, attachedPed);
                 PlayCatchHammerSound();
                 hammerCloseToPlayerSoundPlayer.Stop();
+                GameplayCamera.Shake(CameraShake.LargeExplosion, 0.01f);
                 Script.Wait(1);
                 shouldHammerReturnToPed = false;
                 return;
