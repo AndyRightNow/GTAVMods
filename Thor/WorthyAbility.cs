@@ -14,8 +14,9 @@ namespace Thor
     class WorthyAbility
     {
         private static float PLAYER_MOVEMENT_MULTIPLIER = 1.5f;
-        private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 1f;
+        private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 0.6f;
         private static float CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_SOUND = 140.0f;
+        private static float CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_HAMMER_ROTATION = 5.0f;
         private static int CATCHING_MJONIR_ANIMATION_DURATION = 250;
         private static Bone HAMMER_HOLDING_HAND_ID = Bone.PH_R_Hand;
         private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
@@ -209,7 +210,7 @@ namespace Thor
                 }
                 else
                 {
-                    World.RenderingCamera = null;
+                    Hammer.CancelRenderHammerTrackCam();
                 }
             }
             Hammer.OnTick();
@@ -348,14 +349,6 @@ namespace Thor
 
         private void HandleTimeScaleChange()
         {
-            if (isCollectingTargets)
-            {
-                Game.TimeScale = SLOW_DOWN_TIME_SCALE;
-            }
-            else
-            {
-                Game.TimeScale = 1.0f;
-            }
         }
 
         private void HandleAttackingTargets()
@@ -747,8 +740,8 @@ namespace Thor
             targets.Clear();
             Vector3 rightHandBonePos = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
             Vector3 fromHammerToPedHand = rightHandBonePos - Hammer.Position;
-            
 
+            bool isHammerCloseToPed = false;
             float distanceBetweenHammerToPedHand = Math.Abs(fromHammerToPedHand.Length());
             if (distanceBetweenHammerToPedHand <= MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND)
             {
@@ -776,6 +769,10 @@ namespace Thor
                 Script.Wait(1);
                 shouldHammerReturnToPed = false;
                 return;
+            }
+            else if (distanceBetweenHammerToPedHand <= CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_HAMMER_ROTATION)
+            {
+                isHammerCloseToPed = true;
             }
             else if (distanceBetweenHammerToPedHand <= CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_SOUND)
             {
@@ -810,7 +807,7 @@ namespace Thor
                 Script.Wait(500);
             }
 
-            Hammer.SetSummonStatus(true, attachedPed);
+            Hammer.SetSummonStatus(true, attachedPed, isHammerCloseToPed);
             Hammer.FindWaysToMoveToCoord(rightHandBonePos, true);
         }
 

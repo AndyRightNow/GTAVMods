@@ -55,6 +55,7 @@
     <Compile Include="Line.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="Mjolnir.cs" />
+    <Compile Include="MjolnirCamera.cs" />
     <Compile Include="NativeHelper.cs" />
     <Compile Include="ParticleFxLooped.cs" />
     <Compile Include="Plane.cs" />
@@ -67,6 +68,6 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetPath)" "D:\Steam\steamapps\common\Grand Theft Auto V\scripts" /y</PostBuildEvent>
+    <PostBuildEvent>copy "$(TargetPath)" "C:\Steam\steamapps\common\Grand Theft Auto V\scripts" /y</PostBuildEvent>
   </PropertyGroup>
 </Project>

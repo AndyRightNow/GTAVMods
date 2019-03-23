@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using GTA;
 using GTA.Native;
 using GTA.Math;
+using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Threading;
 using System.Drawing;
@@ -15,17 +15,19 @@ namespace Thor
     class Mjolnir
     {
         private static float HAMMER_ROPE_LENGTH = 0.19f;
-        private static float MOVE_FULL_VELOCITY_MULTIPLIER = 150.0f;
-        private static float MOVE_HALF_VELOCITY_MULTIPLIER = 80.0f;
-        private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 45.0f;
+        private static float MOVE_UPWARD_VELOCITY_MULTIPLIER = 500.0f;
+        private static float MOVE_FULL_VELOCITY_MULTIPLIER = 100.0f;
+        private static float MOVE_HALF_VELOCITY_MULTIPLIER = 40.0f;
+        private static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 35.0f;
         private static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
+        private static float HAMMER_ROTATION_UPWARD_LERP_RATIO = 0.4f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.5f;
         private static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 2f;
         private static string SOUND_FILE_WHIRLING_HAMMER = "./scripts/whirling-hammer.wav";
         private static float APPLY_FORCE_RADIUS = 1.0f;
         private static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
-        private static float WEAPON_MASS = 100000000000.0f;
+        private static float WEAPON_MASS = 1000.0f;
         private static Mjolnir instance;
         private Entity weaponObject;
         private WeaponHash weaponHash;
@@ -33,6 +35,7 @@ namespace Thor
         private Utilities.Timer hammerFxTimer;
         private Camera hammerTrackCam;
         private bool isBeingSummoned;
+        private bool isCloseToSummoningPed;
         private Vector3 summoningPedForwardDirection;
         private Rope hammerRope;
         private Ped hammerRopeAttachedPed;
@@ -93,9 +96,9 @@ namespace Thor
 
             if (IsMoving && weaponObject.IsInAir)
             {
-                if (isBeingSummoned)
+                if (isBeingSummoned && isCloseToSummoningPed)
                 {
-                    weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, Utilities.Math.DirectionToRotation(summoningPedForwardDirection), 0.07f);
+                    weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, Utilities.Math.DirectionToRotation(summoningPedForwardDirection), HAMMER_ROTATION_UPWARD_LERP_RATIO);
                 }
                 else
                 {
@@ -244,9 +247,10 @@ namespace Thor
             }
         }
 
-        public void SetSummonStatus(bool isSumoning, Ped summoningPed = null)
+        public void SetSummonStatus(bool isSumoning, Ped summoningPed = null, bool isCloseToSummoningPed = false)
         {
             isBeingSummoned = isSumoning;
+            this.isCloseToSummoningPed = isCloseToSummoningPed;
 
             if (isSumoning && summoningPed != null)
             {
@@ -367,34 +371,17 @@ namespace Thor
 
         public void DestroyHammerTrackCam()
         {
-            if (hammerTrackCam != null)
-            {
-                hammerTrackCam.Destroy();
-                hammerTrackCam = null;
-            }
+            MjolnirCamera.Instance.DestroyCamera();
         }
 
         public void RenderHammerTrackCam()
         {
-            if (hammerTrackCam == null)
-            {
-                hammerTrackCam = World.CreateCamera(weaponObject.Position, Vector3.Zero, 50.0f);
-            }
-            
-            if (IsMoving)
-            {
-                hammerTrackCam.Position = -weaponObject.Velocity / 15.0f + weaponObject.Position + new Vector3(weaponObject.ForwardVector.Z, 0.0f, weaponObject.ForwardVector.Y) * 2.0f;
-                hammerTrackCam.Shake(CameraShake.SkyDiving, 1150.0f);
-            }
-            else
-            {
-                hammerTrackCam.Position = weaponObject.Position + new Vector3(0.0f, 0.0f, 10.0f);
-                hammerTrackCam.StopShaking();
-            }
-            hammerTrackCam.PointAt(weaponObject);
+            MjolnirCamera.Instance.RenderCamera(weaponObject);
+        }
 
-
-            World.RenderingCamera = hammerTrackCam;
+        public void CancelRenderHammerTrackCam()
+        {
+            MjolnirCamera.Instance.CancelRenderedCamera();
         }
 
         public void Init(Vector3? spawnPos, bool forceReplacingOld = false)
@@ -518,16 +505,14 @@ namespace Thor
 
         public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose, bool canShootUpward = true)
         {
-            var currentWeaponPos = weaponObject.Position;
-            var raycastToTarget = World.Raycast(currentWeaponPos, newPosition, IntersectOptions.Map);
 
-            if (raycastToTarget.DitHitAnything)
+            if (ShouldShootUpward(newPosition))
             {
                 var velocity = Vector3.Zero;
 
                 if (canShootUpward)
                 {
-                    velocity += Vector3.WorldUp * GetVelocityByDistance(newPosition, currentWeaponPos);
+                    velocity += Vector3.WorldUp * MOVE_UPWARD_VELOCITY_MULTIPLIER;
                 }
 
                 MoveToCoord(newPosition, slowDownIfClose, velocity);
@@ -536,6 +521,14 @@ namespace Thor
             {
                 MoveToCoord(newPosition, slowDownIfClose, Vector3.Zero);
             }
+        }
+
+        private bool ShouldShootUpward(Vector3 newPosition)
+        {
+            var currentWeaponPos = weaponObject.Position;
+            var raycastToTarget = World.Raycast(currentWeaponPos, newPosition, IntersectOptions.Map);
+
+            return raycastToTarget.DitHitAnything;
         }
     }
 }

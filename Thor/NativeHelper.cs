@@ -42,7 +42,8 @@ namespace Thor
 
     public static class NativeHelper
     {
-        private static float MELEE_HIT_FORCE = 550.0f;
+        private static float MELEE_HIT_FORCE = 250.0f;
+        private static int MELEE_HIT_PED_DAMAGE = 100;
         private static string[] AnimationDictNames = (new List<string>
         {
             "weapons@first_person@aim_lt@p_m_zero@projectile@misc@sticky_bomb@aim_trans@lt_to_rng",
@@ -379,7 +380,7 @@ namespace Thor
             {
                 var ped = (Ped)ent;
                 SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
-                ped.ApplyDamage(100);
+                ped.ApplyDamage(MELEE_HIT_PED_DAMAGE);
             }
             ent.ApplyForce(direction * MELEE_HIT_FORCE);
             Function.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, ent);
