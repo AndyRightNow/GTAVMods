@@ -13,10 +13,12 @@ namespace Thor
 {
     class WorthyAbility
     {
+        private static float NULL_FLOAT = -1.0f;
         private static float PLAYER_MOVEMENT_MULTIPLIER = 1.5f;
         private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 0.6f;
         private static float CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_SOUND = 140.0f;
         private static float CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_HAMMER_ROTATION = 5.0f;
+        private static float HAMMER_BEFORE_RETURN_TO_PED_WAIT_TIME = 700.0f;
         private static int CATCHING_MJONIR_ANIMATION_DURATION = 250;
         private static Bone HAMMER_HOLDING_HAND_ID = Bone.PH_R_Hand;
         private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
@@ -39,6 +41,7 @@ namespace Thor
         private static WorthyAbility instance;
         private Ped attachedPed;
         private bool isHammerAttackingTargets;
+        private float hammerJustFinishedAttackingTargetsTimestamp;
         private bool isCollectingTargets;
         private bool hasJustSetEndOfFlyingInitialVelocity;
         private bool isFlyingWithThrownHammer;
@@ -80,6 +83,7 @@ namespace Thor
             isHoverWhirling = false;
             catchHammerSoundPlayer = new NAudio.Wave.WaveOut();
             hammerCloseToPlayerSoundPlayer = new NAudio.Wave.WaveOut();
+            hammerJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
         }
 
         public static WorthyAbility Instance
@@ -353,7 +357,6 @@ namespace Thor
 
         private void HandleAttackingTargets()
         {
-            var previousIsHammerAttackingTargets = isHammerAttackingTargets;
             if (targets.Count > 0 && isHammerAttackingTargets)
             {
                 isHammerAttackingTargets = Hammer.MoveToTargets(ref targets);
@@ -361,11 +364,18 @@ namespace Thor
             else if (targets.Count == 0)
             {
                 isHammerAttackingTargets = false;
+                if (hammerJustFinishedAttackingTargetsTimestamp == NULL_FLOAT)
+                {
+                    hammerJustFinishedAttackingTargetsTimestamp = Game.GameTime;
+                }
             }
-            if (previousIsHammerAttackingTargets != isHammerAttackingTargets &&
-                !isHammerAttackingTargets)
+
+            if (!isHammerAttackingTargets &&
+                hammerJustFinishedAttackingTargetsTimestamp != NULL_FLOAT &&
+                Game.GameTime - hammerJustFinishedAttackingTargetsTimestamp >= HAMMER_BEFORE_RETURN_TO_PED_WAIT_TIME)
             {
                 shouldHammerReturnToPed = true;
+                hammerJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
             }
 
             if (shouldHammerReturnToPed)
@@ -768,6 +778,7 @@ namespace Thor
                 GameplayCamera.Shake(CameraShake.LargeExplosion, 0.01f);
                 Script.Wait(1);
                 shouldHammerReturnToPed = false;
+                hammerJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
                 return;
             }
             else if (distanceBetweenHammerToPedHand <= CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_HAMMER_ROTATION)

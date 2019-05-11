@@ -512,7 +512,7 @@ namespace Thor
 
                 if (canShootUpward)
                 {
-                    velocity += Vector3.WorldUp * MOVE_UPWARD_VELOCITY_MULTIPLIER;
+                    velocity = Vector3.Lerp(this.Velocity, Vector3.WorldUp * MOVE_UPWARD_VELOCITY_MULTIPLIER, 0.01f);
                 }
 
                 MoveToCoord(newPosition, slowDownIfClose, velocity);
