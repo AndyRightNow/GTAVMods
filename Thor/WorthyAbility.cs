@@ -40,6 +40,7 @@ namespace Thor
 
         private static WorthyAbility instance;
         private Ped attachedPed;
+        private bool previousIsHammerAttackingTargets;
         private bool isHammerAttackingTargets;
         private float hammerJustFinishedAttackingTargetsTimestamp;
         private bool isCollectingTargets;
@@ -69,6 +70,7 @@ namespace Thor
             targets = new HashSet<Entity>();
             Hammer = Mjolnir.Instance;
             isHammerAttackingTargets = false;
+            previousIsHammerAttackingTargets = false;
             previousPedVelocity = Vector3.Zero;
             isFlying = false;
             hasJustSetEndOfFlyingInitialVelocity = false;
@@ -357,16 +359,19 @@ namespace Thor
 
         private void HandleAttackingTargets()
         {
-            if (targets.Count > 0 && isHammerAttackingTargets)
+            if (isHammerAttackingTargets)
             {
-                isHammerAttackingTargets = Hammer.MoveToTargets(ref targets);
-            }
-            else if (targets.Count == 0)
-            {
-                isHammerAttackingTargets = false;
-                if (hammerJustFinishedAttackingTargetsTimestamp == NULL_FLOAT)
+                if (targets.Count > 0)
                 {
-                    hammerJustFinishedAttackingTargetsTimestamp = Game.GameTime;
+                    isHammerAttackingTargets = Hammer.MoveToTargets(ref targets);
+                }
+                else if (targets.Count == 0)
+                {
+                    isHammerAttackingTargets = false;
+                    if (hammerJustFinishedAttackingTargetsTimestamp == NULL_FLOAT)
+                    {
+                        hammerJustFinishedAttackingTargetsTimestamp = Game.GameTime;
+                    }
                 }
             }
 
