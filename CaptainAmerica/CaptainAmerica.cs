@@ -2,23 +2,21 @@
 using System;
 using System.Windows.Forms;
 
-namespace Thor
+namespace CaptainAmerica
 {
-    public class Thor : Script
+    public class CaptainAmerica : Script
     {
-        private WorthyAbility ability;
         private int previousPedHash;
         private bool abilityHasBeenTurnedOff;
-        private DeveloperConsole.DeveloperConsole dc;
+        private Ability ability;
 
-        public Thor()
+        public CaptainAmerica()
         {
             Tick += OnTick;
             Interval = 0;
-
-            ability = WorthyAbility.Instance;
-            previousPedHash = -1;
+            ability = Ability.Instance;
             abilityHasBeenTurnedOff = true;
+            previousPedHash = -1;
         }
 
         void OnTick(object sender, EventArgs e)
@@ -38,18 +36,18 @@ namespace Thor
         private void HandleAbilityToggle()
         {
             if (Game.IsControlPressed(0, GTA.Control.VehicleSubDescend) &&
-               Game.IsControlPressed(0, GTA.Control.ScriptPadLeft) &&
+               Game.IsControlPressed(0, GTA.Control.ScriptPadDown) &&
                Game.IsKeyPressed(Keys.O))
             {
                 abilityHasBeenTurnedOff = false;
-                UI.Notify("The Thor ability has been turned on.");
+                UI.Notify("The Captain America ability has been turned on.");
             }
             else if (Game.IsControlPressed(0, GTA.Control.VehicleSubDescend) &&
-               Game.IsControlPressed(0, GTA.Control.ScriptPadLeft) &&
+               Game.IsControlPressed(0, GTA.Control.ScriptPadDown) &&
                Game.IsControlPressed(0, GTA.Control.VehicleExit))
             {
                 abilityHasBeenTurnedOff = true;
-                UI.Notify("The Thor ability has been turned off.");
+                UI.Notify("The Captain America ability has been turned off.");
             }
         }
 

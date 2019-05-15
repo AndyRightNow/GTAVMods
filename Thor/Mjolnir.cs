@@ -32,8 +32,7 @@ namespace Thor
         private Entity weaponObject;
         private WeaponHash weaponHash;
         private Vector3 weaponSpawnPos;
-        private Utilities.Timer hammerFxTimer;
-        private Camera hammerTrackCam;
+        private ADModUtils.Utilities.Timer hammerFxTimer;
         private bool isBeingSummoned;
         private bool isCloseToSummoningPed;
         private Vector3 summoningPedForwardDirection;
@@ -98,11 +97,11 @@ namespace Thor
             {
                 if (isBeingSummoned && isCloseToSummoningPed)
                 {
-                    weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, Utilities.Math.DirectionToRotation(summoningPedForwardDirection), HAMMER_ROTATION_UPWARD_LERP_RATIO);
+                    weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, ADModUtils.Utilities.Math.DirectionToRotation(summoningPedForwardDirection), HAMMER_ROTATION_UPWARD_LERP_RATIO);
                 }
                 else
                 {
-                    weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f), 0.5f);
+                    weaponObject.Rotation = Vector3.Lerp(weaponObject.Rotation, ADModUtils.Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f), 0.5f);
                 }
             }
             isWhirling = false;
@@ -138,7 +137,7 @@ namespace Thor
             }
         }
 
-        public void Whirl(Plane hammerWhirlingPlane, bool physically = true, Entity weaponObj = null, bool lerp = false)
+        public void Whirl(ADModUtils.Plane hammerWhirlingPlane, bool physically = true, Entity weaponObj = null, bool lerp = false)
         {
             isWhirling = true;
             if (weaponObj == null)
@@ -185,7 +184,7 @@ namespace Thor
 
         public void RotateToDirection(Entity weaponObj, Vector3 dir)
         {
-            weaponObj.Rotation = Utilities.Math.DirectionToRotation(dir) + new Vector3(-90.0f, 0.0f, 0.0f);
+            weaponObj.Rotation = ADModUtils.Utilities.Math.DirectionToRotation(dir) + new Vector3(-90.0f, 0.0f, 0.0f);
         }
 
         public static Mjolnir Instance
@@ -225,7 +224,7 @@ namespace Thor
                 if (value != null)
                 {
                     weaponObject = InitializeWeaponObject(value);
-                    hammerFxTimer = new Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS,
+                    hammerFxTimer = new ADModUtils.Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS,
                     () =>
                     {
                         NativeHelper.PlayThunderFx(weaponObject);
@@ -275,11 +274,11 @@ namespace Thor
             if (hammerRopeAttachedIntermediateEnt == null)
             {
                 var planeCenter = ped.GetBoneCoord(boneId);
-                hammerRopeAttachedIntermediateEnt = NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, planeCenter);
+                hammerRopeAttachedIntermediateEnt = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, planeCenter);
                 hammerRopeAttachedIntermediateEnt.IsVisible = false;
             }
 
-            weaponObject.Rotation = Utilities.Math.DirectionToRotation(Vector3.WorldNorth);
+            weaponObject.Rotation = ADModUtils.Utilities.Math.DirectionToRotation(Vector3.WorldNorth);
             var hammerAttachPos = GetHammerRopeAttachPosition(weaponObject);
 
             hammerRopeAttachedIntermediateEnt.AttachTo(ped, ped.GetBoneIndex(boneId));
@@ -288,7 +287,7 @@ namespace Thor
             hammerRopeAttachedPed = ped;
             hammerRopeAttachedPedBoneId = boneId;
 
-            NativeHelper.SetObjectPhysicsParams(weaponObject, 1000000.0f);
+            ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponObject, 1000000.0f);
         }
 
         public void DetachRope()
@@ -299,13 +298,13 @@ namespace Thor
                 hammerRopeAttachedPed = null;
                 hammerRopeAttachedIntermediateEnt.Detach();
             }
-            NativeHelper.SetObjectPhysicsParams(weaponObject, WEAPON_MASS);
+            ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponObject, WEAPON_MASS);
         }
 
         private Entity ActivateWeaponPhysics(Entity newWeaponObject)
         {
             Function.Call(Hash.ACTIVATE_PHYSICS, newWeaponObject);
-            NativeHelper.SetObjectPhysicsParams(newWeaponObject, WEAPON_MASS);
+            ADModUtils.NativeHelper.SetObjectPhysicsParams(newWeaponObject, WEAPON_MASS);
             return newWeaponObject;
         }
 
@@ -335,7 +334,7 @@ namespace Thor
         {
             if (IsMoving)
             {
-                NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
+                ADModUtils.NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
                 var fxDirection = -weaponObject.Velocity.Normalized;
                 var speed = Function.Call<float>(Hash.GET_ENTITY_SPEED, weaponObject);
                 Thunder.Instance.Shoot(weaponObject.Position, weaponObject.Position + fxDirection * speed * 0.08f, -1, -1, false);
@@ -360,7 +359,7 @@ namespace Thor
                     ent != weaponObject)
                 {
                     ent.ApplyForce(weaponObject.Velocity);
-                    if (NativeHelper.IsPed(ent))
+                    if (ADModUtils.NativeHelper.IsPed(ent))
                     {
                         Ped ped = (Ped) ent;
                         ped.ApplyDamage(100);
@@ -397,7 +396,7 @@ namespace Thor
 
             try
             {
-                WeaponObject = NativeHelper.CreateWeaponObject(
+                WeaponObject = ADModUtils.NativeHelper.CreateWeaponObject(
                     weaponHash,
                     1,
                     (Vector3) spawnPos
@@ -406,7 +405,7 @@ namespace Thor
             catch (Exception e)
             {
                 UI.Notify("~r~Error occured when initializing Mjolnir. Please see the log file for more imformation.");
-                Logger.Log("ERROR", e.ToString());
+                ADModUtils.Logger.Log("ERROR", e.ToString());
             }
         }
 
@@ -428,8 +427,8 @@ namespace Thor
 
             if (nextTarget.Exists() && 
                 nextTarget.Position != Vector3.Zero && 
-                ((NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET) ||
-                (NativeHelper.IsVehicle(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET)))
+                ((ADModUtils.NativeHelper.IsPed(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET) ||
+                (ADModUtils.NativeHelper.IsVehicle(nextTarget) && distanceBetweenHammerAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET)))
             {
                 targets.Remove(nextTarget);
             }

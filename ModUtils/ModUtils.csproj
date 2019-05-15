@@ -4,13 +4,14 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{03DC09A8-AC07-4F93-86CB-4BFEDDE7B1C4}</ProjectGuid>
+    <ProjectGuid>{E2EFC415-090C-448D-B1A5-919AC269F3F6}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Thor</RootNamespace>
-    <AssemblyName>Thor</AssemblyName>
+    <RootNamespace>ModUtils</RootNamespace>
+    <AssemblyName>ModUtils</AssemblyName>
     <TargetFrameworkVersion>v4.7.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -20,7 +21,6 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -32,16 +32,13 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="DeveloperConsole, Version=9.9.9.9, Culture=neutral, processorArchitecture=AMD64">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="DeveloperConsole">
       <HintPath>..\lib\DeveloperConsole.dll</HintPath>
     </Reference>
-    <Reference Include="NAudio, Version=1.8.4.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="NAudio">
       <HintPath>..\lib\NAudio.dll</HintPath>
     </Reference>
-    <Reference Include="ScriptHookVDotNet2, Version=2.10.6.0, Culture=neutral, processorArchitecture=AMD64">
-      <SpecificVersion>False</SpecificVersion>
+    <Reference Include="ScriptHookVDotNet2">
       <HintPath>..\lib\ScriptHookVDotNet2.dll</HintPath>
     </Reference>
     <Reference Include="System" />
@@ -56,20 +53,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Mjolnir.cs" />
-    <Compile Include="MjolnirCamera.cs" />
+    <Compile Include="Line.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="NativeHelper.cs" />
-    <Compile Include="Thor.cs" />
+    <Compile Include="ParticleFxLooped.cs" />
+    <Compile Include="Plane.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Thunder.cs" />
-    <Compile Include="ThunderSegment.cs" />
-    <Compile Include="WorthyAbility.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\ModUtils\ModUtils.csproj">
-      <Project>{e2efc415-090c-448d-b1a5-919ac269f3f6}</Project>
-      <Name>ModUtils</Name>
-    </ProjectReference>
+    <Compile Include="Utilities.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

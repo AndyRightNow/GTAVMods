@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using GTA;
 using GTA.Math;
 
-namespace Thor
+namespace ADModUtils
 {
     public static class Utilities
     {

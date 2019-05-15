@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Thor;
+using ADModUtils;
 
-namespace ThorTest
+namespace ModUtilsTest
 {
     [TestClass]
     public class Utilities_Test

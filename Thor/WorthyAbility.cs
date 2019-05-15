@@ -30,7 +30,6 @@ namespace Thor
         private static float AIR_DASH_ATTACK_LANDING_VELOCITY = 200.0f;
         private static int FLY_WITH_THROWN_HAMMER_MAX_TIME = 2000;
         private static float FLY_SPRINT_VELOCITY_MULTIPLIER = 4.0f;
-        private static float SLOW_DOWN_TIME_SCALE = 0.01f;
         private static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 20.0f;
         private static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
         private static int MAX_TARGET_COUNT = 15;
@@ -40,7 +39,6 @@ namespace Thor
 
         private static WorthyAbility instance;
         private Ped attachedPed;
-        private bool previousIsHammerAttackingTargets;
         private bool isHammerAttackingTargets;
         private float hammerJustFinishedAttackingTargetsTimestamp;
         private bool isCollectingTargets;
@@ -53,11 +51,11 @@ namespace Thor
         private bool isFlying;
         private HashSet<Entity> targets;
         private bool isInAirDashAttack;
-        private Utilities.Timer pedFxTimer;
+        private ADModUtils.Utilities.Timer pedFxTimer;
         private bool hasSummonedThunder;
         private bool isHoldingHammerRope;
-        private Plane hammerWhirlingPlane;
-        private Plane hammerHoverWhirlingPlane;
+        private ADModUtils.Plane hammerWhirlingPlane;
+        private ADModUtils.Plane hammerHoverWhirlingPlane;
         private Entity hammerUsedForHoveringWhirlingOriginal;
         private Entity hammerUsedForHoveringWhirlingShown;
         private bool isHoverWhirling;
@@ -70,7 +68,6 @@ namespace Thor
             targets = new HashSet<Entity>();
             Hammer = Mjolnir.Instance;
             isHammerAttackingTargets = false;
-            previousIsHammerAttackingTargets = false;
             previousPedVelocity = Vector3.Zero;
             isFlying = false;
             hasJustSetEndOfFlyingInitialVelocity = false;
@@ -153,6 +150,7 @@ namespace Thor
                 Hammer.WeaponObject != null &&
                 !HasHammer)
             {
+                hammerJustFinishedAttackingTargetsTimestamp = Game.GameTime;
                 Hammer.FindWaysToMoveToCoord(attachedPed.Position + new Vector3(0.0f, 0.0f, AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS), true);
             }
         }
@@ -226,7 +224,7 @@ namespace Thor
         {
             if (hammerHoverWhirlingPlane == null)
             {
-                hammerHoverWhirlingPlane = new Plane(Vector3.WorldUp, Vector3.Zero);
+                hammerHoverWhirlingPlane = new ADModUtils.Plane(Vector3.WorldUp, Vector3.Zero);
             }
 
             if (isFlying && isHoverWhirling)
@@ -243,12 +241,12 @@ namespace Thor
                 {
                     var boneCoord = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
 
-                    hammerWhirlingPlane = new Plane(Vector3.Cross(attachedPed.ForwardVector, Vector3.WorldUp), boneCoord);
+                    hammerWhirlingPlane = new ADModUtils.Plane(Vector3.Cross(attachedPed.ForwardVector, Vector3.WorldUp), boneCoord);
 
-                    NativeHelper.PlayPlayerAnimation(
+                    ADModUtils.NativeHelper.PlayPlayerAnimation(
                         attachedPed,
-                        NativeHelper.GetAnimationDictNameByAction(AnimationActions.WhirlingHammer),
-                        NativeHelper.GetAnimationNameByAction(AnimationActions.WhirlingHammer),
+                        NativeHelper.Instance.GetAnimationDictNameByAction((uint) AnimationActions.WhirlingHammer),
+                        NativeHelper.Instance.GetAnimationNameByAction((uint) AnimationActions.WhirlingHammer),
                         AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation
                     );
                     Hammer.Whirl(hammerWhirlingPlane);
@@ -295,15 +293,15 @@ namespace Thor
             Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
             Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
             Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            NativeHelper.PlayPlayerAnimation(
+            ADModUtils.NativeHelper.PlayPlayerAnimation(
                 attachedPed,
-                NativeHelper.GetAnimationDictNameByAction(AnimationActions.SummonThunder),
-                NativeHelper.GetAnimationNameByAction(AnimationActions.SummonThunder),
+                NativeHelper.Instance.GetAnimationDictNameByAction((uint) AnimationActions.SummonThunder),
+                NativeHelper.Instance.GetAnimationNameByAction((uint) AnimationActions.SummonThunder),
                 AnimationFlags.None);
             Script.Wait(2000);
             Thunder.Instance.Shoot(attachedPed.Position + new Vector3(0.0f, 0.0f, 1000.0f), attachedPed.Position);
             PlayThunderFx();
-            pedFxTimer = new Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS, PlayThunderFx);
+            pedFxTimer = new ADModUtils.Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS, PlayThunderFx);
             ApplyForcesAndDamagesOnNearbyEntities(true, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, Vector3.Zero);
             World.Weather = prevWeather;
             Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
@@ -401,13 +399,13 @@ namespace Thor
         {
             if (hammerUsedForHoveringWhirlingOriginal == null)
             {
-                hammerUsedForHoveringWhirlingOriginal = NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero);
+                hammerUsedForHoveringWhirlingOriginal = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero);
                 hammerUsedForHoveringWhirlingOriginal.Alpha = 0;
                 hammerUsedForHoveringWhirlingOriginal.SetNoCollision(attachedPed, true);
             }
             if (hammerUsedForHoveringWhirlingShown == null)
             {
-                hammerUsedForHoveringWhirlingShown = NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero + new Vector3(0.0f, 0.0f, 10.0f));
+                hammerUsedForHoveringWhirlingShown = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero + new Vector3(0.0f, 0.0f, 10.0f));
                 hammerUsedForHoveringWhirlingShown.Alpha = 0;
                 hammerUsedForHoveringWhirlingShown.SetNoCollision(attachedPed, true);
             }
@@ -471,7 +469,7 @@ namespace Thor
                 {
                     continue;
                 }
-                var isPed = NativeHelper.IsPed(ent);
+                var isPed = ADModUtils.NativeHelper.IsPed(ent);
 
                 if (isPed)
                 {
@@ -488,11 +486,11 @@ namespace Thor
                     if (forceDirection.Length() == 0)
                     {
                         var defaultForceDirection = (ent.Position - attachedPed.Position).Normalized;
-                        NativeHelper.ApplyForcesAndDamages(ent, defaultForceDirection);
+                        NativeHelper.Instance.ApplyForcesAndDamages(ent, defaultForceDirection);
                     }
                     else
                     {
-                        NativeHelper.ApplyForcesAndDamages(ent, forceDirection);
+                        NativeHelper.Instance.ApplyForcesAndDamages(ent, forceDirection);
                     }
                 }
             }
@@ -646,7 +644,7 @@ namespace Thor
         private void SetAttachedPedToRagdoll()
         {
             attachedPed.CanRagdoll = true;
-            NativeHelper.SetPedToRagdoll(attachedPed, RagdollType.WideLegs, 2, 1000);
+            ADModUtils.NativeHelper.SetPedToRagdoll(attachedPed, ADModUtils.RagdollType.WideLegs, 2, 1000);
         }
 
         private void HandleSummoningMjolnir()
@@ -692,7 +690,7 @@ namespace Thor
                 var result = World.Raycast(
                     GameplayCamera.Position + GameplayCamera.Direction * 10.0f,
                     GameplayCamera.Position + GameplayCamera.Direction * RAY_CAST_MAX_DISTANCE,
-                    NativeHelper.IntersectAllObjects
+                    ADModUtils.NativeHelper.IntersectAllObjects
                 );
                 if (targets.Count < MAX_TARGET_COUNT &&
                     result.DitHitEntity &&
@@ -712,8 +710,8 @@ namespace Thor
         {
             return entity != null &&
                  entity != attachedPed &&
-                 (NativeHelper.IsPed(entity) ||
-                 NativeHelper.IsVehicle(entity));
+                 (ADModUtils.NativeHelper.IsPed(entity) ||
+                 ADModUtils.NativeHelper.IsVehicle(entity));
         }
 
         private void DrawMarkersOnTargets()
@@ -760,16 +758,16 @@ namespace Thor
             float distanceBetweenHammerToPedHand = Math.Abs(fromHammerToPedHand.Length());
             if (distanceBetweenHammerToPedHand <= MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND)
             {
-                AnimationActions randomCatchingAction = Utilities.Random.PickOne(
+                AnimationActions randomCatchingAction = ADModUtils.Utilities.Random.PickOne(
                     new List<AnimationActions>
                     {
                         AnimationActions.CatchingMjolnir1,
                     }.ToArray()
                 );
-                string catchDictName = NativeHelper.GetAnimationDictNameByAction(randomCatchingAction);
-                string catchAnimName = NativeHelper.GetAnimationNameByAction(randomCatchingAction);
+                string catchDictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint) randomCatchingAction);
+                string catchAnimName = NativeHelper.Instance.GetAnimationNameByAction((uint) randomCatchingAction);
                 Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
-                NativeHelper.PlayPlayerAnimation(
+                ADModUtils.NativeHelper.PlayPlayerAnimation(
                     attachedPed,
                     catchDictName,
                     catchAnimName,
@@ -795,14 +793,14 @@ namespace Thor
                 PlayHammerCloseSound();
             }
 
-            AnimationActions randomCallingAction = Utilities.Random.PickOne(
+            AnimationActions randomCallingAction = ADModUtils.Utilities.Random.PickOne(
                 new List<AnimationActions>
                 {
                     AnimationActions.CallingForMjolnir
                 }.ToArray()
             );
-            string dictName = NativeHelper.GetAnimationDictNameByAction(randomCallingAction);
-            string animName = NativeHelper.GetAnimationNameByAction(randomCallingAction);
+            string dictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint) randomCallingAction);
+            string animName = NativeHelper.Instance.GetAnimationNameByAction((uint) randomCallingAction);
 
             if (!IsAttachedToPed ||
                 HasHammer)
@@ -810,7 +808,7 @@ namespace Thor
                 return;
             }
 
-            NativeHelper.PlayPlayerAnimation(
+            ADModUtils.NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 dictName,
                 animName,
@@ -928,8 +926,8 @@ namespace Thor
                     AnimationActions.ThrowHammer4,
                     AnimationActions.ThrowHammer5
                 }.ToArray();
-            AnimationActions randomAction = Utilities.Random.PickOne(animationActionList);
-            float angleBetweenPedForwardAndCamDirection = Utilities.Math.Angle(
+            AnimationActions randomAction = ADModUtils.Utilities.Random.PickOne(animationActionList);
+            float angleBetweenPedForwardAndCamDirection = ADModUtils.Utilities.Math.Angle(
                 new Vector2(attachedPed.ForwardVector.X, attachedPed.ForwardVector.Y),
                 new Vector2(directionToTurnTo.X, directionToTurnTo.Y)
             );
@@ -940,11 +938,11 @@ namespace Thor
                 angleBetweenPedForwardAndCamDirection >= 0;
             if (!useDefaultAnimation)
             {
-                randomAction = Utilities.Random.PickOneIf(animationActionList, NativeHelper.DoesAnimationActionHaveAngles);
+                randomAction = ADModUtils.Utilities.Random.PickOneIf(animationActionList, (AnimationActions aa) => NativeHelper.Instance.DoesAnimationActionHaveAngles((uint) aa));
             }
 
-            string dictName = NativeHelper.GetAnimationDictNameByAction(randomAction);
-            string animName = NativeHelper.GetAnimationNameByAction(randomAction);
+            string dictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint) randomAction);
+            string animName = NativeHelper.Instance.GetAnimationNameByAction((uint) randomAction);
             if (!useDefaultAnimation)
             {
                 string animationAngle = "180";
@@ -956,7 +954,7 @@ namespace Thor
 
                 animName = animName.Replace("_0", "_" + (toLeft ? "+" : "-") + animationAngle);
             }
-            NativeHelper.PlayPlayerAnimation(
+            ADModUtils.NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 dictName,
                 animName,
@@ -966,7 +964,7 @@ namespace Thor
                 -1,
                 false
             );
-            Script.Wait(NativeHelper.GetAnimationWaitTimeByDictNameAndAnimName(dictName, animName));
+            Script.Wait(NativeHelper.Instance.GetAnimationWaitTimeByDictNameAndAnimName(dictName, animName));
         }
     }
 }

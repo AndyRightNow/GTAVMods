@@ -62,12 +62,12 @@ namespace Thor
                 hammerTrackCam = World.CreateCamera(weaponObject.Position, Vector3.Zero, CAMERA_FOV);
             }
             Vector3 weaponDirection = weaponObject.Velocity.Normalized;
-            int randomNegationFactor = Utilities.Random.RandomNegation();
+            int randomNegationFactor = ADModUtils.Utilities.Random.RandomNegation();
             bool isJustReset = false;
 
             if (ShouldResetCamera())
             {
-                cameraType = Utilities.Random.PickOne(new List<MOLNIR_CAMERA_TYPE>()
+                cameraType = ADModUtils.Utilities.Random.PickOne(new List<MOLNIR_CAMERA_TYPE>()
                     {
                         MOLNIR_CAMERA_TYPE.SIDE_FOLLOW,
                         MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW,
@@ -76,7 +76,7 @@ namespace Thor
                         MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW
                     }.ToArray());
                 lastSetCameraPositionTimestamp = Game.GameTime;
-                currentSideDirection = Utilities.Math.RandomVectorPerpendicularTo(weaponDirection) * randomNegationFactor;
+                currentSideDirection = ADModUtils.Utilities.Math.RandomVectorPerpendicularTo(weaponDirection) * randomNegationFactor;
                 isJustReset = true;
             }
 
