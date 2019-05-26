@@ -23,6 +23,7 @@ namespace ADModUtils
             string[] animationNames,
             AnimationWaitTimeDict animationWaitTime,
             bool[] animationWithAngles,
+            bool[] animationWithAnglesAndIncompletePlusOrMinusSign,
             string[] particleEffectSetNames,
             string[] particleEffectNames,
             int meleeHitPedDamage,
@@ -33,11 +34,11 @@ namespace ADModUtils
             AnimationNames = animationNames;
             AnimationWaitTime = animationWaitTime;
             AnimationWithAngles = animationWithAngles;
+            AnimationWithAnglesAndIncompletePlusOrMinusSign = animationWithAnglesAndIncompletePlusOrMinusSign;
             ParticleEffectSetNames = particleEffectSetNames;
             ParticleEffectNames = particleEffectNames;
             MeleeHitPedDamage = meleeHitPedDamage;
             MeleeHitForce = meleeHitForce;
-
         }
 
         public int GetAnimationWaitTimeByDictNameAndAnimName(string dictName, string animName)
@@ -77,15 +78,20 @@ namespace ADModUtils
             return AnimationWithAngles[(int)action];
         }
 
-        public void ApplyForcesAndDamages(Entity ent, Vector3 direction)
+        public bool DoesAnimationActionHaveAnglesAndIncompletePlusOrMinusSign(uint action)
+        {
+            return AnimationWithAnglesAndIncompletePlusOrMinusSign[(int)action];
+        }
+
+        public void ApplyForcesAndDamages(Entity ent, Vector3 direction, float powerLevel = 100.0f)
         {
             if (IsPed(ent) && ent != Game.Player.Character)
             {
                 var ped = (Ped)ent;
                 SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
-                ped.ApplyDamage(MeleeHitPedDamage);
+                ped.ApplyDamage((int)(MeleeHitPedDamage * powerLevel / 100.0f));
             }
-            ent.ApplyForce(direction * MeleeHitForce);
+            ent.ApplyForce(direction * MeleeHitForce * powerLevel / 100.0f);
             Function.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, ent);
         }
 
@@ -265,6 +271,7 @@ namespace ADModUtils
         public string[] AnimationNames { get; private set; }
         public AnimationWaitTimeDict AnimationWaitTime { get; private set; }
         public bool[] AnimationWithAngles { get; private set; }
+        public bool[] AnimationWithAnglesAndIncompletePlusOrMinusSign { get; private set; }
         public string[] ParticleEffectSetNames { get; private set; }
         public string[] ParticleEffectNames { get; private set; }
         public float MeleeHitForce { get; private set; }

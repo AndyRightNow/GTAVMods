@@ -33,6 +33,9 @@ namespace CaptainAmerica
         private static bool[] AnimationWithAngles = (new List<bool>
         {
         }).ToArray();
+        private static bool[] AnimationWithAnglesAndIncompletePlusOrMinusSign = (new List<bool>
+        {
+        }).ToArray();
 
         private static string[] ParticleEffectSetNames = (new List<string>
         {
@@ -53,6 +56,7 @@ namespace CaptainAmerica
                         AnimationNames,
                         AnimationWaitTime,
                         AnimationWithAngles,
+                        AnimationWithAnglesAndIncompletePlusOrMinusSign,
                         ParticleEffectSetNames,
                         ParticleEffectNames,
                         MELEE_HIT_PED_DAMAGE,

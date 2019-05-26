@@ -6,19 +6,21 @@ namespace Thor
 {
     public enum AnimationActions
     {
-        CallingForMjolnir = 0,
-        ThrowHammer1 = 1,
-        ThrowHammer2 = 2,
-        ThrowHammer3 = 3,
-        ThrowHammer4 = 4,
-        ThrowHammer5 = 5,
-        CatchingMjolnir1,
+        CallingForWeapon = 0,
+        ThrowHammer1,
+        ThrowHammer2,
+        ThrowHammer3,
+        ThrowHammer4,
+        ThrowHammer5,
+        CatchingWeapon1,
         GroundAttack1,
         GroundAttack2,
         GroundAttack3,
         GroundAttack4,
         SummonThunder,
         WhirlingHammer,
+        ThrowTwoHandHammer1,
+        ThrowTwoHandHammer2,
     }
 
     public enum ParticleEffects
@@ -44,7 +46,9 @@ namespace Thor
             "melee@small_wpn@streamed_core",
             "melee@small_wpn@streamed_core",
             "anim@mp_fm_event@intro",
-            "melee@small_wpn@streamed_core"
+            "melee@small_wpn@streamed_core",
+            "melee@large_wpn@streamed_core_fps",
+            "melee@large_wpn@streamed_core_fps"
         }).ToArray();
         private static string[] AnimationNames = (new List<string>
         {
@@ -60,7 +64,9 @@ namespace Thor
             "ground_attack_0",
             "ground_attack_on_spot",
             "beast_transform",
-            "dodge_generic_centre"
+            "dodge_generic_centre",
+            "short_0_attack",
+            "long_0_attack"
         }).ToArray();
         private static Dictionary<string, Dictionary<string, int>> AnimationWaitTime = new Dictionary<string, Dictionary<string, int>>()
         {
@@ -138,6 +144,30 @@ namespace Thor
                 }
             },
             {
+                "melee@large_wpn@streamed_core_fps",
+                new Dictionary<string, int>()
+                {
+                    {
+                        "long_0_attack", 1150
+                    },
+                    {
+                        "long_90_attack", 1100
+                    },
+                    {
+                        "long_-180_attack", 1000
+                    },
+                    {
+                        "short_0_attack", 800
+                    },
+                    {
+                        "short_90_attack", 1100
+                    },
+                    {
+                        "short_-180_attack", 700
+                    }
+                }
+            },
+            {
                 "guard_reactions",
                 new Dictionary<string, int>() { }
             },
@@ -160,7 +190,31 @@ namespace Thor
             true,
             false,
             false,
-            false
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            true
+        }).ToArray();
+        private static bool[] AnimationWithAnglesAndIncompletePlusOrMinusSign = (new List<bool>
+        {
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            true,
+            true
         }).ToArray();
 
         private static string[] ParticleEffectSetNames = (new List<string>
@@ -184,6 +238,7 @@ namespace Thor
                         AnimationNames,
                         AnimationWaitTime,
                         AnimationWithAngles,
+                        AnimationWithAnglesAndIncompletePlusOrMinusSign,
                         ParticleEffectSetNames,
                         ParticleEffectNames,
                         MELEE_HIT_PED_DAMAGE,

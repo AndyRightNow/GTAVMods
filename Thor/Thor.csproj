@@ -56,8 +56,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="GodlyWeapon.cs" />
     <Compile Include="Mjolnir.cs" />
-    <Compile Include="MjolnirCamera.cs" />
+    <Compile Include="StormbreakerWorthyAbility.cs" />
+    <Compile Include="MjolnirWorthyAbility.cs" />
+    <Compile Include="Stormbreaker.cs" />
+    <Compile Include="WeaponCamera.cs" />
     <Compile Include="NativeHelper.cs" />
     <Compile Include="Thor.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

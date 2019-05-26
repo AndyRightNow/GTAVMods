@@ -17,10 +17,10 @@ namespace Thor
         NONE
     }
 
-    class MjolnirCamera
+    class WeaponCamera
     {
         private Camera hammerTrackCam;
-        private static MjolnirCamera instance;
+        private static WeaponCamera instance;
         private static float CAMERA_FOV = 50.0f;
         private static float DEFAULT_CAMERA_POSITION_NOT_SET = -1.0f;
         private static float CAMERA_POSITION_RESET_INTERVAL = 2000.0f;
@@ -30,7 +30,7 @@ namespace Thor
         private float lastSetCameraPositionTimestamp;
         private Vector3 currentSideDirection;
 
-        private MjolnirCamera()
+        private WeaponCamera()
         {
             lastSetCameraPositionTimestamp = DEFAULT_CAMERA_POSITION_NOT_SET;
             cameraType = MOLNIR_CAMERA_TYPE.NONE;
@@ -42,13 +42,13 @@ namespace Thor
                 Game.GameTime - lastSetCameraPositionTimestamp >= CAMERA_POSITION_RESET_INTERVAL;
         }
 
-        public static MjolnirCamera Instance
+        public static WeaponCamera Instance
         {
             get
             {
                 if (instance == null)
                 {
-                    instance = new MjolnirCamera();
+                    instance = new WeaponCamera();
                 }
 
                 return instance;

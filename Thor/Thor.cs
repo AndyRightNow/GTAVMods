@@ -6,7 +6,8 @@ namespace Thor
 {
     public class Thor : Script
     {
-        private WorthyAbility ability;
+        private MjolnirWorthyAbility mjolnirAbility;
+        private StormbreakerWorthyAbility stormbreakerAbility;
         private int previousPedHash;
         private bool abilityHasBeenTurnedOff;
         private DeveloperConsole.DeveloperConsole dc;
@@ -16,9 +17,10 @@ namespace Thor
             Tick += OnTick;
             Interval = 0;
 
-            ability = WorthyAbility.Instance;
+            mjolnirAbility = MjolnirWorthyAbility.Instance;
+            stormbreakerAbility = StormbreakerWorthyAbility.Instance;
             previousPedHash = -1;
-            abilityHasBeenTurnedOff = true;
+            abilityHasBeenTurnedOff = false;
         }
 
         void OnTick(object sender, EventArgs e)
@@ -26,12 +28,15 @@ namespace Thor
             HandleAbilityToggle();
             if (!abilityHasBeenTurnedOff)
             {
-                HandleAbilityTransfer();
-                ability.OnTick();
+                HandleMjolnirAbilityTransfer();
+                mjolnirAbility.OnTick();
+                HandleStormbreakerAbilityTransfer();
+                stormbreakerAbility.OnTick();
             }
-            else if (ability.IsAttachedToPed)
+            else if (mjolnirAbility.IsAttachedToPed)
             {
-                ability.RemoveAbility();
+                mjolnirAbility.RemoveAbility();
+                stormbreakerAbility.RemoveAbility();
             }
         }
 
@@ -53,21 +58,47 @@ namespace Thor
             }
         }
 
-        private void HandleAbilityTransfer()
+        private void HandleMjolnirAbilityTransfer()
         {
-            if (previousPedHash != -1 &&
-                  Game.Player.Character != null &&
-                  Game.Player.Character.GetHashCode() != previousPedHash &&
-                  ability.IsAttachedToPed)
+            if (IsGameCharacterChanged() &&
+                  mjolnirAbility.IsAttachedToPed)
             {
-                ability.RemoveAbility();
+                mjolnirAbility.RemoveAbility();
             }
 
-            previousPedHash = Game.Player.Character.GetHashCode();
+            UpdatePrevCharacter();
 
-            if (!ability.IsAttachedToPed)
+            if (!mjolnirAbility.IsAttachedToPed)
             {
-                ability.ApplyOn(Game.Player.Character);
+                mjolnirAbility.ApplyOn(Game.Player.Character);
+            }
+        }
+
+        private void UpdatePrevCharacter()
+        {
+            previousPedHash = Game.Player.Character.GetHashCode();
+        }
+
+        private bool IsGameCharacterChanged()
+        {
+            return previousPedHash != -1 &&
+                              Game.Player.Character != null &&
+                              Game.Player.Character.GetHashCode() != previousPedHash;
+        }
+
+        private void HandleStormbreakerAbilityTransfer()
+        {
+            if (IsGameCharacterChanged() &&
+                  stormbreakerAbility.IsAttachedToPed)
+            {
+                stormbreakerAbility.RemoveAbility();
+            }
+
+            UpdatePrevCharacter();
+
+            if (!stormbreakerAbility.IsAttachedToPed)
+            {
+                stormbreakerAbility.ApplyOn(Game.Player.Character);
             }
         }
     }
