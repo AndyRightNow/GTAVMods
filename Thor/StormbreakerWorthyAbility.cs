@@ -23,5 +23,11 @@ namespace Thor
         {
             return Game.IsKeyPressed(Keys.N);
         }
+
+        protected override void ThrowWeaponOut(bool hasInitialVelocity = true)
+        {
+            base.ThrowWeaponOut(hasInitialVelocity);
+            Weapon.SetThrownOutInitialRotation(Weapon.WeaponObject.Rotation);
+        }
     }
 }

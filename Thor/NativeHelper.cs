@@ -151,7 +151,10 @@ namespace Thor
                         "long_0_attack", 1150
                     },
                     {
-                        "long_90_attack", 1100
+                        "long_90_attack", 1300
+                    },
+                    {
+                        "long_-90_attack", 1000
                     },
                     {
                         "long_-180_attack", 1000
@@ -160,7 +163,10 @@ namespace Thor
                         "short_0_attack", 800
                     },
                     {
-                        "short_90_attack", 1100
+                        "short_90_attack", 800
+                    },
+                    {
+                        "short_-90_attack", 800
                     },
                     {
                         "short_-180_attack", 700

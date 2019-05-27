@@ -29,14 +29,20 @@ namespace Thor
             if (!abilityHasBeenTurnedOff)
             {
                 HandleMjolnirAbilityTransfer();
-                mjolnirAbility.OnTick();
+                mjolnirAbility.OnTick(stormbreakerAbility.IsHoldingWeapon);
                 HandleStormbreakerAbilityTransfer();
-                stormbreakerAbility.OnTick();
+                stormbreakerAbility.OnTick(mjolnirAbility.IsHoldingWeapon);
             }
-            else if (mjolnirAbility.IsAttachedToPed)
+            else
             {
-                mjolnirAbility.RemoveAbility();
-                stormbreakerAbility.RemoveAbility();
+                if (mjolnirAbility.IsAttachedToPed)
+                {
+                    mjolnirAbility.RemoveAbility();
+                }
+                if (stormbreakerAbility.IsAttachedToPed)
+                {
+                    stormbreakerAbility.RemoveAbility();
+                }
             }
         }
 

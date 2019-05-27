@@ -152,28 +152,31 @@ namespace Thor
             }
         }
 
-        public virtual void OnTick()
+        public virtual void OnTick(bool onlyHandleWeaponHolding)
         {
-            Thunder.Instance.OnTick();
-            if (attachedPed == null)
+            if (!onlyHandleWeaponHolding)
             {
-                return;
-            }
-            HandlePowerLevel();
-            HandleHealthRecovery();
-            SetInvincible(true);
-            if (pedFxTimer != null && hasSummonedThunder)
-            {
-                pedFxTimer.OnTick();
-            }
-            HandleMovement();
-            if (IsHoldingWeapon ||
-                attachedPed.Weapons.CurrentWeaponObject == null)
-            {
-                HandleMeleeForces();
-            }
+                Thunder.Instance.OnTick();
+                if (attachedPed == null)
+                {
+                    return;
+                }
+                HandlePowerLevel();
+                HandleHealthRecovery();
+                SetInvincible(true);
+                if (pedFxTimer != null && hasSummonedThunder)
+                {
+                    pedFxTimer.OnTick();
+                }
+                HandleMovement();
+                if (IsHoldingWeapon ||
+                    attachedPed.Weapons.CurrentWeaponObject == null)
+                {
+                    HandleMeleeForces();
+                }
 
-            HandlePreOnTick();
+                HandlePreOnTick();
+            }
 
             if (IsHoldingWeapon)
             {
@@ -837,7 +840,7 @@ namespace Thor
             ThrowWeaponOut();
         }
 
-        protected void ThrowWeaponOut(bool hasInitialVelocity = true)
+        protected virtual void ThrowWeaponOut(bool hasInitialVelocity = true)
         {
             if (IsHoldingWeapon)
             {
@@ -883,7 +886,7 @@ namespace Thor
 
                 if (NativeHelper.Instance.DoesAnimationActionHaveAnglesAndIncompletePlusOrMinusSign((uint) randomAction))
                 {
-                    animName = animName.Replace("_0", "_" + (animationAngle == "90" ? "" : "-") + animationAngle);
+                    animName = animName.Replace("_0", "_" + (animationAngle == "90" ? (toLeft ? "" : "-") : "-") + animationAngle);
                 }
                 else
                 {

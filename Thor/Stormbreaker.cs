@@ -7,6 +7,8 @@ namespace Thor
 {
     public class Stormbreaker : GodlyWeapon<Stormbreaker>
     {
+        private Vector3 prevRotation;
+
         public Stormbreaker() : base(WeaponHash.GolfClub)
         {
             throwActions = new List<AnimationActions>
@@ -23,6 +25,11 @@ namespace Thor
             HandleWeaponSummonRotation();
         }
 
+        public void SetThrownOutInitialRotation(Vector3 rot)
+        {
+            prevRotation = rot;
+        }
+
         private void HandleWeaponSummonRotation()
         {
             if (IsMoving && weaponObject.IsInAir)
@@ -37,11 +44,18 @@ namespace Thor
                 }
                 else
                 {
-                    weaponObject.Rotation = Vector3.Lerp(
-                        weaponObject.Rotation,
-                        ADModUtils.Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f),
-                        0.5f
+                    if (weaponObject.HasCollidedWithAnything)
+                    {
+                        Script.Wait(1);
+                        prevRotation = weaponObject.Rotation;
+                    }
+
+                    prevRotation = Vector3.Lerp(
+                        prevRotation, 
+                        prevRotation + new Vector3(0.0f, 90.0f, 0.0f),
+                        weaponObject.Velocity.Length() / 300.0f
                     );
+                    weaponObject.Rotation = prevRotation;
                 }
             }
         }
