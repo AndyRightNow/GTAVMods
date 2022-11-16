@@ -258,17 +258,17 @@ namespace Thor
 
         public static void PlayThunderFx(Entity ent, float scale = 1.0f)
         {
-            ADModUtils.NativeHelper.PlayParticleFx(Instance.GetParticleSetName((uint) ParticleEffects.Thunder), Instance.GetParticleName((uint) ParticleEffects.Thunder), ent, scale);
+            ADModUtils.NativeHelper.PlayParticleFx(Instance.GetParticleSetName((uint)ParticleEffects.Thunder), Instance.GetParticleName((uint)ParticleEffects.Thunder), ent, scale);
         }
 
         public static void PlayThunderFx(Ped ped, Bone boneId, float scale = 1.0f)
         {
-            ADModUtils.NativeHelper.PlayParticleFx(Instance.GetParticleSetName((uint) ParticleEffects.Thunder), Instance.GetParticleName((uint) ParticleEffects.Thunder), ped, boneId, scale);
+            ADModUtils.NativeHelper.PlayParticleFx(Instance.GetParticleSetName((uint)ParticleEffects.Thunder), Instance.GetParticleName((uint)ParticleEffects.Thunder), ped, boneId, scale);
         }
 
         public static void PlayThunderFx(Vector3 pos, float scale = 1.0f)
         {
-            ADModUtils.NativeHelper.PlayParticleFx(Instance.GetParticleSetName((uint) ParticleEffects.Thunder), Instance.GetParticleName((uint) ParticleEffects.Thunder), pos, Vector3.Zero, scale);
+            ADModUtils.NativeHelper.PlayParticleFx(Instance.GetParticleSetName((uint)ParticleEffects.Thunder), Instance.GetParticleName((uint)ParticleEffects.Thunder), pos, Vector3.Zero, scale);
         }
     }
 }

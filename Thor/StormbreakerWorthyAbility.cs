@@ -1,6 +1,4 @@
 ﻿using GTA;
-using GTA.Math;
-using GTA.Native;
 using System.Windows.Forms;
 
 namespace Thor

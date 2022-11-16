@@ -1,6 +1,6 @@
 ﻿using GTA;
-using GTA.Native;
 using GTA.Math;
+using GTA.Native;
 using System.Collections.Generic;
 
 namespace Thor
@@ -51,7 +51,7 @@ namespace Thor
                     }
 
                     prevRotation = Vector3.Lerp(
-                        prevRotation, 
+                        prevRotation,
                         prevRotation + new Vector3(0.0f, 90.0f, 0.0f),
                         weaponObject.Velocity.Length() / 300.0f
                     );

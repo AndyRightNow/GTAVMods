@@ -4,10 +4,8 @@ using GTA.Native;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
 using System.Linq;
-using System.IO;
-using System.Media;
+using System.Windows.Forms;
 
 namespace Thor
 {
@@ -305,12 +303,12 @@ namespace Thor
         {
             var movementMultiplier = 1.0f + (PLAYER_MOVEMENT_MULTIPLIER - 1.0f) * powerLevel / FULL_POWER_LEVEL_MAX_RATIO;
             Function.Call(
-                Hash.SET_PED_MOVE_RATE_OVERRIDE, 
+                Hash.SET_PED_MOVE_RATE_OVERRIDE,
                 attachedPed,
                 movementMultiplier
             );
             Function.Call(
-                Hash.SET_SWIM_MULTIPLIER_FOR_PLAYER, 
+                Hash.SET_SWIM_MULTIPLIER_FOR_PLAYER,
                 Game.Player,
                 movementMultiplier
             );
@@ -470,7 +468,7 @@ namespace Thor
         {
             var invincible = toggle && powerLevel > HALF_POWER_LEVEL_MAX_RATIO;
 
-            
+
             if (invincible || !toggle)
             {
                 attachedPed.CanSufferCriticalHits = !toggle;
@@ -714,8 +712,8 @@ namespace Thor
                         AnimationActions.CatchingWeapon1,
                     }.ToArray()
                 );
-                string catchDictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint) randomCatchingAction);
-                string catchAnimName = NativeHelper.Instance.GetAnimationNameByAction((uint) randomCatchingAction);
+                string catchDictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint)randomCatchingAction);
+                string catchAnimName = NativeHelper.Instance.GetAnimationNameByAction((uint)randomCatchingAction);
                 Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
                 ADModUtils.NativeHelper.PlayPlayerAnimation(
                     attachedPed,
@@ -750,8 +748,8 @@ namespace Thor
                     AnimationActions.CallingForWeapon
                 }.ToArray()
             );
-            string dictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint) randomCallingAction);
-            string animName = NativeHelper.Instance.GetAnimationNameByAction((uint) randomCallingAction);
+            string dictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint)randomCallingAction);
+            string animName = NativeHelper.Instance.GetAnimationNameByAction((uint)randomCallingAction);
 
             if (!IsAttachedToPed ||
                 HasWeapon)
@@ -870,11 +868,11 @@ namespace Thor
                 angleBetweenPedForwardAndCamDirection >= 0;
             if (!useDefaultAnimation)
             {
-                randomAction = ADModUtils.Utilities.Random.PickOneIf(animationActionList, (AnimationActions aa) => NativeHelper.Instance.DoesAnimationActionHaveAngles((uint) aa));
+                randomAction = ADModUtils.Utilities.Random.PickOneIf(animationActionList, (AnimationActions aa) => NativeHelper.Instance.DoesAnimationActionHaveAngles((uint)aa));
             }
 
-            string dictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint) randomAction);
-            string animName = NativeHelper.Instance.GetAnimationNameByAction((uint) randomAction);
+            string dictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint)randomAction);
+            string animName = NativeHelper.Instance.GetAnimationNameByAction((uint)randomAction);
             if (!useDefaultAnimation)
             {
                 string animationAngle = "180";
@@ -884,7 +882,7 @@ namespace Thor
                     animationAngle = "90";
                 }
 
-                if (NativeHelper.Instance.DoesAnimationActionHaveAnglesAndIncompletePlusOrMinusSign((uint) randomAction))
+                if (NativeHelper.Instance.DoesAnimationActionHaveAnglesAndIncompletePlusOrMinusSign((uint)randomAction))
                 {
                     animName = animName.Replace("_0", "_" + (animationAngle == "90" ? (toLeft ? "" : "-") : "-") + animationAngle);
                 }

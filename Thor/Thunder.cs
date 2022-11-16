@@ -2,7 +2,6 @@
 using GTA.Math;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Thor
 {
@@ -58,7 +57,7 @@ namespace Thor
             ThunderBolt thunderBolt = new ThunderBolt();
             GenerateThunderBolt(ref thunderBolt, from, to, jaggedness, maxSwayRate);
             var i = 0;
-            foreach(var line in thunderBolt)
+            foreach (var line in thunderBolt)
             {
                 line.Render();
                 i++;

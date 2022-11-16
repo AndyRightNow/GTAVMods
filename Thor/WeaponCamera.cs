@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using GTA;
-using GTA.Native;
+﻿using GTA;
 using GTA.Math;
+using System.Collections.Generic;
 
 namespace Thor
 {
@@ -38,7 +33,7 @@ namespace Thor
 
         private bool ShouldResetCamera()
         {
-            return lastSetCameraPositionTimestamp == DEFAULT_CAMERA_POSITION_NOT_SET || 
+            return lastSetCameraPositionTimestamp == DEFAULT_CAMERA_POSITION_NOT_SET ||
                 Game.GameTime - lastSetCameraPositionTimestamp >= CAMERA_POSITION_RESET_INTERVAL;
         }
 

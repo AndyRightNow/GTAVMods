@@ -1,13 +1,6 @@
 ﻿using GTA;
 using GTA.Math;
-using GTA.Native;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Windows.Forms;
-using System.Linq;
-using System.IO;
-using System.Media;
 
 namespace Thor
 {
@@ -30,7 +23,7 @@ namespace Thor
             soundFileWeaponCloseToPed = "./scripts/hammer-close-to-player.wav";
         }
 
-        public override void RemoveAbility() 
+        public override void RemoveAbility()
         {
             base.RemoveAbility();
 
