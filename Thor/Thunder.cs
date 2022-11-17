@@ -2,7 +2,6 @@
 using GTA.Math;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Thor
 {
@@ -42,7 +41,7 @@ namespace Thor
 
             if (hasDamage)
             {
-                var raycast = World.Raycast(from, to, NativeHelper.IntersectAllObjects);
+                var raycast = World.Raycast(from, to, ADModUtils.NativeHelper.IntersectAllObjects);
 
                 if (raycast.DitHitEntity)
                 {
@@ -50,7 +49,7 @@ namespace Thor
 
                     if (ent != Game.Player.Character)
                     {
-                        NativeHelper.ApplyForcesAndDamages(ent, to - from);
+                        NativeHelper.Instance.ApplyForcesAndDamages(ent, to - from);
                     }
                 }
             }
@@ -58,7 +57,7 @@ namespace Thor
             ThunderBolt thunderBolt = new ThunderBolt();
             GenerateThunderBolt(ref thunderBolt, from, to, jaggedness, maxSwayRate);
             var i = 0;
-            foreach(var line in thunderBolt)
+            foreach (var line in thunderBolt)
             {
                 line.Render();
                 i++;
@@ -76,7 +75,7 @@ namespace Thor
             var direction = (end - start).Normalized;
             var len = startToEnd.Length();
             List<float> stops = new List<float>();
-            var rand = Utilities.Random.SystemRandomInstance;
+            var rand = ADModUtils.Utilities.Random.SystemRandomInstance;
             float maxSwayValue = len * maxSwayRate;
 
             for (int i = 0; i < jaggedness; i++)
@@ -89,8 +88,8 @@ namespace Thor
             Vector3 prevPoint = start;
             foreach (var stop in stops)
             {
-                var randomPerpVec = Utilities.Math.RandomVectorPerpendicularTo(direction);
-                float randomSway = Convert.ToSingle(rand.NextDouble() * maxSwayValue * Utilities.Random.RandomNegation());
+                var randomPerpVec = ADModUtils.Utilities.Math.RandomVectorPerpendicularTo(direction);
+                float randomSway = Convert.ToSingle(rand.NextDouble() * maxSwayValue * ADModUtils.Utilities.Random.RandomNegation());
 
                 var curDir = direction * stop * len + randomPerpVec * randomSway;
                 var curPoint = start + curDir;

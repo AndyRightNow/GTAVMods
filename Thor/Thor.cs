@@ -1,40 +1,49 @@
 ﻿using GTA;
-using DeveloperConsole;
 using System;
 using System.Windows.Forms;
-using GTA.Math;
+using DeveloperConsole;
+using ADModUtils;
 
 namespace Thor
 {
     public class Thor : Script
     {
-        private WorthyAbility ability;
+        private MjolnirWorthyAbility mjolnirAbility;
         private int previousPedHash;
         private bool abilityHasBeenTurnedOff;
-        private DeveloperConsole.DeveloperConsole dc;
 
         public Thor()
         {
             Tick += OnTick;
             Interval = 0;
 
-            ability = WorthyAbility.Instance;
-            ability.ApplyOn(Game.Player.Character);
+            mjolnirAbility = MjolnirWorthyAbility.Instance;
             previousPedHash = -1;
             abilityHasBeenTurnedOff = false;
+
+            this.RegisterConsoleScript(OnConsoleAttached);
         }
 
-        void OnTick(Object sender, EventArgs e)
+        private void OnConsoleAttached(DeveloperConsole.DeveloperConsole dc)
+        {
+            //Initialize console stuff here
+            Logger.Init(dc);
+        }
+
+        void OnTick(object sender, EventArgs e)
         {
             HandleAbilityToggle();
             if (!abilityHasBeenTurnedOff)
             {
-                HandleAbilityTransfer();
-                ability.OnTick();
+                HandleMjolnirAbilityTransfer();
+                mjolnirAbility.OnTick(false);
             }
-            else if (ability.IsAttachedToPed)
+            else
             {
-                ability.RemoveAbility();
+                if (mjolnirAbility.IsAttachedToPed)
+                {
+                    mjolnirAbility.RemoveAbility();
+                }
             }
         }
 
@@ -42,41 +51,46 @@ namespace Thor
         {
             if (Game.IsControlPressed(0, GTA.Control.VehicleSubDescend) &&
                Game.IsControlPressed(0, GTA.Control.ScriptPadLeft) &&
-                Game.IsKeyPressed(Keys.O))
+               Game.IsKeyPressed(Keys.O))
             {
                 abilityHasBeenTurnedOff = false;
                 UI.Notify("The Thor ability has been turned on.");
             }
             else if (Game.IsControlPressed(0, GTA.Control.VehicleSubDescend) &&
                Game.IsControlPressed(0, GTA.Control.ScriptPadLeft) &&
-                Game.IsControlPressed(0, GTA.Control.VehicleExit))
+               Game.IsControlPressed(0, GTA.Control.VehicleExit))
             {
                 abilityHasBeenTurnedOff = true;
                 UI.Notify("The Thor ability has been turned off.");
             }
         }
 
-        private void HandleAbilityTransfer()
+        private void HandleMjolnirAbilityTransfer()
         {
-            if (previousPedHash != -1 &&
-                            Game.Player.Character != null &&
-                            Game.Player.Character.GetHashCode() != previousPedHash &&
-                            ability.IsAttachedToPed)
+            if (IsGameCharacterChanged() &&
+                  mjolnirAbility.IsAttachedToPed)
             {
-                ability.RemoveAbility();
+                mjolnirAbility.RemoveAbility();
             }
 
-            previousPedHash = Game.Player.Character.GetHashCode();
+            UpdatePrevCharacter();
 
-            if (!ability.IsAttachedToPed)
+            if (!mjolnirAbility.IsAttachedToPed)
             {
-                ability.ApplyOn(Game.Player.Character);
+                mjolnirAbility.ApplyOn(Game.Player.Character);
             }
         }
 
-        void OnKeyDown(Object sender, KeyEventArgs e)
+        private void UpdatePrevCharacter()
         {
+            previousPedHash = Game.Player.Character.GetHashCode();
+        }
 
+        private bool IsGameCharacterChanged()
+        {
+            return previousPedHash != -1 &&
+                              Game.Player.Character != null &&
+                              Game.Player.Character.GetHashCode() != previousPedHash;
         }
     }
 }

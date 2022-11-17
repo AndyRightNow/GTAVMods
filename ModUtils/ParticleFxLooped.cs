@@ -3,7 +3,7 @@ using GTA.Math;
 using GTA.Native;
 using System.Drawing;
 
-namespace Thor
+namespace ADModUtils
 {
     public class ParticleFxLooped
     {

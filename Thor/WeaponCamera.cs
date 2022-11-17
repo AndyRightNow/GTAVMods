@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using GTA;
-using GTA.Native;
+﻿using GTA;
 using GTA.Math;
+using System.Collections.Generic;
 
 namespace Thor
 {
@@ -17,10 +12,10 @@ namespace Thor
         NONE
     }
 
-    class MjolnirCamera
+    class WeaponCamera
     {
         private Camera hammerTrackCam;
-        private static MjolnirCamera instance;
+        private static WeaponCamera instance;
         private static float CAMERA_FOV = 50.0f;
         private static float DEFAULT_CAMERA_POSITION_NOT_SET = -1.0f;
         private static float CAMERA_POSITION_RESET_INTERVAL = 2000.0f;
@@ -30,7 +25,7 @@ namespace Thor
         private float lastSetCameraPositionTimestamp;
         private Vector3 currentSideDirection;
 
-        private MjolnirCamera()
+        private WeaponCamera()
         {
             lastSetCameraPositionTimestamp = DEFAULT_CAMERA_POSITION_NOT_SET;
             cameraType = MOLNIR_CAMERA_TYPE.NONE;
@@ -38,17 +33,17 @@ namespace Thor
 
         private bool ShouldResetCamera()
         {
-            return lastSetCameraPositionTimestamp == DEFAULT_CAMERA_POSITION_NOT_SET || 
+            return lastSetCameraPositionTimestamp == DEFAULT_CAMERA_POSITION_NOT_SET ||
                 Game.GameTime - lastSetCameraPositionTimestamp >= CAMERA_POSITION_RESET_INTERVAL;
         }
 
-        public static MjolnirCamera Instance
+        public static WeaponCamera Instance
         {
             get
             {
                 if (instance == null)
                 {
-                    instance = new MjolnirCamera();
+                    instance = new WeaponCamera();
                 }
 
                 return instance;
@@ -62,12 +57,12 @@ namespace Thor
                 hammerTrackCam = World.CreateCamera(weaponObject.Position, Vector3.Zero, CAMERA_FOV);
             }
             Vector3 weaponDirection = weaponObject.Velocity.Normalized;
-            int randomNegationFactor = Utilities.Random.RandomNegation();
+            int randomNegationFactor = ADModUtils.Utilities.Random.RandomNegation();
             bool isJustReset = false;
 
             if (ShouldResetCamera())
             {
-                cameraType = Utilities.Random.PickOne(new List<MOLNIR_CAMERA_TYPE>()
+                cameraType = ADModUtils.Utilities.Random.PickOne(new List<MOLNIR_CAMERA_TYPE>()
                     {
                         MOLNIR_CAMERA_TYPE.SIDE_FOLLOW,
                         MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW,
@@ -76,7 +71,7 @@ namespace Thor
                         MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW
                     }.ToArray());
                 lastSetCameraPositionTimestamp = Game.GameTime;
-                currentSideDirection = Utilities.Math.RandomVectorPerpendicularTo(weaponDirection) * randomNegationFactor;
+                currentSideDirection = ADModUtils.Utilities.Math.RandomVectorPerpendicularTo(weaponDirection) * randomNegationFactor;
                 isJustReset = true;
             }
 

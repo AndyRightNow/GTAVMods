@@ -4,97 +4,99 @@ using GTA.Native;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Windows.Forms;
 using System.Linq;
-using System.IO;
-using System.Media;
+using System.Windows.Forms;
 
 namespace Thor
 {
-    class WorthyAbility
+    public class WorthyAbility<T, W>
+        where W : GodlyWeapon<W>, new()
+        where T : class, new()
     {
-        private static float NULL_FLOAT = -1.0f;
-        private static float PLAYER_MOVEMENT_MULTIPLIER = 1.5f;
-        private static float MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND = 0.6f;
-        private static float CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_SOUND = 140.0f;
-        private static float CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_HAMMER_ROTATION = 5.0f;
-        private static float HAMMER_BEFORE_RETURN_TO_PED_WAIT_TIME = 700.0f;
-        private static int CATCHING_MJONIR_ANIMATION_DURATION = 250;
-        private static Bone HAMMER_HOLDING_HAND_ID = Bone.PH_R_Hand;
-        private static float THROW_HAMMER_SPEED_MULTIPLIER = 100.0f;
-        private static float AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS = 1000.0f;
-        private static float ANIMATION_ANGLE_RANGE_STEP = 45.0f;
-        private static float RAY_CAST_MAX_DISTANCE = 100000.0f;
-        private static float FLY_UPWARD_VELOCITY = 50.0f;
-        private static float FLY_HORIZONTAL_VELOCITY_LEVEL_1 = 70.0f;
-        private static float AIR_DASH_ATTACK_LANDING_VELOCITY = 200.0f;
-        private static int FLY_WITH_THROWN_HAMMER_MAX_TIME = 2000;
-        private static float FLY_SPRINT_VELOCITY_MULTIPLIER = 4.0f;
-        private static float SLOW_DOWN_TIME_SCALE = 0.01f;
-        private static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 20.0f;
-        private static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
-        private static int MAX_TARGET_COUNT = 15;
-        private static string SOUND_FILE_HAMMER_CLOSE_TO_PLAYER = "./scripts/hammer-close-to-player.wav";
-        private static string SOUND_FILE_CATCH_HAMMER = "./scripts/catch-hammer.wav";
-        private static Vector3 THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
+        protected static float NULL_FLOAT = -1.0f;
+        protected static float FULL_POWER_LEVEL_MAX_RATIO = 100.0f;
+        protected static int FULL_POWER_MAX_HEALTH = 30000;
+        protected static float HALF_POWER_LEVEL_MAX_RATIO = 50.0f;
+        protected static float POWER_LEVEL_PRESENT_MAX_TIME_AFTER_LOSING_WEAPON = 10000.0f;
+        protected static float PLAYER_MOVEMENT_MULTIPLIER = 1.5f;
+        protected static float MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND = 0.6f;
+        protected static float CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_SOUND = 140.0f;
+        protected static float CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_WEAPON_ROTATION = 5.0f;
+        protected static float WEAPON_BEFORE_RETURN_TO_PED_WAIT_TIME = 700.0f;
+        protected static int CATCHING_WEAPON_ANIMATION_DURATION = 250;
+        protected static Bone WEAPON_HOLDING_HAND_ID = Bone.PH_R_Hand;
+        protected static float THROW_WEAPON_SPEED_MULTIPLIER = 100.0f;
+        protected static float AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS = 1000.0f;
+        protected static float ANIMATION_ANGLE_RANGE_STEP = 45.0f;
+        protected static float RAY_CAST_MAX_DISTANCE = 100000.0f;
+        protected static float FLY_UPWARD_VELOCITY = 50.0f;
+        protected static float FLY_HORIZONTAL_VELOCITY_LEVEL_1 = 70.0f;
+        protected static float AIR_DASH_ATTACK_LANDING_VELOCITY = 200.0f;
+        protected static int FLY_WITH_THROWN_WEAPON_MAX_TIME = 2000;
+        protected static float FLY_SPRINT_VELOCITY_MULTIPLIER = 4.0f;
+        protected static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 20.0f;
+        protected static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
+        protected static int MAX_TARGET_COUNT = 15;
+        protected static Vector3 THROW_WEAPON_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
+        protected static int HEALTH_RECOVER_TIMER_INTERVAL = 200;
 
-        private static WorthyAbility instance;
-        private Ped attachedPed;
-        private bool previousIsHammerAttackingTargets;
-        private bool isHammerAttackingTargets;
-        private float hammerJustFinishedAttackingTargetsTimestamp;
-        private bool isCollectingTargets;
-        private bool hasJustSetEndOfFlyingInitialVelocity;
-        private bool isFlyingWithThrownHammer;
-        private Vector3 flyWithThrownHammerDirection;
-        private int flyWithThrownHammerStartTime;
-        private Vector3 previousPedVelocity;
-        private bool shouldHammerReturnToPed;
-        private bool isFlying;
-        private HashSet<Entity> targets;
-        private bool isInAirDashAttack;
-        private Utilities.Timer pedFxTimer;
-        private bool hasSummonedThunder;
-        private bool isHoldingHammerRope;
-        private Plane hammerWhirlingPlane;
-        private Plane hammerHoverWhirlingPlane;
-        private Entity hammerUsedForHoveringWhirlingOriginal;
-        private Entity hammerUsedForHoveringWhirlingShown;
-        private bool isHoverWhirling;
-        private NAudio.Wave.WaveOut catchHammerSoundPlayer;
-        private NAudio.Wave.WaveOut hammerCloseToPlayerSoundPlayer;
+        protected static T instance;
+        protected Ped attachedPed;
+        protected bool isWeaponAttackingTargets;
+        protected float weaponJustFinishedAttackingTargetsTimestamp;
+        protected bool isCollectingTargets;
+        protected bool hasJustSetEndOfFlyingInitialVelocity;
+        protected bool isFlyingWithThrownWeapon;
+        protected Vector3 flyWithThrownWeaponDirection;
+        protected int flyWithThrownWeaponStartTime;
+        protected Vector3 previousPedVelocity;
+        protected bool shouldWeaponReturnToPed;
+        protected bool isFlying;
+        protected HashSet<Entity> targets;
+        protected bool isInAirDashAttack;
+        protected ADModUtils.Utilities.Timer pedFxTimer;
+        protected ADModUtils.Utilities.Timer pedHealthRecoverTimer;
+        protected bool hasSummonedThunder;
+        protected float lastLostWeaponTime;
+        protected float powerLevel;
+        protected bool isPreviouslyHoldingWeapon;
+        protected NAudio.Wave.WaveOut catchWeaponSoundPlayer;
+        protected NAudio.Wave.WaveOut weaponCloseToPlayerSoundPlayer;
+        protected string soundFileCatchWeapon;
+        protected string soundFileWeaponCloseToPed;
 
-        private WorthyAbility()
+        protected WorthyAbility()
         {
             isCollectingTargets = false;
             targets = new HashSet<Entity>();
-            Hammer = Mjolnir.Instance;
-            isHammerAttackingTargets = false;
-            previousIsHammerAttackingTargets = false;
+            isWeaponAttackingTargets = false;
             previousPedVelocity = Vector3.Zero;
             isFlying = false;
             hasJustSetEndOfFlyingInitialVelocity = false;
-            isFlyingWithThrownHammer = false;
-            flyWithThrownHammerDirection = Vector3.Zero;
-            flyWithThrownHammerStartTime = 0;
-            shouldHammerReturnToPed = false;
+            isFlyingWithThrownWeapon = false;
+            flyWithThrownWeaponDirection = Vector3.Zero;
+            flyWithThrownWeaponStartTime = 0;
+            shouldWeaponReturnToPed = false;
             isInAirDashAttack = false;
             pedFxTimer = null;
             hasSummonedThunder = false;
-            isHoldingHammerRope = false;
-            isHoverWhirling = false;
-            catchHammerSoundPlayer = new NAudio.Wave.WaveOut();
-            hammerCloseToPlayerSoundPlayer = new NAudio.Wave.WaveOut();
-            hammerJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
+            catchWeaponSoundPlayer = new NAudio.Wave.WaveOut();
+            weaponCloseToPlayerSoundPlayer = new NAudio.Wave.WaveOut();
+            weaponJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
+            powerLevel = 0.0f;
+            lastLostWeaponTime = NULL_FLOAT;
+            isPreviouslyHoldingWeapon = false;
         }
 
-        public static WorthyAbility Instance
+        public W Weapon { get; set; }
+
+        public static T Instance
         {
             get
             {
                 if (instance == null)
                 {
-                    instance = new WorthyAbility();
+                    instance = new T();
                 }
 
                 return instance;
@@ -109,26 +111,16 @@ namespace Thor
             }
         }
 
-        public void RemoveAbility()
+        public virtual void RemoveAbility()
         {
-            if (HasHammer)
+            if (HasWeapon)
             {
-                ThrowHammerOut(false);
+                ThrowWeaponOut(false);
             }
             if (attachedPed != null)
             {
                 SetInvincible(false);
                 attachedPed = null;
-            }
-            if (hammerUsedForHoveringWhirlingOriginal != null)
-            {
-                hammerUsedForHoveringWhirlingOriginal.Delete();
-                hammerUsedForHoveringWhirlingOriginal = null;
-            }
-            if (hammerUsedForHoveringWhirlingShown != null)
-            {
-                hammerUsedForHoveringWhirlingShown.Delete();
-                hammerUsedForHoveringWhirlingShown = null;
             }
 
             if (pedFxTimer != null)
@@ -149,187 +141,196 @@ namespace Thor
             attachedPed = ped;
             attachedPed.CanRagdoll = true;
 
-            if (Hammer != null &&
-                Hammer.WeaponObject != null &&
-                !HasHammer)
+            if (Weapon != null &&
+                Weapon.WeaponObject != null &&
+                !HasWeapon)
             {
-                Hammer.FindWaysToMoveToCoord(attachedPed.Position + new Vector3(0.0f, 0.0f, AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS), true);
+                weaponJustFinishedAttackingTargetsTimestamp = Game.GameTime;
+                Weapon.FindWaysToMoveToCoord(attachedPed.Position + new Vector3(0.0f, 0.0f, AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS), true);
             }
         }
 
-        public Mjolnir Hammer { get; }
-
-        public void OnTick()
+        public virtual void OnTick(bool onlyHandleWeaponHolding)
         {
-            Thunder.Instance.OnTick();
-            if (attachedPed == null)
+            if (!onlyHandleWeaponHolding)
             {
-                return;
-            }
-            InitHoverWhirledHammer();
+                Thunder.Instance.OnTick();
+                if (attachedPed == null)
+                {
+                    return;
+                }
+                HandlePowerLevel();
+                HandleHealthRecovery();
+                SetInvincible(true);
+                if (pedFxTimer != null && hasSummonedThunder)
+                {
+                    pedFxTimer.OnTick();
+                }
+                HandleMovement();
+                if (IsHoldingWeapon ||
+                    attachedPed.Weapons.CurrentWeaponObject == null)
+                {
+                    HandleMeleeForces();
+                }
 
-            SetInvincible(true);
-            HandleTimeScaleChange();
-            if (pedFxTimer != null)
-            {
-                pedFxTimer.OnTick();
-            }
-            HandleMovement();
-            HandleLightningAutoAttack(3.0f);
-            if (IsHoldingHammer ||
-                attachedPed.Weapons.CurrentWeaponObject == null)
-            {
-                HandleMeleeForces();
+                HandlePreOnTick();
             }
 
-            if (Game.IsKeyPressed(Keys.X))
+            if (IsHoldingWeapon)
             {
-                SummonThunder();
-            }
-            if (IsHoldingHammer)
-            {
-                HandleHoverWhirlingHammer();
+                lastLostWeaponTime = NULL_FLOAT;
                 HandleFlying();
-                Hammer.DestroyHammerTrackCam();
-                Hammer.SetSummonStatus(false);
+                Weapon.DestroyWeaponTrackCam();
+                Weapon.SetSummonStatus(false);
                 World.RenderingCamera = null;
                 Function.Call<bool>(Hash.SET_PLAYER_LOCKON_RANGE_OVERRIDE, Game.Player.Handle, 0.0f);
                 HandleAirDashAttack();
                 CollectTargets();
-                HandleThrowingMjolnir();
+                isPreviouslyHoldingWeapon = true;
+                HandleThrowingWeapon();
                 DrawMarkersOnTargets();
-                HandleDropAndHoldHammerRope();
+                HandlePostHoldingWeaponOnTick();
             }
             else
             {
-
-                HandleSummoningMjolnir();
-                HandleWhirlingHammer();
-                InitHammerIfNotExist();
-                Hammer.ApplyForcesToNearbyEntities();
-                ShowHammerPFX();
+                if (isPreviouslyHoldingWeapon && lastLostWeaponTime == NULL_FLOAT)
+                {
+                    lastLostWeaponTime = Game.GameTime;
+                }
+                isPreviouslyHoldingWeapon = false;
+                HandleSummoningWeapon();
+                InitWeaponIfNotExist();
+                Weapon.ApplyForcesToNearbyEntities();
+                ShowWeaponPFX();
                 HandleAttackingTargets();
 
-                if (Game.IsKeyPressed(Keys.R))
+                if (IsRenderWeaponCameraKeyPressed())
                 {
-                    Hammer.RenderHammerTrackCam();
+                    Weapon.RenderWeaponTrackCam();
                 }
                 else
                 {
-                    Hammer.CancelRenderHammerTrackCam();
+                    Weapon.CancelRenderWeaponTrackCam();
                 }
+                HandlePostNotHoldingWeaponOnTick();
             }
-            Hammer.OnTick();
+            Weapon.OnTick();
         }
 
-        private void HandleHoverWhirlingHammer()
+        protected virtual bool IsRenderWeaponCameraKeyPressed()
         {
-            if (hammerHoverWhirlingPlane == null)
+            return false;
+        }
+
+        protected virtual void HandlePreOnTick() { }
+        protected virtual void HandlePostHoldingWeaponOnTick() { }
+        protected virtual void HandlePostNotHoldingWeaponOnTick() { }
+
+        protected void HandleHealthRecovery()
+        {
+            if (pedHealthRecoverTimer == null)
             {
-                hammerHoverWhirlingPlane = new Plane(Vector3.WorldUp, Vector3.Zero);
+                pedHealthRecoverTimer = new ADModUtils.Utilities.Timer(HEALTH_RECOVER_TIMER_INTERVAL, RecoverHealth);
             }
 
-            if (isFlying && isHoverWhirling)
+            pedHealthRecoverTimer.OnTick();
+        }
+
+        protected void RecoverHealth()
+        {
+            if (powerLevel > 0)
             {
-                Hammer.Whirl(hammerHoverWhirlingPlane, false, hammerUsedForHoveringWhirlingOriginal);
+                attachedPed.Health += (int)(attachedPed.MaxHealth * powerLevel / FULL_POWER_LEVEL_MAX_RATIO / 10);
             }
         }
 
-        private void HandleWhirlingHammer()
+        protected void SummonThunder()
         {
-            if (Game.IsKeyPressed(Keys.Z))
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            PlayThunderFx();
+            if (pedFxTimer == null)
             {
-                if (isHoldingHammerRope)
-                {
-                    var boneCoord = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
+                pedFxTimer = new ADModUtils.Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS, PlayThunderFx);
+            }
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+        }
 
-                    hammerWhirlingPlane = new Plane(Vector3.Cross(attachedPed.ForwardVector, Vector3.WorldUp), boneCoord);
+        protected virtual bool ShouldPossessFullPower()
+        {
+            return false;
+        }
 
-                    NativeHelper.PlayPlayerAnimation(
-                        attachedPed,
-                        NativeHelper.GetAnimationDictNameByAction(AnimationActions.WhirlingHammer),
-                        NativeHelper.GetAnimationNameByAction(AnimationActions.WhirlingHammer),
-                        AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation
-                    );
-                    Hammer.Whirl(hammerWhirlingPlane);
-                }
+        protected void HandlePowerLevel()
+        {
+            if (IsHoldingWeapon || ShouldPossessFullPower())
+            {
+                powerLevel = FULL_POWER_LEVEL_MAX_RATIO;
             }
             else
             {
-                if (isHoldingHammerRope)
+                if (HasWeapon)
                 {
-                    SummonMjolnir();
+                    powerLevel = HALF_POWER_LEVEL_MAX_RATIO;
+                }
+                else
+                {
+                    if (lastLostWeaponTime != NULL_FLOAT)
+                    {
+                        var timePast = Game.GameTime - lastLostWeaponTime;
+                        if (timePast > POWER_LEVEL_PRESENT_MAX_TIME_AFTER_LOSING_WEAPON)
+                        {
+                            powerLevel = 0.0f;
+                            lastLostWeaponTime = NULL_FLOAT;
+                        }
+                        else
+                        {
+                            powerLevel = FULL_POWER_LEVEL_MAX_RATIO * (1 - timePast / POWER_LEVEL_PRESENT_MAX_TIME_AFTER_LOSING_WEAPON);
+                        }
+                    }
                 }
             }
+
+            hasSummonedThunder = powerLevel > HALF_POWER_LEVEL_MAX_RATIO;
         }
 
-        private void HandleDropAndHoldHammerRope()
+        protected void HandleMovement()
         {
-            if (Game.IsKeyPressed(Keys.Z))
-            {
-                DropAndHoldHammerRope();
-            }
-        }
-
-        private void HandleMovement()
-        {
-            Function.Call(Hash.SET_PED_MOVE_RATE_OVERRIDE, attachedPed, PLAYER_MOVEMENT_MULTIPLIER);
-            Function.Call(Hash.SET_SWIM_MULTIPLIER_FOR_PLAYER, Game.Player, PLAYER_MOVEMENT_MULTIPLIER);
-            if (hasSummonedThunder)
+            var movementMultiplier = 1.0f + (PLAYER_MOVEMENT_MULTIPLIER - 1.0f) * powerLevel / FULL_POWER_LEVEL_MAX_RATIO;
+            Function.Call(
+                Hash.SET_PED_MOVE_RATE_OVERRIDE,
+                attachedPed,
+                movementMultiplier
+            );
+            Function.Call(
+                Hash.SET_SWIM_MULTIPLIER_FOR_PLAYER,
+                Game.Player,
+                movementMultiplier
+            );
+            if (powerLevel >= HALF_POWER_LEVEL_MAX_RATIO)
             {
                 Function.Call(Hash.SET_SUPER_JUMP_THIS_FRAME, Game.Player);
             }
         }
 
-        private void SummonThunder()
-        {
-            if (hasSummonedThunder)
-            {
-                return;
-            }
-            hasSummonedThunder = true;
-
-            var prevWeather = World.Weather;
-            World.Weather = Weather.ThunderStorm;
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            NativeHelper.PlayPlayerAnimation(
-                attachedPed,
-                NativeHelper.GetAnimationDictNameByAction(AnimationActions.SummonThunder),
-                NativeHelper.GetAnimationNameByAction(AnimationActions.SummonThunder),
-                AnimationFlags.None);
-            Script.Wait(2000);
-            Thunder.Instance.Shoot(attachedPed.Position + new Vector3(0.0f, 0.0f, 1000.0f), attachedPed.Position);
-            PlayThunderFx();
-            pedFxTimer = new Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS, PlayThunderFx);
-            ApplyForcesAndDamagesOnNearbyEntities(true, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, Vector3.Zero);
-            World.Weather = prevWeather;
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-        }
-
-        private void PlayThunderFx()
+        protected virtual void PlayThunderFx()
         {
             NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_L_Forearm);
             NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_R_Forearm);
             NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_L_Thigh);
             NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_R_Thigh);
-            if (IsHoldingHammer)
+            if (IsHoldingWeapon)
             {
                 NativeHelper.PlayThunderFx(attachedPed.Weapons.CurrentWeaponObject, 0.5f);
-
-                if (hammerUsedForHoveringWhirlingShown != null)
-                {
-                    NativeHelper.PlayThunderFx(hammerUsedForHoveringWhirlingShown, 0.5f);
-                }
             }
         }
 
-        private void HandleAirDashAttack()
+        protected void HandleAirDashAttack()
         {
             if (attachedPed.IsInAir && !isInAirDashAttack)
             {
@@ -344,7 +345,7 @@ namespace Thor
                 if (!attachedPed.IsInAir)
                 {
                     isInAirDashAttack = false;
-                    ApplyForcesAndDamagesOnNearbyEntities(true, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, Vector3.Zero);
+                    ApplyForcesAndDamagesOnNearbyEntities(true, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, Vector3.Zero, powerLevel);
                 }
                 else
                 {
@@ -353,75 +354,60 @@ namespace Thor
             }
         }
 
-        private void HandleTimeScaleChange()
+        protected void HandleAttackingTargets()
         {
-        }
-
-        private void HandleAttackingTargets()
-        {
-            if (isHammerAttackingTargets)
+            if (isWeaponAttackingTargets)
             {
                 if (targets.Count > 0)
                 {
-                    isHammerAttackingTargets = Hammer.MoveToTargets(ref targets);
+                    isWeaponAttackingTargets = Weapon.MoveToTargets(ref targets);
                 }
                 else if (targets.Count == 0)
                 {
-                    isHammerAttackingTargets = false;
-                    if (hammerJustFinishedAttackingTargetsTimestamp == NULL_FLOAT)
+                    isWeaponAttackingTargets = false;
+                    if (weaponJustFinishedAttackingTargetsTimestamp == NULL_FLOAT)
                     {
-                        hammerJustFinishedAttackingTargetsTimestamp = Game.GameTime;
+                        weaponJustFinishedAttackingTargetsTimestamp = Game.GameTime;
                     }
                 }
             }
 
-            if (!isHammerAttackingTargets &&
-                hammerJustFinishedAttackingTargetsTimestamp != NULL_FLOAT &&
-                Game.GameTime - hammerJustFinishedAttackingTargetsTimestamp >= HAMMER_BEFORE_RETURN_TO_PED_WAIT_TIME)
+            if (!isWeaponAttackingTargets &&
+                weaponJustFinishedAttackingTargetsTimestamp != NULL_FLOAT &&
+                Game.GameTime - weaponJustFinishedAttackingTargetsTimestamp >= WEAPON_BEFORE_RETURN_TO_PED_WAIT_TIME)
             {
-                shouldHammerReturnToPed = true;
-                hammerJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
+                shouldWeaponReturnToPed = true;
+                weaponJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
             }
 
-            if (shouldHammerReturnToPed)
+            if (shouldWeaponReturnToPed)
             {
-                SummonMjolnir();
+                SummonWeapon();
             }
         }
 
-        private void InitHammerIfNotExist()
+        protected void InitWeaponIfNotExist()
         {
-            if (!HasHammer)
+            if (!HasWeapon)
             {
-                Hammer.Init(null);
+                Weapon.Init(null);
             }
         }
 
-        private void InitHoverWhirledHammer()
+        protected virtual bool ShouldShowWeaponPFX()
         {
-            if (hammerUsedForHoveringWhirlingOriginal == null)
-            {
-                hammerUsedForHoveringWhirlingOriginal = NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero);
-                hammerUsedForHoveringWhirlingOriginal.Alpha = 0;
-                hammerUsedForHoveringWhirlingOriginal.SetNoCollision(attachedPed, true);
-            }
-            if (hammerUsedForHoveringWhirlingShown == null)
-            {
-                hammerUsedForHoveringWhirlingShown = NativeHelper.CreateWeaponObject(WeaponHash.Hammer, 1, Vector3.Zero + new Vector3(0.0f, 0.0f, 10.0f));
-                hammerUsedForHoveringWhirlingShown.Alpha = 0;
-                hammerUsedForHoveringWhirlingShown.SetNoCollision(attachedPed, true);
-            }
+            return true;
         }
 
-        private void ShowHammerPFX()
+        protected void ShowWeaponPFX()
         {
-            if (Hammer.IsMoving && !isHoldingHammerRope)
+            if (Weapon.IsMoving && ShouldShowWeaponPFX())
             {
-                Hammer.ShowParticleFx();
+                Weapon.ShowParticleFx();
             }
         }
 
-        private void HandleMeleeForces()
+        protected void HandleMeleeForces()
         {
             if (attachedPed.IsInVehicle() ||
                 !attachedPed.IsInMeleeCombat)
@@ -429,10 +415,10 @@ namespace Thor
                 return;
             }
 
-            ApplyForcesAndDamagesOnNearbyEntities(false, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, attachedPed.ForwardVector);
+            ApplyForcesAndDamagesOnNearbyEntities(false, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, attachedPed.ForwardVector, powerLevel);
         }
 
-        private void ShootLightningsToEnemy(Ped ped)
+        protected void ShootLightningsToEnemy(Ped ped)
         {
             if (!hasSummonedThunder)
             {
@@ -445,22 +431,7 @@ namespace Thor
             }
         }
 
-        private void HandleLightningAutoAttack(float range)
-        {
-            if (!hasSummonedThunder || attachedPed.IsInVehicle())
-            {
-                return;
-            }
-
-            Ped[] nearbyPeds = World.GetNearbyPeds(attachedPed.Position, range);
-
-            foreach (var ped in nearbyPeds)
-            {
-                ShootLightningsToEnemy(ped);
-            }
-        }
-
-        private void ApplyForcesAndDamagesOnNearbyEntities(bool applyToAll, float range, Vector3 forceDirection)
+        protected void ApplyForcesAndDamagesOnNearbyEntities(bool applyToAll, float range, Vector3 forceDirection, float powerLevel)
         {
             Entity[] closestEntities = World.GetNearbyEntities(attachedPed.Position, range);
 
@@ -471,12 +442,7 @@ namespace Thor
                 {
                     continue;
                 }
-                var isPed = NativeHelper.IsPed(ent);
-
-                if (isPed)
-                {
-                    ShootLightningsToEnemy((Ped)ent);
-                }
+                var isPed = ADModUtils.NativeHelper.IsPed(ent);
 
                 if (applyToAll || ent.HasBeenDamagedBy(attachedPed))
                 {
@@ -488,53 +454,68 @@ namespace Thor
                     if (forceDirection.Length() == 0)
                     {
                         var defaultForceDirection = (ent.Position - attachedPed.Position).Normalized;
-                        NativeHelper.ApplyForcesAndDamages(ent, defaultForceDirection);
+                        NativeHelper.Instance.ApplyForcesAndDamages(ent, defaultForceDirection, powerLevel);
                     }
                     else
                     {
-                        NativeHelper.ApplyForcesAndDamages(ent, forceDirection);
+                        NativeHelper.Instance.ApplyForcesAndDamages(ent, forceDirection, powerLevel);
                     }
                 }
             }
         }
 
-        private void SetInvincible(bool toggle)
+        protected void SetInvincible(bool toggle)
         {
-            attachedPed.CanSufferCriticalHits = !toggle;
-            Function.Call(Hash.SET_ENTITY_CAN_BE_DAMAGED, attachedPed, !toggle);
-            attachedPed.IsInvincible = toggle;
-            attachedPed.Health = attachedPed.MaxHealth;
-            attachedPed.Armor = 100;
-            attachedPed.AlwaysDiesOnLowHealth = !toggle;
-            attachedPed.IsBulletProof = toggle;
-            attachedPed.IsCollisionProof = toggle;
-            attachedPed.IsExplosionProof = toggle;
-            attachedPed.IsFireProof = toggle;
-            attachedPed.IsMeleeProof = toggle;
+            var invincible = toggle && powerLevel > HALF_POWER_LEVEL_MAX_RATIO;
+
+
+            if (invincible || !toggle)
+            {
+                attachedPed.CanSufferCriticalHits = !toggle;
+                attachedPed.MaxHealth = FULL_POWER_MAX_HEALTH;
+                attachedPed.AlwaysDiesOnLowHealth = !toggle;
+            }
+            else
+            {
+                attachedPed.CanSufferCriticalHits = false;
+                Function.Call(Hash.SET_ENTITY_CAN_BE_DAMAGED, attachedPed, true);
+                attachedPed.MaxHealth = (int)(100 + FULL_POWER_MAX_HEALTH * powerLevel / FULL_POWER_LEVEL_MAX_RATIO);
+                attachedPed.IsInvincible = false;
+                attachedPed.AlwaysDiesOnLowHealth = false;
+                attachedPed.IsBulletProof = false;
+                attachedPed.IsCollisionProof = false;
+                attachedPed.IsExplosionProof = false;
+                attachedPed.IsFireProof = false;
+                attachedPed.IsMeleeProof = false;
+            }
         }
 
-        private void HandleFlying()
+        protected virtual void HandlePreInAir() { }
+        protected virtual void HandleMidIsFlying(Vector3 velocity, Vector3 weaponHoldingHandCoord) { }
+        protected virtual void HandlePreNotFlying() { }
+
+        protected virtual void HandleFlying()
         {
             GameplayCamera.ClampYaw(-180.0f, 180.0f);
             GameplayCamera.ClampPitch(-180.0f, 180.0f);
             var velocity = Vector3.Zero;
 
-            if (!IsHoldingHammer)
+            if (!IsHoldingWeapon)
             {
                 return;
             }
 
-            if (isFlyingWithThrownHammer)
+            if (isFlyingWithThrownWeapon)
             {
-                int endTime = flyWithThrownHammerStartTime + FLY_WITH_THROWN_HAMMER_MAX_TIME;
+                int endTime = flyWithThrownWeaponStartTime + FLY_WITH_THROWN_WEAPON_MAX_TIME;
 
                 if (Game.GameTime < endTime)
                 {
-                    velocity += flyWithThrownHammerDirection * FLY_HORIZONTAL_VELOCITY_LEVEL_1 * 2;
+                    velocity += flyWithThrownWeaponDirection * FLY_HORIZONTAL_VELOCITY_LEVEL_1 * 2;
                 }
                 else
                 {
-                    isFlyingWithThrownHammer = false;
+                    isFlyingWithThrownWeapon = false;
                 }
             }
 
@@ -560,35 +541,14 @@ namespace Thor
                 previousPedVelocity = attachedPed.Velocity;
             }
 
-            SetHeldHammerVisible(true);
-            var hammerHoldingHandCoord = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
+            HandlePreInAir();
+            var weaponHoldingHandCoord = attachedPed.GetBoneCoord(WEAPON_HOLDING_HAND_ID);
             if (velocity.Length() > 0)
             {
                 isFlying = true;
                 GameplayCamera.Shake(CameraShake.MediumExplosion, 0.01f);
                 SetAttachedPedToRagdoll();
-                var velocityAndUpDot = Vector3.Dot(velocity.Normalized, Vector3.WorldUp);
-                if (velocityAndUpDot >= 0.85f &&
-                    velocityAndUpDot <= 1.0f)
-                {
-                    isHoverWhirling = true;
-                    SetHeldHammerVisible(false);
-                }
-                else
-                {
-                    isHoverWhirling = false;
-                    SetHeldHammerVisible(true);
-                    Hammer.RotateToDirection(attachedPed.Weapons.CurrentWeaponObject, velocity.Normalized);
-                    attachedPed.Weapons.CurrentWeaponObject.Position = hammerHoldingHandCoord + velocity.Normalized * 0.3f;
-                }
-                if (isHoverWhirling)
-                {
-                    hammerUsedForHoveringWhirlingShown.Position = 
-                        attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID) + 
-                        (hammerUsedForHoveringWhirlingOriginal.Position - hammerHoverWhirlingPlane.Center) + 
-                        new Vector3(0, 0, 0.1f);
-                    hammerUsedForHoveringWhirlingShown.Rotation = hammerUsedForHoveringWhirlingOriginal.Rotation;
-                }
+                HandleMidIsFlying(velocity, weaponHoldingHandCoord);
                 attachedPed.Weapons.CurrentWeaponObject.Velocity += velocity;
                 Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
 
@@ -605,9 +565,16 @@ namespace Thor
             }
             else
             {
-                SetHeldHammerVisible(true);
+                HandlePreNotFlying();
                 isFlying = false;
-                attachedPed.CanRagdoll = !attachedPed.IsInAir;
+                if (powerLevel == FULL_POWER_LEVEL_MAX_RATIO)
+                {
+                    attachedPed.CanRagdoll = !attachedPed.IsInAir;
+                }
+                else
+                {
+                    attachedPed.CanRagdoll = true;
+                }
                 if (!isFlying && !hasJustSetEndOfFlyingInitialVelocity)
                 {
                     attachedPed.Velocity += previousPedVelocity;
@@ -616,52 +583,33 @@ namespace Thor
             }
         }
 
-        private void SetHeldHammerVisible(bool toggle)
-        {
-            if (IsHoldingHammer)
-            {
-                if (toggle)
-                {
-                    attachedPed.Weapons.CurrentWeaponObject.ResetAlpha();
-                }
-                else
-                {
-                    attachedPed.Weapons.CurrentWeaponObject.Alpha = 0;
-                }
-            }
-            if (hammerUsedForHoveringWhirlingShown != null)
-            {
-                if (toggle)
-                {
-                    hammerUsedForHoveringWhirlingShown.Alpha = 0;
-
-                }
-                else
-                {
-                    hammerUsedForHoveringWhirlingShown.ResetAlpha();
-                }
-            }
-        }
-
-        private void SetAttachedPedToRagdoll()
+        protected void SetAttachedPedToRagdoll()
         {
             attachedPed.CanRagdoll = true;
-            NativeHelper.SetPedToRagdoll(attachedPed, RagdollType.WideLegs, 2, 1000);
+            ADModUtils.NativeHelper.SetPedToRagdoll(attachedPed, ADModUtils.RagdollType.WideLegs, 2, 1000);
         }
 
-        private void HandleSummoningMjolnir()
+        protected virtual bool IsSummonWeaponKeyPressed()
         {
-            if (Game.IsKeyPressed(Keys.H))
+            return false;
+        }
+
+        protected void HandleSummoningWeapon()
+        {
+            if (IsSummonWeaponKeyPressed())
             {
-                SummonMjolnir();
-            }
-            else if (Game.IsKeyPressed(Keys.B))
-            {
-                SummonMjolnir(true);
+                if (HasWeapon)
+                {
+                    attachedPed.Weapons.Select(Weapon.WeaponHash, true);
+                }
+                else
+                {
+                    SummonWeapon();
+                }
             }
         }
 
-        private void HandleThrowingMjolnir()
+        protected void HandleThrowingWeapon()
         {
             if (Game.IsControlPressed(0, GTA.Control.Aim))
             {
@@ -669,22 +617,22 @@ namespace Thor
 
                 if (Game.IsKeyPressed(Keys.T))
                 {
-                    ThrowMjolnir(ref targets);
+                    ThrowWeapon(ref targets);
                     isCollectingTargets = false;
                 }
                 else if (Game.IsKeyPressed(Keys.U))
                 {
                     isCollectingTargets = false;
-                    ThrowAndFlyWithMjolnir();
+                    ThrowAndFlyWithWeapon();
                 }
             }
             else if (Game.IsKeyPressed(Keys.Y))
             {
-                ThrowHammerOut(false);
+                ThrowWeaponOut(false);
             }
         }
 
-        private void CollectTargets()
+        protected void CollectTargets()
         {
             if (Game.IsControlPressed(0, GTA.Control.Aim))
             {
@@ -692,7 +640,7 @@ namespace Thor
                 var result = World.Raycast(
                     GameplayCamera.Position + GameplayCamera.Direction * 10.0f,
                     GameplayCamera.Position + GameplayCamera.Direction * RAY_CAST_MAX_DISTANCE,
-                    NativeHelper.IntersectAllObjects
+                    ADModUtils.NativeHelper.IntersectAllObjects
                 );
                 if (targets.Count < MAX_TARGET_COUNT &&
                     result.DitHitEntity &&
@@ -708,15 +656,15 @@ namespace Thor
             }
         }
 
-        private bool IsValidHitEntity(Entity entity)
+        protected bool IsValidHitEntity(Entity entity)
         {
             return entity != null &&
                  entity != attachedPed &&
-                 (NativeHelper.IsPed(entity) ||
-                 NativeHelper.IsVehicle(entity));
+                 (ADModUtils.NativeHelper.IsPed(entity) ||
+                 ADModUtils.NativeHelper.IsVehicle(entity));
         }
 
-        private void DrawMarkersOnTargets()
+        protected void DrawMarkersOnTargets()
         {
             foreach (var target in targets)
             {
@@ -730,87 +678,86 @@ namespace Thor
             }
         }
 
-        private bool HasHammer
+        protected bool HasWeapon
         {
             get
             {
-                return IsAttachedToPed && attachedPed.Weapons.HasWeapon(Hammer.WeaponHash);
+                return IsAttachedToPed && attachedPed.Weapons.HasWeapon(Weapon.WeaponHash);
             }
         }
 
-        public bool IsHoldingHammer
+        public bool IsHoldingWeapon
         {
             get
             {
-                return HasHammer && attachedPed.Weapons.Current.Hash == Hammer.WeaponHash;
+                return HasWeapon && attachedPed.Weapons.Current.Hash == Weapon.WeaponHash;
             }
         }
 
 
-        public void SummonMjolnir(bool shootUpwardFirst = false)
+        public virtual void SummonWeapon(bool shootUpwardFirst = false)
         {
-            Hammer.DetachRope();
-            isHoldingHammerRope = false;
-            isHammerAttackingTargets = false;
+            isWeaponAttackingTargets = false;
             targets.Clear();
-            Vector3 rightHandBonePos = attachedPed.GetBoneCoord(HAMMER_HOLDING_HAND_ID);
-            Vector3 fromHammerToPedHand = rightHandBonePos - Hammer.Position;
+            Vector3 rightHandBonePos = attachedPed.GetBoneCoord(WEAPON_HOLDING_HAND_ID);
+            Vector3 fromWeaponToPedHand = rightHandBonePos - Weapon.Position;
 
-            bool isHammerCloseToPed = false;
-            float distanceBetweenHammerToPedHand = Math.Abs(fromHammerToPedHand.Length());
-            if (distanceBetweenHammerToPedHand <= MINIMUM_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND)
+            bool isWeaponCloseToPed = false;
+            float distanceBetweenWeaponToPedHand = Math.Abs(fromWeaponToPedHand.Length());
+            if (distanceBetweenWeaponToPedHand <= MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND)
             {
-                AnimationActions randomCatchingAction = Utilities.Random.PickOne(
+                AnimationActions randomCatchingAction = ADModUtils.Utilities.Random.PickOne(
                     new List<AnimationActions>
                     {
-                        AnimationActions.CatchingMjolnir1,
+                        AnimationActions.CatchingWeapon1,
                     }.ToArray()
                 );
-                string catchDictName = NativeHelper.GetAnimationDictNameByAction(randomCatchingAction);
-                string catchAnimName = NativeHelper.GetAnimationNameByAction(randomCatchingAction);
+                string catchDictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint)randomCatchingAction);
+                string catchAnimName = NativeHelper.Instance.GetAnimationNameByAction((uint)randomCatchingAction);
                 Function.Call(Hash.DISABLE_PED_PAIN_AUDIO, attachedPed, true);
-                NativeHelper.PlayPlayerAnimation(
+                ADModUtils.NativeHelper.PlayPlayerAnimation(
                     attachedPed,
                     catchDictName,
                     catchAnimName,
                     AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
-                    CATCHING_MJONIR_ANIMATION_DURATION
+                    CATCHING_WEAPON_ANIMATION_DURATION
                 );
-                NativeHelper.PlayThunderFx(attachedPed, HAMMER_HOLDING_HAND_ID, 0.8f);
-                Function.Call(Hash.GIVE_WEAPON_OBJECT_TO_PED, Hammer.WeaponObject, attachedPed);
-                PlayCatchHammerSound();
-                hammerCloseToPlayerSoundPlayer.Stop();
+                NativeHelper.PlayThunderFx(attachedPed, WEAPON_HOLDING_HAND_ID, 0.8f);
+                Function.Call(Hash.GIVE_WEAPON_OBJECT_TO_PED, Weapon.WeaponObject, attachedPed);
+                PlayCatchWeaponSound();
+                weaponCloseToPlayerSoundPlayer.Stop();
                 GameplayCamera.Shake(CameraShake.LargeExplosion, 0.01f);
                 Script.Wait(1);
-                shouldHammerReturnToPed = false;
-                hammerJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
+                shouldWeaponReturnToPed = false;
+                weaponJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
+                SummonThunder();
                 return;
             }
-            else if (distanceBetweenHammerToPedHand <= CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_HAMMER_ROTATION)
+            else if (distanceBetweenWeaponToPedHand <= CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_WEAPON_ROTATION)
             {
-                isHammerCloseToPed = true;
+                isWeaponCloseToPed = true;
             }
-            else if (distanceBetweenHammerToPedHand <= CLOSE_DISTANCE_BETWEEN_HAMMER_AND_PED_HAND_FOR_SOUND)
+            else if (distanceBetweenWeaponToPedHand <= CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_SOUND)
             {
-                PlayHammerCloseSound();
+                PlayWeaponCloseSound();
             }
 
-            AnimationActions randomCallingAction = Utilities.Random.PickOne(
+            AnimationActions randomCallingAction = ADModUtils.Utilities.Random.PickOne(
                 new List<AnimationActions>
                 {
-                    AnimationActions.CallingForMjolnir
+                    AnimationActions.CallingForWeapon
                 }.ToArray()
             );
-            string dictName = NativeHelper.GetAnimationDictNameByAction(randomCallingAction);
-            string animName = NativeHelper.GetAnimationNameByAction(randomCallingAction);
+            string dictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint)randomCallingAction);
+            string animName = NativeHelper.Instance.GetAnimationNameByAction((uint)randomCallingAction);
 
             if (!IsAttachedToPed ||
-                HasHammer)
+                HasWeapon)
             {
                 return;
             }
 
-            NativeHelper.PlayPlayerAnimation(
+            ADModUtils.NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 dictName,
                 animName,
@@ -819,117 +766,98 @@ namespace Thor
 
             if (shootUpwardFirst)
             {
-                Hammer.WeaponObject.Velocity += new Vector3(0.0f, 0.0f, 1000.0f);
+                Weapon.WeaponObject.Velocity += new Vector3(0.0f, 0.0f, 1000.0f);
                 Script.Wait(500);
             }
 
-            Hammer.SetSummonStatus(true, attachedPed, isHammerCloseToPed);
-            Hammer.FindWaysToMoveToCoord(rightHandBonePos, true);
+            Weapon.SetSummonStatus(true, attachedPed, isWeaponCloseToPed);
+            Weapon.FindWaysToMoveToCoord(rightHandBonePos, true);
         }
 
-        private void PlayCatchHammerSound()
+        protected void PlayCatchWeaponSound()
         {
-            catchHammerSoundPlayer.Init(new NAudio.Wave.AudioFileReader(SOUND_FILE_CATCH_HAMMER));
-            catchHammerSoundPlayer.Volume = 0.3f;
-            catchHammerSoundPlayer.Play();
+            catchWeaponSoundPlayer.Init(new NAudio.Wave.AudioFileReader(soundFileCatchWeapon));
+            catchWeaponSoundPlayer.Volume = 0.3f;
+            catchWeaponSoundPlayer.Play();
         }
 
-        private void PlayHammerCloseSound()
+        protected void PlayWeaponCloseSound()
         {
-            if (hammerCloseToPlayerSoundPlayer.PlaybackState == NAudio.Wave.PlaybackState.Playing)
+            if (weaponCloseToPlayerSoundPlayer.PlaybackState == NAudio.Wave.PlaybackState.Playing)
             {
                 return;
             }
-            hammerCloseToPlayerSoundPlayer.Init(new NAudio.Wave.AudioFileReader(SOUND_FILE_HAMMER_CLOSE_TO_PLAYER));
-            hammerCloseToPlayerSoundPlayer.Volume = 0.3f;
-            hammerCloseToPlayerSoundPlayer.Play();
+            weaponCloseToPlayerSoundPlayer.Init(new NAudio.Wave.AudioFileReader(soundFileWeaponCloseToPed));
+            weaponCloseToPlayerSoundPlayer.Volume = 0.3f;
+            weaponCloseToPlayerSoundPlayer.Play();
         }
 
-        public void ThrowAndFlyWithMjolnir()
+        public void ThrowAndFlyWithWeapon()
         {
-            if (!IsHoldingHammer)
+            if (!IsHoldingWeapon)
             {
                 return;
             }
-            PlayThrowHammerAnimation(GameplayCamera.Direction);
+            PlayThrowWeaponAnimation(GameplayCamera.Direction);
             SetAttachedPedToRagdoll();
-            isFlyingWithThrownHammer = true;
-            flyWithThrownHammerDirection = GameplayCamera.Direction;
-            flyWithThrownHammerStartTime = Game.GameTime;
+            isFlyingWithThrownWeapon = true;
+            flyWithThrownWeaponDirection = GameplayCamera.Direction;
+            flyWithThrownWeaponStartTime = Game.GameTime;
         }
 
-        public void ThrowMjolnir(ref HashSet<Entity> targets)
+        public void ThrowWeapon(ref HashSet<Entity> targets)
         {
-            if (!IsHoldingHammer)
+            if (!IsHoldingWeapon)
             {
                 return;
             }
 
             if (targets.Count == 0)
             {
-                isHammerAttackingTargets = false;
-                ThrowMjolnir();
+                isWeaponAttackingTargets = false;
+                ThrowWeapon();
                 return;
             }
 
             if (targets.Count > 0)
             {
-                isHammerAttackingTargets = true;
+                isWeaponAttackingTargets = true;
                 Vector3 firstTargetPosition = targets.ToList().First().Position;
-                PlayThrowHammerAnimation((firstTargetPosition - attachedPed.Position).Normalized);
-                ThrowHammerOut(false);
+                PlayThrowWeaponAnimation((firstTargetPosition - attachedPed.Position).Normalized);
+                ThrowWeaponOut(false);
             }
         }
 
-        public void ThrowMjolnir()
+        public void ThrowWeapon()
         {
-            if (!IsHoldingHammer)
+            if (!IsHoldingWeapon)
             {
                 return;
             }
-            PlayThrowHammerAnimation(GameplayCamera.Direction);
-            ThrowHammerOut();
+            PlayThrowWeaponAnimation(GameplayCamera.Direction);
+            ThrowWeaponOut();
         }
 
-        private void ThrowHammerOut(bool hasInitialVelocity = true)
+        protected virtual void ThrowWeaponOut(bool hasInitialVelocity = true)
         {
-            if (IsHoldingHammer)
+            if (IsHoldingWeapon)
             {
-                Hammer.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
+                Weapon.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
             }
-            attachedPed.Weapons.Remove(Hammer.WeaponHash);
+            attachedPed.Weapons.Remove(Weapon.WeaponHash);
             attachedPed.Weapons.Select(WeaponHash.Unarmed);
             if (hasInitialVelocity)
             {
-                var hammerVelocity = GameplayCamera.Direction * THROW_HAMMER_SPEED_MULTIPLIER + THROW_HAMMER_Z_AXIS_PRECISION_COMPENSATION;
-                Hammer.WeaponObject.Velocity += hammerVelocity;
+                var weaponVelocity = GameplayCamera.Direction * THROW_WEAPON_SPEED_MULTIPLIER + THROW_WEAPON_Z_AXIS_PRECISION_COMPENSATION;
+                Weapon.WeaponObject.Velocity += weaponVelocity;
             }
         }
 
-        private void DropAndHoldHammerRope()
+        protected void PlayThrowWeaponAnimation(Vector3 directionToTurnTo)
         {
-            if (!IsHoldingHammer)
-            {
-                return;
-            }
-
-            ThrowHammerOut(false);
-            Hammer.AttachHammerRopeTo(attachedPed, HAMMER_HOLDING_HAND_ID);
-            isHoldingHammerRope = true;
-        }
-
-        private void PlayThrowHammerAnimation(Vector3 directionToTurnTo)
-        {
-            var animationActionList = new List<AnimationActions>
-                {
-                    AnimationActions.ThrowHammer1,
-                    AnimationActions.ThrowHammer2,
-                    AnimationActions.ThrowHammer3,
-                    AnimationActions.ThrowHammer4,
-                    AnimationActions.ThrowHammer5
-                }.ToArray();
-            AnimationActions randomAction = Utilities.Random.PickOne(animationActionList);
-            float angleBetweenPedForwardAndCamDirection = Utilities.Math.Angle(
+            var animationActionList = Weapon.ThrowActions;
+            AnimationActions randomAction = ADModUtils.Utilities.Random.PickOne(animationActionList);
+            float angleBetweenPedForwardAndCamDirection = ADModUtils.Utilities.Math.Angle(
                 new Vector2(attachedPed.ForwardVector.X, attachedPed.ForwardVector.Y),
                 new Vector2(directionToTurnTo.X, directionToTurnTo.Y)
             );
@@ -940,11 +868,11 @@ namespace Thor
                 angleBetweenPedForwardAndCamDirection >= 0;
             if (!useDefaultAnimation)
             {
-                randomAction = Utilities.Random.PickOneIf(animationActionList, NativeHelper.DoesAnimationActionHaveAngles);
+                randomAction = ADModUtils.Utilities.Random.PickOneIf(animationActionList, (AnimationActions aa) => NativeHelper.Instance.DoesAnimationActionHaveAngles((uint)aa));
             }
 
-            string dictName = NativeHelper.GetAnimationDictNameByAction(randomAction);
-            string animName = NativeHelper.GetAnimationNameByAction(randomAction);
+            string dictName = NativeHelper.Instance.GetAnimationDictNameByAction((uint)randomAction);
+            string animName = NativeHelper.Instance.GetAnimationNameByAction((uint)randomAction);
             if (!useDefaultAnimation)
             {
                 string animationAngle = "180";
@@ -954,9 +882,16 @@ namespace Thor
                     animationAngle = "90";
                 }
 
-                animName = animName.Replace("_0", "_" + (toLeft ? "+" : "-") + animationAngle);
+                if (NativeHelper.Instance.DoesAnimationActionHaveAnglesAndIncompletePlusOrMinusSign((uint)randomAction))
+                {
+                    animName = animName.Replace("_0", "_" + (animationAngle == "90" ? (toLeft ? "" : "-") : "-") + animationAngle);
+                }
+                else
+                {
+                    animName = animName.Replace("_0", "_" + (toLeft ? "+" : "-") + animationAngle);
+                }
             }
-            NativeHelper.PlayPlayerAnimation(
+            ADModUtils.NativeHelper.PlayPlayerAnimation(
                 attachedPed,
                 dictName,
                 animName,
@@ -966,7 +901,7 @@ namespace Thor
                 -1,
                 false
             );
-            Script.Wait(NativeHelper.GetAnimationWaitTimeByDictNameAndAnimName(dictName, animName));
+            Script.Wait(NativeHelper.Instance.GetAnimationWaitTimeByDictNameAndAnimName(dictName, animName));
         }
     }
 }
