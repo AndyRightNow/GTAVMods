@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using GTA;
 using GTA.Math;
+using GTA.UI;
 using GTA.Native;
-using Font = GTA.Font;
+using Font = GTA.UI.Font;
 
 namespace DeveloperConsole {
     public static class GTAFuncs {
@@ -23,9 +24,9 @@ namespace DeveloperConsole {
         }
 
         public static Vector2 ValidateScreenPoint(Vector2 v) {
-            if (v.X > UI.WIDTH) v.X = UI.WIDTH;
+            if (v.X > Screen.Width) v.X = Screen.Width;
             else if (v.X < 0) v.X = 0;
-            if (v.Y > UI.HEIGHT) v.Y = UI.HEIGHT;
+            if (v.Y > Screen.Height) v.Y = Screen.Height;
             else if (v.Y < 0) v.Y = 0;
             return v;
         }
@@ -57,8 +58,8 @@ namespace DeveloperConsole {
             SetControlAction(Control.CursorX, true);
             SetControlAction(Control.CursorY, true);
 
-            var ret = new Point((int) (GetControlNormal(Control.CursorX)*UI.WIDTH),
-                (int) (GetControlNormal(Control.CursorY)*UI.HEIGHT));
+            var ret = new Point((int) (GetControlNormal(Control.CursorX)* Screen.Width),
+                (int) (GetControlNormal(Control.CursorY)* Screen.Height));
 
             SetControlAction(Control.CursorX, x);
             SetControlAction(Control.CursorY, y);
@@ -174,8 +175,8 @@ namespace DeveloperConsole {
         public static unsafe Vector2 WorldToScreen(Vector3 world) {
             float x = 0;
             float y = 0;
-            Function.Call<bool>(Hash._WORLD3D_TO_SCREEN2D, world.X, world.Y, world.Z, &x, &y);
-            return new Vector2(x*UI.WIDTH, y*UI.HEIGHT);
+            Function.Call<bool>(Hash.GET_SCREEN_COORD_FROM_WORLD_COORD, world.X, world.Y, world.Z, &x, &y);
+            return new Vector2(x*GTA.UI.Screen.Width, y*GTA.UI.Screen.Height);
         }
 
         public static void DisplayRadar(bool b) {
@@ -187,7 +188,7 @@ namespace DeveloperConsole {
         }
 
         public static void ShowMouseThisFrame() {
-            Function.Call(Hash._SHOW_CURSOR_THIS_FRAME);
+            Function.Call(Hash._SET_MOUSE_CURSOR_ACTIVE_THIS_FRAME);
         }
 
         public static int GetNumNetworkPlayers() {
@@ -224,29 +225,6 @@ namespace DeveloperConsole {
             coord.Z = coord.Z + (float) (Math.Sin(tX))*8;
 
             return coord;
-        }
-
-        public static bool SlotHasPlayer(int i) {
-           var p = new Player(i);
-           return p.Name != "**Invalid**";
-        }
-
-        public static Player GetPedPlayer(Ped ped) {
-            for (var i = 0; i < 32; i++) {
-                var p = new Player(i);
-                if (SlotHasPlayer(i) && p.Character.Handle == ped.Handle) return p;
-            }
-
-            return null;
-        }
-
-        public static Player GetPlayerByName(string player) {
-            for (var i = 0; i < 32; i++) {
-                var p = new Player(i);
-                if (p.Name.ToLower() == player.ToLower()) return p;
-            }
-
-            return null;
         }
 
         public static Entity GetPlayerEntity(Player p) {
@@ -322,9 +300,9 @@ namespace DeveloperConsole {
         public static float GetTextWidth(string s, Font f, float scale) {
             Function.Call(Hash.SET_TEXT_FONT, (int) f);
             Function.Call(Hash.SET_TEXT_SCALE, scale, scale);
-            Function.Call(Hash._0x54CE8AC98E120CAB, "STRING"); //SET_TEXT_ENTRY_FOR_WIDTH
-            Function.Call(Hash._ADD_TEXT_COMPONENT_STRING, s);
-            return Function.Call<float>(Hash._0x85F061DA64ED2F67, 1); //_GET_TEXT_SCREEN_WIDTH
+            Function.Call(Hash._BEGIN_TEXT_COMMAND_GET_WIDTH, "STRING"); //SET_TEXT_ENTRY_FOR_WIDTH
+            Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, s);
+            return Function.Call<float>(Hash._END_TEXT_COMMAND_GET_WIDTH, 1); //_GET_TEXT_SCREEN_WIDTH
         }
 
 
@@ -386,7 +364,8 @@ namespace DeveloperConsole {
                 i--;
                 Script.Wait(0);
             }
-            return new Vehicle(Function.Call<int>(Hash.CREATE_VEHICLE, m.Hash, pos.X, pos.Y, pos.Z, 0, 0));
+
+            return (Vehicle)Vehicle.FromHandle(Function.Call<int>(Hash.CREATE_VEHICLE, m.Hash, pos.X, pos.Y, pos.Z, 0, 0));
         }
 
 

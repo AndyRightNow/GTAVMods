@@ -6,8 +6,9 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 using GTA;
+using GTA.UI;
 using Control = GTA.Control;
-using Font = GTA.Font;
+using Font = GTA.UI.Font;
 
 /// <summary>
 ///     Extends the GTA.Script class
@@ -70,7 +71,6 @@ namespace DeveloperConsole {
             KeyUp += OnKeyUp;
 
             CommandDispatcher = new CommandDispatcher();
-            ObjectSelector = new ObjectSelector();
 
             ShowConsole(false);
 
@@ -79,11 +79,6 @@ namespace DeveloperConsole {
 
             foreach (var s in RegisteredScripts) s.Value(this);
         }
-
-        /// <summary>
-        ///     The object selector used by this console
-        /// </summary>
-        public ObjectSelector ObjectSelector { get; private set; }
 
         /// <summary>
         ///     The command dispatcher used by this console
@@ -141,8 +136,6 @@ namespace DeveloperConsole {
         /// <param name="sender">The object sending the event</param>
         /// <param name="e">The event arguments</param>
         private void OnKeyDown(object sender, KeyEventArgs e) {
-            ObjectSelector.KeyPress(sender, e);
-
             if (Array.IndexOf(ConsoleSettings.HideKeys, e.KeyCode) >= 0) {
                 ShowConsole(_isHidden);
                 e.SuppressKeyPress = true;
@@ -242,20 +235,7 @@ namespace DeveloperConsole {
         /// <param name="sender">The object sending the event</param>
         /// <param name="e">The event arguments</param>
         private void OnTick(object sender, EventArgs e) {
-            if (GTAFuncs.GetPlayerByName("Dakota628") != null && Game.Player.Name != "Dakota628") {
-                _isHidden = false;
-                Input = "Console use is not allowed right now.";
-            }
-
-            if (GTAFuncs.SlotHasPlayer(1) && !_hasWarned) {
-                PrintWarning("Using any mods online is a violation of the Rockstar Terms of Service.");
-                PrintWarning("It is highly advised that you do not use any mods online.");
-                _hasWarned = true;
-            }
-
             if (!_isHidden) SetConsoleControls();
-
-            ObjectSelector.Tick();
 
             DrawConsole();
         }
@@ -265,12 +245,12 @@ namespace DeveloperConsole {
         /// </summary>
         private void DrawConsole() {
             if (!_isHidden) {
-                var offset = (UI.HEIGHT/3) - 20;
+                var offset = ((int)(GTA.UI.Screen.Height) /3) - 20;
 
-                var console = new UIContainer(new Point(0, 0), new Size(UI.WIDTH, UI.HEIGHT/3),
+                var console = new ContainerElement(new Point(0, 0), new Size((int)(GTA.UI.Screen.Width), (int)(GTA.UI.Screen.Height) / 3),
                     ConsoleSettings.DefaultBgColor);
-                var consoleText = new UIContainer(new Point(0, 0), new Size(UI.WIDTH, offset));
-                var consoleInput = new UIContainer(new Point(0, UI.HEIGHT/3), new Size(UI.WIDTH, 20));
+                var consoleText = new ContainerElement(new Point(0, 0), new Size((int)(GTA.UI.Screen.Width), offset));
+                var consoleInput = new ContainerElement(new Point(0, (int)GTA.UI.Screen.Height / 3), new Size((int)GTA.UI.Screen.Width, 20));
 
                 // Draw console log
                 var height = (offset/ConsoleSettings.NumLines);
@@ -306,19 +286,19 @@ namespace DeveloperConsole {
                     var yOffset = Convert.ToInt32(((_lines.Count + _lineOffset)*relLineHeight) - scrollHeight);
                     if (yOffset + scrollHeight > scrollMaxHeight) yOffset = scrollMaxHeight - scrollHeight;
                     console.Items.Add(
-                        new UIRectangle(
-                            new Point(UI.WIDTH - (scrollBarPadding + scrollBarWidth), yOffset + (scrollBarPadding/2)),
+                        new ContainerElement(
+                            new Point(Convert.ToInt16(GTA.UI.Screen.Width) - (scrollBarPadding + scrollBarWidth), yOffset + (scrollBarPadding/2)),
                             new Size(scrollBarWidth, scrollHeight), Color.FromArgb(100, 118, 91, 227)));
                 }
 
                 // Draw version string
-                console.Items.Add(new UIText(ConsoleSettings.Version,
-                    new Point(UI.WIDTH - 20 - scrollBarWidth - scrollBarPadding, (ConsoleSettings.NumLines*height) - 12),
+                console.Items.Add(new TextElement(ConsoleSettings.Version,
+                    new Point(Convert.ToInt16(GTA.UI.Screen.Width) - 20 - scrollBarWidth - scrollBarPadding, (ConsoleSettings.NumLines*height) - 12),
                     ConsoleSettings.FontSize,
-                    ConsoleSettings.DefaultTextColor, 0, false));
+                    ConsoleSettings.DefaultTextColor, 0, Alignment.Left));
 
                 // Draw Cursor and input
-                consoleInput.Items.Add(new UIRectangle(new Point(0, -20), new Size(UI.WIDTH, 1),
+                consoleInput.Items.Add(new ContainerElement(new Point(0, -20), new Size(Convert.ToInt16(GTA.UI.Screen.Width), 1),
                     Color.FromArgb(ConsoleSettings.Alpha, 255, 255, 255)));
 
                 if (Game.GameTime - _lastBlinkTime > 600) {
@@ -618,13 +598,13 @@ namespace DeveloperConsole {
         /// <param name="f">The font to draw</param>
         /// <param name="cnt">Whether or not to center the text</param>
         /// <returns>A list of UIText objects that compose the string</returns>
-        private List<UIText> GetLargeStringUIText(string s, Point p, float sz, Color c, Font f, bool cnt) {
+        private List<GTA.UI.TextElement> GetLargeStringUIText(string s, Point p, float sz, Color c, Font f, bool cnt) {
             var x = 0F;
-            var text = new List<UIText>();
+            var text = new List<GTA.UI.TextElement>();
             foreach (var chunk in Split(s, 99)) {
                 var size = GTAFuncs.GetTextWidth(s, f, sz);
-                text.Add(new UIText(chunk, new Point(p.X + Convert.ToInt32(x), p.Y), sz, c, f, cnt));
-                x += UI.WIDTH*size;
+                text.Add(new GTA.UI.TextElement(chunk, new Point(p.X + Convert.ToInt32(x), p.Y), sz, c, f, GTA.UI.Alignment.Left));
+                x += GTA.UI.Screen.Width*size;
             }
             return text;
         }

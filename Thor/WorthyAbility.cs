@@ -1,5 +1,6 @@
 ﻿using GTA;
 using GTA.Math;
+using GTA.UI;
 using GTA.Native;
 using System;
 using System.Collections.Generic;
@@ -24,7 +25,7 @@ namespace Thor
         protected static float CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_WEAPON_ROTATION = 5.0f;
         protected static float WEAPON_BEFORE_RETURN_TO_PED_WAIT_TIME = 700.0f;
         protected static int CATCHING_WEAPON_ANIMATION_DURATION = 250;
-        protected static Bone WEAPON_HOLDING_HAND_ID = Bone.PH_R_Hand;
+        protected static Bone WEAPON_HOLDING_HAND_ID = Bone.PHRightHand;
         protected static float THROW_WEAPON_SPEED_MULTIPLIER = 100.0f;
         protected static float AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS = 1000.0f;
         protected static float ANIMATION_ANGLE_RANGE_STEP = 45.0f;
@@ -246,19 +247,19 @@ namespace Thor
 
         protected void SummonThunder()
         {
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash.FORCE_LIGHTNING_FLASH);
+            Function.Call(Hash.FORCE_LIGHTNING_FLASH);
+            Function.Call(Hash.FORCE_LIGHTNING_FLASH);
+            Function.Call(Hash.FORCE_LIGHTNING_FLASH);
             PlayThunderFx();
             if (pedFxTimer == null)
             {
                 pedFxTimer = new ADModUtils.Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS, PlayThunderFx);
             }
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
-            Function.Call(Hash._CREATE_LIGHTNING_THUNDER);
+            Function.Call(Hash.FORCE_LIGHTNING_FLASH);
+            Function.Call(Hash.FORCE_LIGHTNING_FLASH);
+            Function.Call(Hash.FORCE_LIGHTNING_FLASH);
+            Function.Call(Hash.FORCE_LIGHTNING_FLASH);
         }
 
         protected virtual bool ShouldPossessFullPower()
@@ -320,10 +321,10 @@ namespace Thor
 
         protected virtual void PlayThunderFx()
         {
-            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_L_Forearm);
-            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_R_Forearm);
-            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_L_Thigh);
-            NativeHelper.PlayThunderFx(attachedPed, Bone.SKEL_R_Thigh);
+            NativeHelper.PlayThunderFx(attachedPed, Bone.SkelLeftForearm);
+            NativeHelper.PlayThunderFx(attachedPed, Bone.SkelRightForearm);
+            NativeHelper.PlayThunderFx(attachedPed, Bone.SkelLeftThigh);
+            NativeHelper.PlayThunderFx(attachedPed, Bone.SkelRightThigh);
             if (IsHoldingWeapon)
             {
                 NativeHelper.PlayThunderFx(attachedPed.Weapons.CurrentWeaponObject, 0.5f);
@@ -334,7 +335,7 @@ namespace Thor
         {
             if (attachedPed.IsInAir && !isInAirDashAttack)
             {
-                if (Game.IsControlPressed(0, GTA.Control.Attack))
+                if (Game.IsControlPressed(GTA.Control.Attack))
                 {
                     isInAirDashAttack = true;
                 }
@@ -473,7 +474,7 @@ namespace Thor
             {
                 attachedPed.CanSufferCriticalHits = !toggle;
                 attachedPed.MaxHealth = FULL_POWER_MAX_HEALTH;
-                attachedPed.AlwaysDiesOnLowHealth = !toggle;
+                attachedPed.DiesOnLowHealth = !toggle;
             }
             else
             {
@@ -481,7 +482,7 @@ namespace Thor
                 Function.Call(Hash.SET_ENTITY_CAN_BE_DAMAGED, attachedPed, true);
                 attachedPed.MaxHealth = (int)(100 + FULL_POWER_MAX_HEALTH * powerLevel / FULL_POWER_LEVEL_MAX_RATIO);
                 attachedPed.IsInvincible = false;
-                attachedPed.AlwaysDiesOnLowHealth = false;
+                attachedPed.DiesOnLowHealth = false;
                 attachedPed.IsBulletProof = false;
                 attachedPed.IsCollisionProof = false;
                 attachedPed.IsExplosionProof = false;
@@ -525,13 +526,13 @@ namespace Thor
             }
             if (attachedPed.IsInAir)
             {
-                if (Game.IsControlPressed(0, GTA.Control.ScriptPadUp) ||
+                if (Game.IsControlPressed(GTA.Control.ScriptPadUp) ||
                     Game.IsKeyPressed(Keys.W))
                 {
                     velocity += GameplayCamera.Direction * FLY_HORIZONTAL_VELOCITY_LEVEL_1;
                 }
             }
-            if (Game.IsControlPressed(0, GTA.Control.Sprint))
+            if (Game.IsControlPressed(GTA.Control.Sprint))
             {
                 velocity += Vector3.Multiply(velocity, FLY_SPRINT_VELOCITY_MULTIPLIER);
             }
@@ -542,7 +543,7 @@ namespace Thor
             }
 
             HandlePreInAir();
-            var weaponHoldingHandCoord = attachedPed.GetBoneCoord(WEAPON_HOLDING_HAND_ID);
+            var weaponHoldingHandCoord = attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position;
             if (velocity.Length() > 0)
             {
                 isFlying = true;
@@ -611,9 +612,9 @@ namespace Thor
 
         protected void HandleThrowingWeapon()
         {
-            if (Game.IsControlPressed(0, GTA.Control.Aim))
+            if (Game.IsControlPressed(GTA.Control.Aim))
             {
-                UI.ShowHudComponentThisFrame(HudComponent.Reticle);
+                Hud.ShowComponentThisFrame(HudComponent.Reticle);
 
                 if (Game.IsKeyPressed(Keys.T))
                 {
@@ -634,7 +635,7 @@ namespace Thor
 
         protected void CollectTargets()
         {
-            if (Game.IsControlPressed(0, GTA.Control.Aim))
+            if (Game.IsControlPressed(GTA.Control.Aim))
             {
                 isCollectingTargets = true;
                 var result = World.Raycast(
@@ -643,13 +644,13 @@ namespace Thor
                     ADModUtils.NativeHelper.IntersectAllObjects
                 );
                 if (targets.Count < MAX_TARGET_COUNT &&
-                    result.DitHitEntity &&
+                    result.DidHit &&
                     IsValidHitEntity(result.HitEntity))
                 {
                     targets.Add(result.HitEntity);
                 }
             }
-            else if (Game.IsControlJustReleased(0, GTA.Control.Aim) && isCollectingTargets)
+            else if (Game.IsControlJustReleased( GTA.Control.Aim) && isCollectingTargets)
             {
                 isCollectingTargets = false;
                 targets.Clear();
@@ -699,7 +700,7 @@ namespace Thor
         {
             isWeaponAttackingTargets = false;
             targets.Clear();
-            Vector3 rightHandBonePos = attachedPed.GetBoneCoord(WEAPON_HOLDING_HAND_ID);
+            Vector3 rightHandBonePos = attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position;
             Vector3 fromWeaponToPedHand = rightHandBonePos - Weapon.Position;
 
             bool isWeaponCloseToPed = false;
@@ -842,7 +843,7 @@ namespace Thor
         {
             if (IsHoldingWeapon)
             {
-                Weapon.WeaponObject = Function.Call<Entity>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
+                Weapon.WeaponObject = Function.Call<Prop>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
             }
             attachedPed.Weapons.Remove(Weapon.WeaponHash);
             attachedPed.Weapons.Select(WeaponHash.Unarmed);

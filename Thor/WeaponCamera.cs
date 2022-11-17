@@ -112,7 +112,7 @@ namespace Thor
         {
             if (hammerTrackCam != null)
             {
-                hammerTrackCam.Destroy();
+                hammerTrackCam.Delete();
                 hammerTrackCam = null;
             }
         }

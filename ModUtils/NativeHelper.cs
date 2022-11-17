@@ -112,7 +112,7 @@ namespace ADModUtils
                 }
             }
 
-            return Bone.IK_Root;
+            return Bone.IKRoot;
         }
 
         public static void PlayPlayerAnimation(Ped ped, string dictName, string animName, AnimationFlags flag, int duration = -1, bool checkIsPlaying = true)
@@ -145,11 +145,11 @@ namespace ADModUtils
             Function.Call(Hash.SET_ENTITY_VELOCITY, entity, velocity.X, velocity.Y, velocity.Z);
         }
 
-        public static Entity CreateWeaponObject(WeaponHash weaponHash, int amountCount, Vector3 position, bool showWorldModel = true, float heading = 1.0f)
+        public static Prop CreateWeaponObject(WeaponHash weaponHash, int amountCount, Vector3 position, bool showWorldModel = true, float heading = 1.0f)
         {
             new WeaponAsset(weaponHash).Request(3000);
 
-            return Function.Call<Entity>(Hash.CREATE_WEAPON_OBJECT, (int)weaponHash, amountCount, position.X, position.Y, position.Z, showWorldModel, heading);
+            return Function.Call<Prop>(Hash.CREATE_WEAPON_OBJECT, (int)weaponHash, amountCount, position.X, position.Y, position.Z, showWorldModel, heading);
         }
 
         public static void DrawLine(Vector3 start, Vector3 end, Color color)
@@ -175,7 +175,7 @@ namespace ADModUtils
         private static void BeforePlayingParticleFx(string effectSetName)
         {
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
-            Function.Call(Hash._SET_PTFX_ASSET_NEXT_CALL, effectSetName);
+            Function.Call(Hash.USE_PARTICLE_FX_ASSET, effectSetName);
         }
 
         public static void PlayParticleFx(string effectSetName, string effect, Entity entity, float scale = 1.0f)
@@ -259,11 +259,11 @@ namespace ADModUtils
             Function.Call(Hash.DRAW_BOX, a.X, a.Y, a.Z, b.X, b.Y, b.Z, col.R, col.G, col.B, col.A);
         }
 
-        public static IntersectOptions IntersectAllObjects
+        public static IntersectFlags IntersectAllObjects
         {
             get
             {
-                return (IntersectOptions)(2 | 4 | 8 | 16);
+                return IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.MissionEntities | IntersectFlags.Map;
             }
         }
 

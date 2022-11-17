@@ -3,6 +3,7 @@ using System;
 using System.Windows.Forms;
 using DeveloperConsole;
 using ADModUtils;
+using GTA.UI;
 
 namespace Thor
 {
@@ -49,19 +50,19 @@ namespace Thor
 
         private void HandleAbilityToggle()
         {
-            if (Game.IsControlPressed(0, GTA.Control.VehicleSubDescend) &&
-               Game.IsControlPressed(0, GTA.Control.ScriptPadLeft) &&
+            if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
+               Game.IsControlPressed(GTA.Control.ScriptPadLeft) &&
                Game.IsKeyPressed(Keys.O))
             {
                 abilityHasBeenTurnedOff = false;
-                UI.Notify("The Thor ability has been turned on.");
+                Notification.Show("The Thor ability has been turned on.");
             }
-            else if (Game.IsControlPressed(0, GTA.Control.VehicleSubDescend) &&
-               Game.IsControlPressed(0, GTA.Control.ScriptPadLeft) &&
-               Game.IsControlPressed(0, GTA.Control.VehicleExit))
+            else if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
+               Game.IsControlPressed(GTA.Control.ScriptPadLeft) &&
+               Game.IsControlPressed(GTA.Control.VehicleExit))
             {
                 abilityHasBeenTurnedOff = true;
-                UI.Notify("The Thor ability has been turned off.");
+                Notification.Show("The Thor ability has been turned off.");
             }
         }
 
