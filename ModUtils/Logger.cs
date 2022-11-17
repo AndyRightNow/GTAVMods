@@ -1,11 +1,34 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 namespace ADModUtils
 {
     public class Logger
     {
+        private static DeveloperConsole.DeveloperConsole developerConsole;
+
+        public static void Init(DeveloperConsole.DeveloperConsole developerConsole)
+        {
+            Logger.developerConsole = developerConsole;
+        }
+
+        private static string FormatMessage(string logLevel, params string[] message)
+        {
+            var datetime = DateTime.Now;
+
+            var output = string.Concat("[", datetime.ToString("HH:mm:ss"), "] ", logLevel, " ");
+
+
+            foreach (string str in message)
+            {
+                output = string.Concat(output, " ", str);
+            }
+
+            return output;
+        }
+
         public static void Log(string logLevel, params string[] message)
         {
             var datetime = DateTime.Now;
@@ -22,7 +45,7 @@ namespace ADModUtils
 
                 try
                 {
-                    sw.Write(string.Concat("[", datetime.ToString("HH:mm:ss"), "] ", logLevel, " "));
+                    sw.Write(FormatMessage(logLevel, message));
 
                     foreach (string str in message)
                     {
@@ -40,6 +63,16 @@ namespace ADModUtils
             catch (Exception)
             {
             }
+        }
+
+        public static void LogConsole(string logLevel, params string[] message)
+        {
+            if (developerConsole == null)
+            {
+                return;
+            }
+
+            developerConsole.PrintLine(FormatMessage(logLevel, message));
         }
     }
 }

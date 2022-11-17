@@ -34,9 +34,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="DeveloperConsole">
-      <HintPath>..\lib\DeveloperConsole.dll</HintPath>
-    </Reference>
     <Reference Include="NAudio">
       <HintPath>..\lib\NAudio.dll</HintPath>
     </Reference>
@@ -63,6 +60,12 @@
     <Compile Include="Plane.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utilities.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\gtav_console\DeveloperConsole.csproj">
+      <Project>{effe7239-0a6b-4dec-bb24-6cb563ec48a7}</Project>
+      <Name>DeveloperConsole</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

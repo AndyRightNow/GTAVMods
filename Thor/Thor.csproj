@@ -33,10 +33,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="DeveloperConsole, Version=9.9.9.9, Culture=neutral, processorArchitecture=AMD64">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\lib\DeveloperConsole.dll</HintPath>
-    </Reference>
     <Reference Include="NAudio, Version=1.8.4.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\lib\NAudio.dll</HintPath>
@@ -59,9 +55,7 @@
   <ItemGroup>
     <Compile Include="GodlyWeapon.cs" />
     <Compile Include="Mjolnir.cs" />
-    <Compile Include="StormbreakerWorthyAbility.cs" />
     <Compile Include="MjolnirWorthyAbility.cs" />
-    <Compile Include="Stormbreaker.cs" />
     <Compile Include="WeaponCamera.cs" />
     <Compile Include="NativeHelper.cs" />
     <Compile Include="Thor.cs" />
@@ -71,6 +65,10 @@
     <Compile Include="WorthyAbility.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\gtav_console\DeveloperConsole.csproj">
+      <Project>{effe7239-0a6b-4dec-bb24-6cb563ec48a7}</Project>
+      <Name>DeveloperConsole</Name>
+    </ProjectReference>
     <ProjectReference Include="..\ModUtils\ModUtils.csproj">
       <Project>{e2efc415-090c-448d-b1a5-919ac269f3f6}</Project>
       <Name>ModUtils</Name>

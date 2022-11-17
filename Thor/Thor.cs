@@ -1,16 +1,16 @@
 ﻿using GTA;
 using System;
 using System.Windows.Forms;
+using DeveloperConsole;
+using ADModUtils;
 
 namespace Thor
 {
     public class Thor : Script
     {
         private MjolnirWorthyAbility mjolnirAbility;
-        private StormbreakerWorthyAbility stormbreakerAbility;
         private int previousPedHash;
         private bool abilityHasBeenTurnedOff;
-        private DeveloperConsole.DeveloperConsole dc;
 
         public Thor()
         {
@@ -18,9 +18,16 @@ namespace Thor
             Interval = 0;
 
             mjolnirAbility = MjolnirWorthyAbility.Instance;
-            stormbreakerAbility = StormbreakerWorthyAbility.Instance;
             previousPedHash = -1;
             abilityHasBeenTurnedOff = false;
+
+            this.RegisterConsoleScript(OnConsoleAttached);
+        }
+
+        private void OnConsoleAttached(DeveloperConsole.DeveloperConsole dc)
+        {
+            //Initialize console stuff here
+            Logger.Init(dc);
         }
 
         void OnTick(object sender, EventArgs e)
@@ -29,19 +36,13 @@ namespace Thor
             if (!abilityHasBeenTurnedOff)
             {
                 HandleMjolnirAbilityTransfer();
-                mjolnirAbility.OnTick(stormbreakerAbility.IsHoldingWeapon);
-                HandleStormbreakerAbilityTransfer();
-                stormbreakerAbility.OnTick(mjolnirAbility.IsHoldingWeapon);
+                mjolnirAbility.OnTick(false);
             }
             else
             {
                 if (mjolnirAbility.IsAttachedToPed)
                 {
                     mjolnirAbility.RemoveAbility();
-                }
-                if (stormbreakerAbility.IsAttachedToPed)
-                {
-                    stormbreakerAbility.RemoveAbility();
                 }
             }
         }
@@ -90,22 +91,6 @@ namespace Thor
             return previousPedHash != -1 &&
                               Game.Player.Character != null &&
                               Game.Player.Character.GetHashCode() != previousPedHash;
-        }
-
-        private void HandleStormbreakerAbilityTransfer()
-        {
-            if (IsGameCharacterChanged() &&
-                  stormbreakerAbility.IsAttachedToPed)
-            {
-                stormbreakerAbility.RemoveAbility();
-            }
-
-            UpdatePrevCharacter();
-
-            if (!stormbreakerAbility.IsAttachedToPed)
-            {
-                stormbreakerAbility.ApplyOn(Game.Player.Character);
-            }
         }
     }
 }

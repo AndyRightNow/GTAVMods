@@ -1,6 +1,8 @@
-﻿using GTA;
+﻿using ADModUtils;
+using GTA;
 using GTA.Math;
 using GTA.Native;
+using System;
 using System.Collections.Generic;
 
 namespace Thor
@@ -16,7 +18,7 @@ namespace Thor
         private NAudio.Wave.WaveOut hammerWhirlingSoundPlayer;
         private bool isWhirling;
 
-        public Mjolnir() : base((WeaponHash)Function.Call<uint>(Hash.GET_HASH_KEY, "WEAPON_MJOLNIR"))
+        public Mjolnir() : base(WeaponHash.Hammer)
         {
             hammerWhirlingSoundPlayer = new NAudio.Wave.WaveOut();
             isWhirling = false;
@@ -67,6 +69,7 @@ namespace Thor
                         ADModUtils.Utilities.Math.DirectionToRotation(summoningPedForwardDirection),
                         HAMMER_ROTATION_UPWARD_LERP_RATIO
                     );
+
                 }
                 else
                 {
@@ -78,7 +81,7 @@ namespace Thor
                 }
             }
         }
-
+        
         public override Vector3 Velocity
         {
             set

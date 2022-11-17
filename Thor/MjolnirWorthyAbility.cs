@@ -1,4 +1,5 @@
-﻿using GTA;
+﻿using ADModUtils;
+using GTA;
 using GTA.Math;
 using System.Windows.Forms;
 
@@ -213,7 +214,6 @@ namespace Thor
         {
             Weapon.DetachRope();
             isHoldingWeaponRope = false;
-
             base.SummonWeapon();
         }
 
