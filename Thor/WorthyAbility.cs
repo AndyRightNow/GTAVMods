@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using ADModUtils;
 
 namespace Thor
 {
@@ -20,7 +21,7 @@ namespace Thor
         protected static float HALF_POWER_LEVEL_MAX_RATIO = 50.0f;
         protected static float POWER_LEVEL_PRESENT_MAX_TIME_AFTER_LOSING_WEAPON = 10000.0f;
         protected static float PLAYER_MOVEMENT_MULTIPLIER = 1.5f;
-        protected static float MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND = 0.6f;
+        protected static float MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND = 0.2f;
         protected static float CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_SOUND = 140.0f;
         protected static float CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_WEAPON_ROTATION = 5.0f;
         protected static float WEAPON_BEFORE_RETURN_TO_PED_WAIT_TIME = 700.0f;
@@ -702,10 +703,17 @@ namespace Thor
             targets.Clear();
             Vector3 rightHandBonePos = attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position;
             Vector3 fromWeaponToPedHand = rightHandBonePos - Weapon.Position;
-
+            
             bool isWeaponCloseToPed = false;
             float distanceBetweenWeaponToPedHand = Math.Abs(fromWeaponToPedHand.Length());
-            if (distanceBetweenWeaponToPedHand <= MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND)
+            var weaponToPedHandRaycastResult = World.RaycastCapsule(
+                Weapon.Position, 
+                new Vector3(Weapon.Position.X, Weapon.Position.Y, Weapon.Position.Z + MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND), 
+                MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND,
+                IntersectFlags.Peds
+            );
+
+            if (weaponToPedHandRaycastResult.HitEntity != null && weaponToPedHandRaycastResult.HitEntity.Equals(attachedPed))
             {
                 AnimationActions randomCatchingAction = ADModUtils.Utilities.Random.PickOne(
                     new List<AnimationActions>

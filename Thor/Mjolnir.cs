@@ -73,6 +73,7 @@ namespace Thor
                 }
                 else
                 {
+                    //@todo change to averaged velocity vector across multiple frames
                     weaponObject.Rotation = Vector3.Lerp(
                         weaponObject.Rotation,
                         ADModUtils.Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f),
