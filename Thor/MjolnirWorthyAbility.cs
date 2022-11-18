@@ -11,8 +11,8 @@ namespace Thor
         protected bool isHoldingWeaponRope;
         protected ADModUtils.Plane weaponWhirlingPlane;
         protected ADModUtils.Plane weaponHoverWhirlingPlane;
-        protected Entity weaponUsedForHoveringWhirlingOriginal;
-        protected Entity weaponUsedForHoveringWhirlingShown;
+        protected Prop weaponUsedForHoveringWhirlingOriginal;
+        protected Prop weaponUsedForHoveringWhirlingShown;
         protected bool isHoverWhirling;
 
         public MjolnirWorthyAbility() : base()
@@ -78,7 +78,7 @@ namespace Thor
             {
                 if (isHoldingWeaponRope)
                 {
-                    var boneCoord = attachedPed.GetBoneCoord(WEAPON_HOLDING_HAND_ID);
+                    var boneCoord = attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position;
 
                     weaponWhirlingPlane = new ADModUtils.Plane(Vector3.Cross(attachedPed.ForwardVector, Vector3.WorldUp), boneCoord);
 
@@ -123,13 +123,13 @@ namespace Thor
             if (weaponUsedForHoveringWhirlingOriginal == null)
             {
                 weaponUsedForHoveringWhirlingOriginal = ADModUtils.NativeHelper.CreateWeaponObject(Weapon.WeaponHash, 1, Vector3.Zero);
-                weaponUsedForHoveringWhirlingOriginal.Alpha = 0;
+                weaponUsedForHoveringWhirlingOriginal.Opacity = 0;
                 weaponUsedForHoveringWhirlingOriginal.SetNoCollision(attachedPed, true);
             }
             if (weaponUsedForHoveringWhirlingShown == null)
             {
                 weaponUsedForHoveringWhirlingShown = ADModUtils.NativeHelper.CreateWeaponObject(Weapon.WeaponHash, 1, Vector3.Zero + new Vector3(0.0f, 0.0f, 10.0f));
-                weaponUsedForHoveringWhirlingShown.Alpha = 0;
+                weaponUsedForHoveringWhirlingShown.Opacity = 0;
                 weaponUsedForHoveringWhirlingShown.SetNoCollision(attachedPed, true);
             }
         }
@@ -162,7 +162,7 @@ namespace Thor
             if (isHoverWhirling)
             {
                 weaponUsedForHoveringWhirlingShown.Position =
-                    attachedPed.GetBoneCoord(WEAPON_HOLDING_HAND_ID) +
+                    attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position +
                     (weaponUsedForHoveringWhirlingOriginal.Position - weaponHoverWhirlingPlane.Center) +
                     new Vector3(0, 0, 0.1f);
                 weaponUsedForHoveringWhirlingShown.Rotation = weaponUsedForHoveringWhirlingOriginal.Rotation;
@@ -179,23 +179,23 @@ namespace Thor
             {
                 if (toggle)
                 {
-                    attachedPed.Weapons.CurrentWeaponObject.ResetAlpha();
+                    attachedPed.Weapons.CurrentWeaponObject.ResetOpacity();
                 }
                 else
                 {
-                    attachedPed.Weapons.CurrentWeaponObject.Alpha = 0;
+                    attachedPed.Weapons.CurrentWeaponObject.Opacity = 0;
                 }
             }
             if (weaponUsedForHoveringWhirlingShown != null)
             {
                 if (toggle)
                 {
-                    weaponUsedForHoveringWhirlingShown.Alpha = 0;
+                    weaponUsedForHoveringWhirlingShown.Opacity = 0;
 
                 }
                 else
                 {
-                    weaponUsedForHoveringWhirlingShown.ResetAlpha();
+                    weaponUsedForHoveringWhirlingShown.ResetOpacity();
                 }
             }
         }

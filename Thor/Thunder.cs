@@ -43,7 +43,7 @@ namespace Thor
             {
                 var raycast = World.Raycast(from, to, ADModUtils.NativeHelper.IntersectAllObjects);
 
-                if (raycast.DitHitEntity)
+                if (raycast.DidHit && raycast.HitEntity != null)
                 {
                     var ent = raycast.HitEntity;
 

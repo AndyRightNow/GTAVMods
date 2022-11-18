@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Media.Media3D;
 using GTA;
 using GTA.Math;
+using GTA.UI;
 using Quaternion = GTA.Math.Quaternion;
 
 namespace DeveloperConsole {
@@ -239,7 +240,7 @@ namespace DeveloperConsole {
         public Rectangle3D DrawDebug(Color c) {
             foreach (var v in Corners) {
                 var w = GTAFuncs.WorldToScreen(v.Value);
-                new UIText(v.Key, new Point((int) w.X, (int) w.Y), .15f, c).Draw();
+                new TextElement(v.Key, new Point((int) w.X, (int) w.Y), .15f, c).Draw();
             }
             return this;
         }

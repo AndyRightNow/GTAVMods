@@ -1,6 +1,7 @@
 ﻿using GTA;
 using GTA.Math;
 using GTA.Native;
+using GTA.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +23,7 @@ namespace Thor
         protected static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
         protected static float WEAPON_MASS = 1000.0f;
         protected static T instance;
-        protected Entity weaponObject;
+        protected Prop weaponObject;
         protected WeaponHash weaponHash;
         protected Vector3 weaponSpawnPos;
         protected ADModUtils.Utilities.Timer weaponFxTimer;
@@ -123,7 +124,7 @@ namespace Thor
             }
         }
 
-        public Entity WeaponObject
+        public Prop WeaponObject
         {
             get
             {
@@ -172,15 +173,15 @@ namespace Thor
             }
         }
 
-        protected Entity ActivateWeaponPhysics(Entity newWeaponObject)
+        protected Prop ActivateWeaponPhysics(Prop newWeaponObject)
         {
             Function.Call(Hash.ACTIVATE_PHYSICS, newWeaponObject);
-            newWeaponObject.HasCollision = true;
+            newWeaponObject.IsCollisionEnabled = true;
             ADModUtils.NativeHelper.SetObjectPhysicsParams(newWeaponObject, WEAPON_MASS);
             return newWeaponObject;
         }
 
-        protected Entity InitializeWeaponObject(Entity newWeaponObject)
+        protected Prop InitializeWeaponObject(Prop newWeaponObject)
         {
             if (newWeaponObject == null)
             {
@@ -276,7 +277,7 @@ namespace Thor
             }
             catch (Exception e)
             {
-                UI.Notify("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.");
+                Notification.Show("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.");
                 ADModUtils.Logger.Log("ERROR", e.ToString());
             }
         }
@@ -397,9 +398,9 @@ namespace Thor
         protected bool ShouldShootUpward(Vector3 newPosition)
         {
             var currentWeaponPos = weaponObject.Position;
-            var raycastToTarget = World.Raycast(currentWeaponPos, newPosition, IntersectOptions.Map);
+            var raycastToTarget = World.Raycast(currentWeaponPos, newPosition, IntersectFlags.Map);
 
-            return raycastToTarget.DitHitAnything;
+            return raycastToTarget.DidHit;
         }
     }
 }

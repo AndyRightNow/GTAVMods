@@ -49,7 +49,7 @@ namespace Thor
             }
             if (hammerRopeAttachedPed != null)
             {
-                hammerRope.ResetLength(true);
+                hammerRope.Length = 0;
                 hammerRope.Length = HAMMER_ROPE_LENGTH;
                 return;
             }
@@ -73,6 +73,7 @@ namespace Thor
                 }
                 else
                 {
+                    //@todo change to averaged velocity vector across multiple frames
                     weaponObject.Rotation = Vector3.Lerp(
                         weaponObject.Rotation,
                         ADModUtils.Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f),
@@ -169,12 +170,12 @@ namespace Thor
 
             if (hammerRope == null)
             {
-                hammerRope = World.AddRope(RopeType.Normal, Vector3.Zero, Vector3.Zero, HAMMER_ROPE_LENGTH, 0.0f, false);
+                hammerRope = World.AddRope(RopeType.ThickRope, Vector3.Zero, Vector3.Zero, HAMMER_ROPE_LENGTH, 0.0f, false);
                 hammerRope.ActivatePhysics();
             }
             if (hammerRopeAttachedIntermediateEnt == null)
             {
-                var planeCenter = ped.GetBoneCoord(boneId);
+                var planeCenter = ped.Bones[boneId].Position;
                 hammerRopeAttachedIntermediateEnt = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, planeCenter);
                 hammerRopeAttachedIntermediateEnt.IsVisible = false;
             }
@@ -182,8 +183,8 @@ namespace Thor
             weaponObject.Rotation = ADModUtils.Utilities.Math.DirectionToRotation(Vector3.WorldNorth);
             var hammerAttachPos = GetHammerRopeAttachPosition(weaponObject);
 
-            hammerRopeAttachedIntermediateEnt.AttachTo(ped, ped.GetBoneIndex(boneId));
-            hammerRope.AttachEntities(hammerRopeAttachedIntermediateEnt, hammerRopeAttachedIntermediateEnt.Position, weaponObject, hammerAttachPos, HAMMER_ROPE_LENGTH);
+            hammerRopeAttachedIntermediateEnt.AttachTo(ped, ped.Bones[boneId].Position);
+            hammerRope.Connect(hammerRopeAttachedIntermediateEnt, hammerRopeAttachedIntermediateEnt.Position, weaponObject, hammerAttachPos, HAMMER_ROPE_LENGTH);
             weaponObject.SetNoCollision(ped, true);
             hammerRopeAttachedPed = ped;
             hammerRopeAttachedPedBoneId = boneId;
@@ -195,7 +196,7 @@ namespace Thor
         {
             if (hammerRope != null && hammerRopeAttachedPed != null && hammerRopeAttachedIntermediateEnt != null)
             {
-                hammerRope.DetachEntity(hammerRopeAttachedIntermediateEnt);
+                hammerRope.Detach(hammerRopeAttachedIntermediateEnt);
                 hammerRopeAttachedPed = null;
                 hammerRopeAttachedIntermediateEnt.Detach();
             }

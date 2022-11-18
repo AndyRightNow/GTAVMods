@@ -60,7 +60,7 @@ namespace ADModUtils
             public static Vector3 DirectionToRotation(Vector3 dir, float roll = 0.0f)
             {
                 dir = dir.Normalized;
-                Vector3 rot;
+                Vector3 rot = new Vector3();
                 rot.Z = - RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(dir.X, dir.Y)));
                 Vector3 vec = new Vector3(dir.Z, new Vector3(dir.X, dir.Y, 0.0f).Length(), 0.0f).Normalized;
                 rot.X = RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(vec.X, vec.Y)));

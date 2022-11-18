@@ -37,9 +37,8 @@
     <Reference Include="NAudio">
       <HintPath>..\lib\NAudio.dll</HintPath>
     </Reference>
-    <Reference Include="ScriptHookVDotNet2, Version=2.11.5.0, Culture=neutral, processorArchitecture=AMD64">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\lib\ScriptHookVDotNet2.dll</HintPath>
+    <Reference Include="ScriptHookVDotNet3">
+      <HintPath>..\lib\ScriptHookVDotNet3.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
