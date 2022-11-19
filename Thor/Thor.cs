@@ -46,6 +46,8 @@ namespace Thor
                     mjolnirAbility.RemoveAbility();
                 }
             }
+
+            //TestObjects.OnTick();
         }
 
         private void HandleAbilityToggle()

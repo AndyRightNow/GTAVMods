@@ -32,6 +32,8 @@ namespace Thor
                 }.ToArray();
         }
 
+        public static Vector3 LocalForwardVector = Vector3.UnitY;
+
         public override void OnTick()
         {
             base.OnTick();
@@ -54,35 +56,46 @@ namespace Thor
                 return;
             }
             HandleWeaponAvailability();
-            HandleWeaponSummonRotation();
+            HandleWeaponInAirRotation();
             isWhirling = false;
         }
 
-        private void HandleWeaponSummonRotation()
+        public void PointAt(Vector3 direction, bool shouldLerp = true)
+        {
+            var prevQua = weaponObject.Quaternion;
+
+            weaponObject.Quaternion = Quaternion.Zero;
+
+            Quaternion targetQua = Quaternion.Normalize(
+                Utilities.Math.DirectionToQuaternion(weaponObject.ForwardVector, direction) *
+                Utilities.Math.DirectionToQuaternion(Vector3.UnitZ, LocalForwardVector)
+            );
+
+            if (shouldLerp)
+            {
+                weaponObject.Quaternion = Quaternion.Lerp(prevQua, targetQua, HAMMER_ROTATION_UPWARD_LERP_RATIO);
+            }
+            else
+            {
+                weaponObject.Quaternion = targetQua;
+            }
+        }
+
+        private void HandleWeaponInAirRotation()
         {
             if (IsMoving && weaponObject.IsInAir)
             {
                 if (isBeingSummoned && isCloseToSummoningPed)
                 {
-                    weaponObject.Rotation = Vector3.Lerp(
-                        weaponObject.Rotation,
-                        ADModUtils.Utilities.Math.DirectionToRotation(summoningPedForwardDirection),
-                        HAMMER_ROTATION_UPWARD_LERP_RATIO
-                    );
-
+                    PointAt(Vector3.WorldUp);
                 }
                 else
                 {
-                    //@todo change to averaged velocity vector across multiple frames
-                    weaponObject.Rotation = Vector3.Lerp(
-                        weaponObject.Rotation,
-                        ADModUtils.Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f),
-                        0.5f
-                    );
+                    PointAt(weaponObject.Velocity.Normalized);
                 }
             }
         }
-        
+
         public override Vector3 Velocity
         {
             set
@@ -157,6 +170,13 @@ namespace Thor
                 weaponObj.Position = nextHammerPos;
                 RotateToDirection(weaponObj, (nextHammerPos - planeCenter).Normalized);
             }
+        }
+
+        public Vector3 ConvertToHammerHeadDirection(Vector3 dir)
+        {
+            var right = Vector3.Cross(dir, Vector3.WorldUp);
+
+            return Vector3.Cross(dir, right).Normalized;
         }
 
         public void AttachHammerRopeTo(Ped ped, Bone boneId)
