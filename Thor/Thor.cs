@@ -47,7 +47,7 @@ namespace Thor
                 }
             }
 
-            //TestObjects.OnTick();
+            TestObjects.OnTick();
         }
 
         private void HandleAbilityToggle()

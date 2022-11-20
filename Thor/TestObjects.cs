@@ -5,6 +5,8 @@ using GTA;
 using System.Runtime;
 using ADModUtils;
 using System;
+using System.Drawing;
+using GTA.Native;
 
 namespace Thor
 {
@@ -13,8 +15,8 @@ namespace Thor
     {
         private Prop mjolnir;
         private bool Initialized;
-        private Vector3 DefaultSpawnPos;
         private ScriptSettings Settings;
+        private Vector3 DefaultSpawnPos;
         private static TestMjolnir _instance;
 
         private TestMjolnir()
@@ -74,8 +76,9 @@ namespace Thor
                 Init();
             }
 
-            SetupTestMjolnir();
-            DoTestStuff();
+            //SetupTestMjolnir();
+            //DoPointAtTestStuff();
+            DoRopeTestStuff();
         }
 
         private void SetupTestMjolnir()
@@ -88,7 +91,7 @@ namespace Thor
 
         private Quaternion tempRot = new Quaternion(Vector3.WorldUp, 0.1f);
 
-        private void DoTestStuff()
+        private void DoPointAtTestStuff()
         {
 
             Vector3 weaponCurrentForwardVector = mjolnir.ForwardVector;
@@ -111,7 +114,111 @@ namespace Thor
 
             Logger.LogConsole("Info", "angle between", Convert.ToString(Vector3.Angle(weaponCurrentForwardVector, testDirection)), "current quaternion", Convert.ToString(tempRot), "current euler", Convert.ToString(Utilities.Math.QuaternionToEulerAngles(tempRot)));
         }
+
+
+        private bool ropeCreated = false;
+        private void DoRopeTestStuff()
+        {
+            if (ropeCreated)
+            {
+                return;
+            }
+            mjolnir.Position = DefaultSpawnPos + Vector3.UnitY;
+
+            Function.Call(Hash.ACTIVATE_PHYSICS, mjolnir);
+            mjolnir.IsCollisionEnabled = true;
+            ADModUtils.NativeHelper.SetObjectPhysicsParams(mjolnir, 1000000.0f);
+
+            var hammerRope = World.AddRope(RopeType.ThickRope, DefaultSpawnPos + Vector3.UnitX, Vector3.Zero, 3.19f, 0.0f, false);
+
+            hammerRope.ActivatePhysics();
+
+            var hammerRopeAttachedIntermediateEnt = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, mjolnir.Position);
+            hammerRopeAttachedIntermediateEnt.IsCollisionEnabled = false;
+            hammerRopeAttachedIntermediateEnt.IsVisible = true;
+            hammerRope.Connect(hammerRopeAttachedIntermediateEnt, mjolnir, 5.19f);
+
+            ropeCreated = true;
+        }
     }
+
+    internal class TestChasingPlane
+    {
+        private static TestChasingPlane _instance;
+        private bool Initialized;
+        private Vehicle plane;
+        private ScriptSettings Settings;
+        private Vector3 DefaultSpawnPos;
+
+        private TestChasingPlane() 
+        {
+            Initialized = false;
+            DefaultSpawnPos = new Vector3(-75.0f, -818.0f, 347.0f);
+        }
+        private void Init()
+        {
+            if (Initialized)
+            {
+                return;
+            }
+
+            Settings = ScriptSettings.Load("test-chasing-plane-settings.ini");
+            var savedHandle = Settings.GetValue("Plane", "Handle", -1);
+
+            if (savedHandle != -1)
+            {
+                plane = (Vehicle)Entity.FromHandle(savedHandle);
+            }
+
+            if (plane == null || !plane.Exists() || plane.IsConsideredDestroyed)
+            {
+                var planeModel = new Model(VehicleHash.Akula);
+                planeModel.Request();
+                plane = World.CreateVehicle(planeModel, DefaultSpawnPos);
+                plane.CreateRandomPedOnSeat(VehicleSeat.Driver);
+                var driver = plane.GetPedOnSeat(VehicleSeat.Driver);
+                driver.Task.ChaseWithHelicopter(Game.Player.Character, Vector3.Zero);
+            }
+            //driver.Task.ChaseWithGroundVehicle(Game.Player.Character);
+            //driver.Task.ChaseWithPlane(Game.Player.Character, Vector3.Zero);
+            //driver.Task.VehicleChase(Game.Player.Character);
+
+            Settings.SetValue("Plane", "Handle", plane.Handle);
+            Settings.Save();
+
+            Initialized = true;
+        }
+
+        public void OnTick()
+        {
+            if (!Initialized)
+            {
+                Init();
+                return;
+            }
+
+            //plane.IsCollisionProof = true;
+            //plane.IsExplosionProof = true;
+            //plane.Repair();
+            //plane.IsInvincible = true;
+            //plane.EngineHealth = 1000.0f;
+            plane.MaxSpeed = 100000.0f;
+        }
+
+        public static TestChasingPlane Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    _instance = new TestChasingPlane();
+                }
+
+                return _instance;
+            }
+        }
+    }
+
     internal static class TestObjects
     {
         public static void OnTick()
@@ -121,7 +228,8 @@ namespace Thor
 
         private static void DrawTestMjolnir()
         {
-            TestMjolnir.Instance.OnTick();
+            //TestMjolnir.Instance.OnTick();
+            TestChasingPlane.Instance.OnTick();
         }
     }
 }

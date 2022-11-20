@@ -55,6 +55,7 @@
     <Compile Include="GodlyWeapon.cs" />
     <Compile Include="Mjolnir.cs" />
     <Compile Include="MjolnirWorthyAbility.cs" />
+    <Compile Include="PathFinder.cs" />
     <Compile Include="TestObjects.cs" />
     <Compile Include="WeaponCamera.cs" />
     <Compile Include="NativeHelper.cs" />

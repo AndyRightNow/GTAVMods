@@ -55,18 +55,22 @@ namespace Thor
         protected void HandleWeaponAvailability()
         {
             if (weaponObject != null &&
-                weaponObject.Exists() &&
-                weaponObject.HeightAboveGround > 1.0f &&
-                weaponObject.Velocity.Length() == 0)
+                weaponObject.Exists())
             {
-                weaponObject.Velocity = Vector3.WorldUp;
-                if (weaponObject.Velocity.Length() == 0)
+                weaponObject.IsPersistent = true;
+
+                if (weaponObject.HeightAboveGround > 1.0f &&
+                    weaponObject.Velocity.Length() == 0)
                 {
-                    Init(weaponObject.Position + Vector3.WorldUp, true);
-                }
-                else
-                {
-                    weaponObject.Velocity = Vector3.Zero;
+                    weaponObject.Velocity = Vector3.WorldUp;
+                    if (weaponObject.Velocity.Length() == 0)
+                    {
+                        Init(weaponObject.Position + Vector3.WorldUp, true);
+                    }
+                    else
+                    {
+                        weaponObject.Velocity = Vector3.Zero;
+                    }
                 }
             }
         }

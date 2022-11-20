@@ -181,7 +181,7 @@ namespace ADModUtils
             {
                 if (Game.GameTime - previouslyFiredGameTime >= interval)
                 {
-                    this.handler();
+                    handler();
                     previouslyFiredGameTime = Game.GameTime;
                 }
             }
