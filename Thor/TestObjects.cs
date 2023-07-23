@@ -7,6 +7,8 @@ using ADModUtils;
 using System;
 using System.Drawing;
 using GTA.Native;
+using System.Windows.Forms;
+using System.Collections.Generic;
 
 namespace Thor
 {
@@ -19,11 +21,12 @@ namespace Thor
         private Vector3 DefaultSpawnPos;
         private static TestMjolnir _instance;
 
-        private TestMjolnir()
+        public TestMjolnir(Vector3? spawnPos)
         {
             mjolnir = null;
             Initialized = false;
-            DefaultSpawnPos = new Vector3(-75.0f, -818.0f, 327.0f);
+
+            DefaultSpawnPos = spawnPos ?? new Vector3(-75.0f, -818.0f, 327.0f);
         }
 
         public static TestMjolnir Instance
@@ -32,7 +35,7 @@ namespace Thor
             {
                 if (_instance == null)
                 {
-                    _instance = new TestMjolnir();
+                    _instance = new TestMjolnir(null);
                 }
 
                 return _instance;
@@ -46,35 +49,46 @@ namespace Thor
                 return;
             }
 
-            Settings = ScriptSettings.Load("test-mjolnir-settings.ini");
-            var savedHandle = Settings.GetValue("Weapon", "Handle", -1);
+            //Settings = ScriptSettings.Load("test-mjolnir-settings.ini");
+            //var savedHandle = Settings.GetValue("Weapon", "Handle", -1);
 
-            if (savedHandle != -1)
-            {
-                mjolnir = (Prop)Entity.FromHandle(savedHandle);
-            }
+            //if (savedHandle != -1)
+            //{
+            //    mjolnir = (Prop)Entity.FromHandle(savedHandle);
+            //}
 
-            if (mjolnir == null)
-            {
-                mjolnir = ADModUtils.NativeHelper.CreateWeaponObject(
-                    WeaponHash.Hammer,
-                    1,
-                    DefaultSpawnPos
-                );
-            }
+            //if (mjolnir == null)
+            //{
+            //    mjolnir = ADModUtils.NativeHelper.CreateWeaponObject(
+            //        WeaponHash.Hammer,
+            //        1,
+            //        DefaultSpawnPos
+            //    );
+            //}
 
-            Settings.SetValue("Weapon", "Handle", mjolnir.Handle);
-            Settings.Save();
+            //Settings.SetValue("Weapon", "Handle", mjolnir.Handle);
+            //Settings.Save();
+            mjolnir = ADModUtils.NativeHelper.CreateWeaponObject(
+                WeaponHash.Hammer,
+                1,
+                DefaultSpawnPos
+            );
+            mjolnir.Position = DefaultSpawnPos + Vector3.UnitY;
 
+            Function.Call(Hash.ACTIVATE_PHYSICS, mjolnir);
+            mjolnir.IsCollisionEnabled = true;
+            ADModUtils.NativeHelper.SetObjectPhysicsParams(mjolnir, 1000.0f);
+
+            ADModUtils.Logger.Log("INFO", "test mjolnir initialized");
             Initialized = true;
         }
 
         public void OnTick()
         {
-            if (!Initialized)
-            {
-                Init();
-            }
+            //if (!Initialized)
+            //{
+            //    Init();
+            //}
 
             //SetupTestMjolnir();
             //DoPointAtTestStuff();
@@ -117,27 +131,45 @@ namespace Thor
 
 
         private bool ropeCreated = false;
+        private Rope HammerRope = null;
+        private Entity AttachedIntermediateEnt1 = null;
+        private Entity AttachedIntermediateEnt2 = null;
+
         private void DoRopeTestStuff()
         {
-            if (ropeCreated)
+            if (HammerRope != null)
             {
+                Logger.LogConsole("INFO", $"Ent1 {AttachedIntermediateEnt1}");
+                Logger.LogConsole("INFO", $"Rope pos {HammerRope.GetVertexCoord(0)} - {HammerRope.GetVertexCoord(1)}");
+                Logger.LogConsole("INFO", $"Rope length {HammerRope.Length}");
                 return;
             }
-            mjolnir.Position = DefaultSpawnPos + Vector3.UnitY;
+            Logger.LogConsole("INFO", "------------------------------------------------");
 
-            Function.Call(Hash.ACTIVATE_PHYSICS, mjolnir);
-            mjolnir.IsCollisionEnabled = true;
-            ADModUtils.NativeHelper.SetObjectPhysicsParams(mjolnir, 1000000.0f);
 
-            var hammerRope = World.AddRope(RopeType.ThickRope, DefaultSpawnPos + Vector3.UnitX, Vector3.Zero, 3.19f, 0.0f, false);
+            //var hammerRopeAttachedIntermediateEnt = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, mjolnir.Position);
+            //hammerRopeAttachedIntermediateEnt.IsCollisionEnabled = false;
+            //hammerRopeAttachedIntermediateEnt.IsVisible = true;
+            //hammerRope.Connect(hammerRopeAttachedIntermediateEnt, mjolnir, 20.0f);
 
-            hammerRope.ActivatePhysics();
+            AttachedIntermediateEnt1 = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Widowmaker, 1, DefaultSpawnPos + Vector3.UnitY);
+            AttachedIntermediateEnt2 = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Widowmaker, 1, DefaultSpawnPos - Vector3.UnitY);
 
-            var hammerRopeAttachedIntermediateEnt = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, mjolnir.Position);
-            hammerRopeAttachedIntermediateEnt.IsCollisionEnabled = false;
-            hammerRopeAttachedIntermediateEnt.IsVisible = true;
-            hammerRope.Connect(hammerRopeAttachedIntermediateEnt, mjolnir, 5.19f);
+            AttachedIntermediateEnt1.IsCollisionEnabled = true;
+            AttachedIntermediateEnt1.IsVisible = true;
+            AttachedIntermediateEnt2.IsCollisionEnabled = true;
+            AttachedIntermediateEnt2.IsVisible = true;
 
+            var dist = World.GetDistance(AttachedIntermediateEnt1.Position, AttachedIntermediateEnt2.Position);
+
+            HammerRope = World.AddRope(RopeType.ThickRope, AttachedIntermediateEnt1.Position, Vector3.Zero, dist, 0.5f, false);
+            HammerRope.Length = dist;
+
+            HammerRope.Connect(AttachedIntermediateEnt1, AttachedIntermediateEnt1.Position, AttachedIntermediateEnt2, AttachedIntermediateEnt2.Position, dist);
+
+            HammerRope.ActivatePhysics();
+
+            Logger.LogConsole("INFO", "------------------------------------------------");
             ropeCreated = true;
         }
     }
@@ -221,15 +253,33 @@ namespace Thor
 
     internal static class TestObjects
     {
+        private static List<TestMjolnir> TestMjolnirList;
+        private static bool Initialized;
+
         public static void OnTick()
         {
-            DrawTestMjolnir();
+            if (!Initialized)
+            {
+                TestMjolnirList = new List<TestMjolnir>();
+                Initialized = true;
+            }
+
+            if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
+               Game.IsKeyPressed(Keys.T) && Game.IsKeyPressed(Keys.D1))
+            {
+                TestMjolnirList.Add(new TestMjolnir(Game.Player.Character.Position + Vector3.UnitY));
+            }
+
+            foreach (var testMjolnir in TestMjolnirList)
+            {
+                testMjolnir.OnTick();
+            }
         }
 
         private static void DrawTestMjolnir()
         {
-            //TestMjolnir.Instance.OnTick();
-            TestChasingPlane.Instance.OnTick();
+            TestMjolnir.Instance.OnTick();
+            //TestChasingPlane.Instance.OnTick();
         }
     }
 }

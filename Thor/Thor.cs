@@ -33,25 +33,35 @@ namespace Thor
 
         void OnTick(object sender, EventArgs e)
         {
-            HandleAbilityToggle();
-            if (!abilityHasBeenTurnedOff)
+            try
             {
-                HandleMjolnirAbilityTransfer();
-                mjolnirAbility.OnTick(false);
-            }
-            else
-            {
-                if (mjolnirAbility.IsAttachedToPed)
+                HandleAbilityToggle();
+                if (!abilityHasBeenTurnedOff)
                 {
-                    mjolnirAbility.RemoveAbility();
-                }
-            }
+                    HandleMjolnirAbilityTransfer();
+                    mjolnirAbility.OnTick(false);
 
-            TestObjects.OnTick();
+                }
+                else
+                {
+                    if (mjolnirAbility.IsAttachedToPed)
+                    {
+                        mjolnirAbility.RemoveAbility();
+                        Game.Player.Character.Weapons.Give(WeaponHash.Parachute, 1, false, false);
+                    }
+                }
+
+                TestObjects.OnTick();
+            }
+            catch(Exception ex)
+            {
+                Logger.LogConsole("ERROR", ex.ToString());
+            }
         }
 
         private void HandleAbilityToggle()
         {
+            // ctrl + a + o
             if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
                Game.IsControlPressed(GTA.Control.ScriptPadLeft) &&
                Game.IsKeyPressed(Keys.O))
@@ -59,6 +69,7 @@ namespace Thor
                 abilityHasBeenTurnedOff = false;
                 Notification.Show("The Thor ability has been turned on.");
             }
+            // ctrl + a + f
             else if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
                Game.IsControlPressed(GTA.Control.ScriptPadLeft) &&
                Game.IsControlPressed(GTA.Control.VehicleExit))

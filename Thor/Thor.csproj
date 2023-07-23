@@ -32,6 +32,9 @@
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <PropertyGroup>
+    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="NAudio, Version=1.8.4.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -77,6 +80,8 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetPath)" "C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V\scripts" /y</PostBuildEvent>
+    <PostBuildEvent>copy "$(TargetPath)" "C:\SteamLibrary\steamapps\common\Grand Theft Auto V\scripts" /y
+REM copy "$(ProjectDir)\..\lib\*" "C:\SteamLibrary\steamapps\common\Grand Theft Auto V\scripts" /y
+REM copy "$(ProjectDir)\resources\*.wav" "C:\SteamLibrary\steamapps\common\Grand Theft Auto V\scripts" /y</PostBuildEvent>
   </PropertyGroup>
 </Project>

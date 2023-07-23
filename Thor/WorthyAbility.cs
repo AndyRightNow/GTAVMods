@@ -216,6 +216,7 @@ namespace Thor
                 }
                 HandlePostNotHoldingWeaponOnTick();
             }
+            attachedPed.Weapons.Remove(WeaponHash.Parachute);
             Weapon.OnTick();
         }
 
@@ -521,7 +522,7 @@ namespace Thor
                 }
             }
 
-            if (Game.IsKeyPressed(Keys.J))
+            if (Game.IsKeyPressed(Keys.X))
             {
                 velocity.Z = FLY_UPWARD_VELOCITY;
             }
@@ -630,7 +631,7 @@ namespace Thor
             }
             else if (Game.IsKeyPressed(Keys.Y))
             {
-                ThrowWeaponOut(false);
+                DropWeapon();
             }
         }
 
@@ -651,7 +652,7 @@ namespace Thor
                     targets.Add(result.HitEntity);
                 }
             }
-            else if (Game.IsControlJustReleased( GTA.Control.Aim) && isCollectingTargets)
+            else if (Game.IsControlJustReleased(GTA.Control.Aim) && isCollectingTargets)
             {
                 isCollectingTargets = false;
                 targets.Clear();
@@ -694,6 +695,16 @@ namespace Thor
             {
                 return HasWeapon && attachedPed.Weapons.Current.Hash == Weapon.WeaponHash;
             }
+        }
+
+        private void DropWeapon()
+        {
+            if (!IsHoldingWeapon)
+            {
+                return;
+            }
+
+            ThrowWeaponOut(false);
         }
 
 

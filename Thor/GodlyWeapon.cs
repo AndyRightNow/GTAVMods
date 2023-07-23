@@ -20,8 +20,9 @@ namespace Thor
         protected static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.5f;
         protected static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 2f;
         protected static float APPLY_FORCE_RADIUS = 1.0f;
+        protected static float MAX_SHOOT_UPWARD_DIST = 4.0f;
         protected static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
-        protected static float WEAPON_MASS = 1000.0f;
+        protected static float WEAPON_MASS = 50000.0f;
         protected static T instance;
         protected Prop weaponObject;
         protected WeaponHash weaponHash;
@@ -404,7 +405,7 @@ namespace Thor
             var currentWeaponPos = weaponObject.Position;
             var raycastToTarget = World.Raycast(currentWeaponPos, newPosition, IntersectFlags.Map);
 
-            return raycastToTarget.DidHit;
+            return raycastToTarget.DidHit && World.GetDistance(currentWeaponPos, raycastToTarget.HitPosition) <= MAX_SHOOT_UPWARD_DIST;
         }
     }
 }
