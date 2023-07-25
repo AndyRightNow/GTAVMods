@@ -148,7 +148,7 @@ namespace Thor
                 !HasWeapon)
             {
                 weaponJustFinishedAttackingTargetsTimestamp = Game.GameTime;
-                Weapon.FindWaysToMoveToCoord(attachedPed.Position + new Vector3(0.0f, 0.0f, AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS), true);
+                Weapon.FindWaysToMoveToCoord(attachedPed.Position, true);
             }
         }
 
@@ -534,6 +534,7 @@ namespace Thor
                     velocity += GameplayCamera.Direction * FLY_HORIZONTAL_VELOCITY_LEVEL_1;
                 }
             }
+            
             if (Game.IsControlPressed(GTA.Control.Sprint))
             {
                 velocity += Vector3.Multiply(velocity, FLY_SPRINT_VELOCITY_MULTIPLIER);
@@ -708,7 +709,7 @@ namespace Thor
         }
 
 
-        public virtual void SummonWeapon(bool shootUpwardFirst = false)
+        public virtual void SummonWeapon()
         {
             isWeaponAttackingTargets = false;
             targets.Clear();
@@ -717,14 +718,18 @@ namespace Thor
             
             bool isWeaponCloseToPed = false;
             float distanceBetweenWeaponToPedHand = Math.Abs(fromWeaponToPedHand.Length());
-            var weaponToPedHandRaycastResult = World.RaycastCapsule(
+            var weaponToPedHandRaycastTest = ShapeTest.StartTestCapsule(
                 Weapon.Position, 
                 new Vector3(Weapon.Position.X, Weapon.Position.Y, Weapon.Position.Z + MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND), 
                 MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND,
                 IntersectFlags.Peds
             );
+            ShapeTestResult weaponToPedHandRaycastResult;
+            weaponToPedHandRaycastTest.GetResult(out weaponToPedHandRaycastResult);
+            Entity weaponToPedHandRaycastHitEntity = null;
+            weaponToPedHandRaycastResult.TryGetHitEntity(out weaponToPedHandRaycastHitEntity);
 
-            if (weaponToPedHandRaycastResult.HitEntity != null && weaponToPedHandRaycastResult.HitEntity.Equals(attachedPed))
+            if (weaponToPedHandRaycastHitEntity != null && weaponToPedHandRaycastHitEntity.Equals(attachedPed))
             {
                 AnimationActions randomCatchingAction = ADModUtils.Utilities.Random.PickOne(
                     new List<AnimationActions>
@@ -739,7 +744,7 @@ namespace Thor
                     attachedPed,
                     catchDictName,
                     catchAnimName,
-                    AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
+                    AnimationFlags.UpperBodyOnly | AnimationFlags.Secondary,
                     CATCHING_WEAPON_ANIMATION_DURATION
                 );
                 NativeHelper.PlayThunderFx(attachedPed, WEAPON_HOLDING_HAND_ID, 0.8f);
@@ -781,14 +786,8 @@ namespace Thor
                 attachedPed,
                 dictName,
                 animName,
-                AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation
+                AnimationFlags.UpperBodyOnly | AnimationFlags.Secondary
             );
-
-            if (shootUpwardFirst)
-            {
-                Weapon.WeaponObject.Velocity += new Vector3(0.0f, 0.0f, 1000.0f);
-                Script.Wait(500);
-            }
 
             Weapon.SetSummonStatus(true, attachedPed, isWeaponCloseToPed);
             Weapon.FindWaysToMoveToCoord(rightHandBonePos, true);

@@ -1,10 +1,12 @@
-﻿using GTA;
+﻿using ADModUtils;
+using GTA;
 using GTA.Math;
 using GTA.Native;
 using GTA.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Thor.PathFinder;
 
 namespace Thor
 {
@@ -29,8 +31,12 @@ namespace Thor
         protected Vector3 weaponSpawnPos;
         protected ADModUtils.Utilities.Timer weaponFxTimer;
         protected bool isBeingSummoned;
+        protected bool prevHasObstaclesInBetween = false;
         protected bool isCloseToSummoningPed;
         protected Vector3 summoningPedForwardDirection;
+        protected bool isInOutOfRangeIdleState = false;
+        protected Vector3 outOfRangeIdleRandomVelocity = Vector3.Zero;
+        protected int outOfRangeIdleRandomVelocityChangeInterval = 1000;
         protected AnimationActions[] throwActions;
 
         protected GodlyWeapon(WeaponHash weapon)
@@ -42,7 +48,28 @@ namespace Thor
 
         public virtual void OnTick()
         {
+            PathFinder.PathFinder.Instance.OnTick(weaponObject);
             HandleFx();
+
+            if (isInOutOfRangeIdleState && !isBeingSummoned)
+            {
+                if (Game.GameTime % outOfRangeIdleRandomVelocityChangeInterval == 0)
+                {
+                    outOfRangeIdleRandomVelocityChangeInterval = (int)ADModUtils.Utilities.Random.NextFloat(false) * 1000 + 1000;
+
+                    outOfRangeIdleRandomVelocity = new Vector3(
+                            ADModUtils.Utilities.Random.NextFloat(),
+                            ADModUtils.Utilities.Random.NextFloat(),
+                            ADModUtils.Utilities.Random.NextFloat()
+                        ).Normalized * ADModUtils.Utilities.Random.NextFloat(false) * 30.0f;
+                }
+
+                weaponObject.Velocity = Vector3.Lerp(
+                    weaponObject.Velocity,
+                    outOfRangeIdleRandomVelocity,
+                    0.5f * ADModUtils.Utilities.Random.NextFloat(false)
+                    );
+            }
         }
 
         public AnimationActions[] ThrowActions
@@ -53,26 +80,81 @@ namespace Thor
             }
         }
 
+        protected float prevHeightAboveGround = 0.0f;
+
         protected void HandleWeaponAvailability()
         {
             if (weaponObject != null &&
                 weaponObject.Exists())
             {
                 weaponObject.IsPersistent = true;
+                Function.Call(Hash.SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION, weaponObject, false);
+                //Function.Call(Hash.ONLY_CLEAN_UP_OBJECT_WHEN_OUT_OF_RANGE, weaponObject, false);
 
-                if (weaponObject.HeightAboveGround > 1.0f &&
-                    weaponObject.Velocity.Length() == 0)
+                //if (weaponCollisionTriggerProp == null)
+                //{
+                //    weaponCollisionTriggerProp = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Bat, 1, weaponObject.Position + Vector3.UnitY);
+                //    ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponCollisionTriggerProp, 1.0f);
+                //    weaponCollisionTriggerProp.IsCollisionEnabled = true;
+                //}
+
+                //weaponCollisionTriggerProp.Position = weaponObject.Position + new Vector3(0.5f, 0.0f, 0.0f);
+                //if (World.GetDistance(weaponCollisionTriggerProp.Position, weaponObject.Position) > 1.0f)
+                //{
+                //    weaponCollisionTriggerProp.Position = weaponObject.Position + Vector3.UnitY;
+                //}
+                //weaponCollisionTriggerProp.Velocity = weaponObject.Velocity + (weaponObject.Position - weaponCollisionTriggerProp.Position) * 20.0f;
+
+                if (weaponObject.HeightAboveGround - prevHeightAboveGround > 50.0f)
                 {
-                    weaponObject.Velocity = Vector3.WorldUp;
-                    if (weaponObject.Velocity.Length() == 0)
+
+                    if (!isBeingSummoned)
                     {
-                        Init(weaponObject.Position + Vector3.WorldUp, true);
-                    }
-                    else
-                    {
-                        weaponObject.Velocity = Vector3.Zero;
+                        isInOutOfRangeIdleState = true;
                     }
                 }
+                else
+                {
+                    prevHeightAboveGround = weaponObject.HeightAboveGround;
+                }
+
+                var raycastDownwardResult = World.Raycast(weaponObject.Position, Vector3.UnitZ * -1000.0f, IntersectFlags.Map);
+
+                if (raycastDownwardResult.DidHit)
+                {
+                    isInOutOfRangeIdleState = false;
+                }
+
+                //if (weaponObject.Velocity != Vector3.Zero)
+                //{
+                //    prevNonZeroVelocity = weaponObject.Velocity;
+                //} else if (weaponObject.HeightAboveGround > 1.0f || !weaponObject.IsOnScreen)
+                //{
+                //    weaponObject.Velocity = Vector3.WorldUp * 1.0f;
+
+                //    if (weaponObject.Velocity == Vector3.Zero)
+                //    {
+
+                //    var prevPos = weaponObject.Position;
+                //        Init(new Vector3(
+                //            ADModUtils.Utilities.Random.NextFloat() * 1000.0f,
+                //            ADModUtils.Utilities.Random.NextFloat() * 1000.0f,
+                //            ADModUtils.Utilities.Random.NextFloat(false) * 1000.0f
+                //        ), true);
+                //        weaponObject.Position = prevPos + Vector3.UnitZ * 0.1f;
+                //        weaponObject.Velocity = prevNonZeroVelocity;
+
+                //        //continuousWeaponResetCount++;
+
+                //        //if (continuousWeaponResetCount > 5)
+                //        //{
+                //        //    prevNonZeroVelocity = Vector3.UnitZ * 0.1f;
+                //        //}
+                //    } else
+                //    {
+                //        weaponObject.Velocity = prevNonZeroVelocity;
+                //    }
+                //}
             }
         }
 
@@ -145,6 +227,7 @@ namespace Thor
                 if (value != null)
                 {
                     weaponObject = InitializeWeaponObject(value);
+                    PathFinder.PathFinder.Instance.SetNoCollision(weaponObject);
                     weaponFxTimer = new ADModUtils.Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS,
                     () =>
                     {
@@ -234,7 +317,8 @@ namespace Thor
             foreach (var ent in entities)
             {
                 if (ent != Game.Player.Character &&
-                    ent != weaponObject)
+                    ent != weaponObject &&
+                    !PathFinder.PathFinder.Instance.IsRelatedEntity(ent))
                 {
                     ent.ApplyForce(weaponObject.Velocity);
                     if (ADModUtils.NativeHelper.IsPed(ent))
@@ -326,22 +410,6 @@ namespace Thor
             }
         }
 
-        public void MoveTowardDirection(Vector3 direction, int startTime, int maxTime)
-        {
-            if (weaponObject == null)
-            {
-                return;
-            }
-            int endTime = startTime + maxTime;
-
-            if (Game.GameTime >= endTime)
-            {
-                return;
-            }
-
-            weaponObject.Velocity = weaponObject.Velocity.Normalized + direction * MOVE_FULL_VELOCITY_MULTIPLIER;
-        }
-
         protected float GetVelocityByDistance(Vector3 newPosition, Vector3 curPosition)
         {
             float distanceBetweenNewPosAndCurPos = (newPosition - curPosition).Length();
@@ -360,7 +428,7 @@ namespace Thor
             }
         }
 
-        public void MoveToCoord(Vector3 newPosition, bool slowDownIfClose, Vector3 blendInVelocity)
+        protected void MoveToCoord(Vector3 newPosition, bool slowDownIfClose, Vector3 blendInVelocity)
         {
             if (weaponObject == null)
             {
@@ -377,35 +445,69 @@ namespace Thor
                 velocity += moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
             }
 
-            weaponObject.Velocity = weaponObject.Velocity.Normalized + velocity;
+            weaponObject.Velocity = velocity;
         }
 
-        public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose, bool canShootUpward = true)
+        public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose)
         {
 
-            if (ShouldShootUpward(newPosition))
-            {
-                var velocity = Vector3.Zero;
+            bool curHasObstaclesInBetween = HasObstaclesInBetween(newPosition);
 
-                if (canShootUpward)
+            if (curHasObstaclesInBetween && !IsInOpenAir())
+            {
+                if (PathFinder.PathFinder.Instance.Position is null)
                 {
-                    velocity = Vector3.Lerp(this.Velocity, Vector3.WorldUp * MOVE_UPWARD_VELOCITY_MULTIPLIER, 0.01f);
+                    return;
                 }
 
-                MoveToCoord(newPosition, slowDownIfClose, velocity);
+                if (!prevHasObstaclesInBetween && curHasObstaclesInBetween)
+                {
+                    PathFinder.PathFinder.Instance.UpdateStartPosition(weaponObject.Position);
+                }
+
+                prevHasObstaclesInBetween = curHasObstaclesInBetween;
+
+                PathFinder.PathFinder.Instance.UpdateCurrentTarget(newPosition);
+
+                weaponObject.Velocity = PathFinder.PathFinder.Instance.GetTargetVelocity(weaponObject.Position);
+                return;
             }
-            else
-            {
-                MoveToCoord(newPosition, slowDownIfClose, Vector3.Zero);
-            }
+
+            prevHasObstaclesInBetween = curHasObstaclesInBetween;
+
+            MoveToCoord(newPosition, slowDownIfClose, Vector3.Zero);
         }
 
-        protected bool ShouldShootUpward(Vector3 newPosition)
+        private static float OPEN_AIR_TEST_RADIUS = 10.0f;
+
+        protected bool HasObstaclesInBetween(Vector3 newPosition)
         {
             var currentWeaponPos = weaponObject.Position;
-            var raycastToTarget = World.Raycast(currentWeaponPos, newPosition, IntersectFlags.Map);
 
-            return raycastToTarget.DidHit && World.GetDistance(currentWeaponPos, raycastToTarget.HitPosition) <= MAX_SHOOT_UPWARD_DIST;
+            var raycastTest = ShapeTest.StartTestCapsule(currentWeaponPos, newPosition, 0.1f, IntersectFlags.Map);
+            ShapeTestResult raycastResult;
+
+            raycastTest.GetResult(out raycastResult);
+
+            return raycastResult.DidHit && World.GetDistance(currentWeaponPos, raycastResult.HitPosition) <= 20.0f;
+        }
+
+
+        protected bool IsInOpenAir()
+        {
+            var currentWeaponPos = weaponObject.Position;
+            var raycastXTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitX * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitX * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
+            var raycastYTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitY * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitY * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
+            var raycastZTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitZ * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitZ * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
+            ShapeTestResult raycastXResult;
+            ShapeTestResult raycastYResult;
+            ShapeTestResult raycastZResult;
+
+            raycastXTest.GetResult(out raycastXResult);
+            raycastYTest.GetResult(out raycastYResult);
+            raycastZTest.GetResult(out raycastZResult);
+
+            return !raycastXResult.DidHit && !raycastYResult.DidHit && !raycastZResult.DidHit;
         }
     }
 }

@@ -1,356 +1,163 @@
-﻿//using GTA;
-//using GTA.Math;
-//using System;
-//using System.Collections.Generic;
-//using System.Linq;
-//using System.Text;
-//using System.Threading.Tasks;
-//using static Thor.PathFinder.PathFinder;
+﻿using ADModUtils;
+using GTA;
+using GTA.Math;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-//namespace Thor
-//{
-//    namespace PathFinder
-//    {
-//        internal enum PathFinderDestinationType
-//        {
-//            Player,
-//            Target,
-//        }
+namespace Thor
+{
+    namespace PathFinder
+    {
+        public class PathFinder
+        {
+            private static PathFinder instance = null;
+            private Ped driver = null;
+            private Vehicle chasingVehicle = null;
+            private Ped currentTargetPed = null;
+            private Vector3 currentTargetPosition = Vector3.Zero;
+            private bool initialized = false;
+            private static Vector3 DEFAULT_SPAWN_POS = new Vector3(500.0f, 500.0f, 500.0f);
 
-//        internal static class Constants
-//        {
-//            public static readonly PathFinderDirection[] PrimaryDirections = {
-//                    PathFinderDirection.Front,
-//                    PathFinderDirection.Up,
-//                    PathFinderDirection.Left,
-//                    PathFinderDirection.Right,
-//                };
+            private PathFinder() { }
 
-//            public static readonly PathFinderDirection[] SecondaryDirections = {
-//                    PathFinderDirection.Back,
-//                    PathFinderDirection.Down,
-//                };
+            public static PathFinder Instance
+            {
+                get
+                {
+                    if (instance is null)
+                    {
+                        instance = new PathFinder();
+                    }
 
-//            public const float RaycastStartingPointOffset = 1.0f;
-//        }
+                    return instance;
+                }
+            }
 
-//        internal static class Utils
-//        {
-//            public static readonly PathFinderDirection[] PrimaryDirections = {
-//                    PathFinderDirection.Front,
-//                    PathFinderDirection.Up,
-//                    PathFinderDirection.Left,
-//                    PathFinderDirection.Right,
-//                };
+            private void Init()
+            {
+                if (initialized)
+                {
+                    return;
+                }
 
-//            public static readonly PathFinderDirection[] SecondaryDirections = {
-//                    PathFinderDirection.Back,
-//                    PathFinderDirection.Down,
-//                };
+                var planeModel = new Model(VehicleHash.Thruster);
+                planeModel.Request();
+                chasingVehicle = World.CreateVehicle(planeModel, DEFAULT_SPAWN_POS);
+                chasingVehicle.CreateRandomPedOnSeat(VehicleSeat.Driver);
+                driver = chasingVehicle.GetPedOnSeat(VehicleSeat.Driver);
 
-//            public const float RaycastStartingPointOffset = 1.0f;
-//        }
+                initialized = true;
+            }
 
-//        internal class PathFinder
-//        {
-//            internal enum PathFinderDirection
-//            {
-//                Up,
-//                Down,
-//                Left,
-//                Right,
-//                Front,
-//                Back,
-//            }
+            public bool IsRelatedEntity(Entity entity)
+            {
+                return entity == chasingVehicle || entity == driver;
+            }
 
-//            private Vector3 destination;
-//            private Queue<Node> nodes;
-//            private PathFinderState currentState;
-//            private PathFinderRouteInstruction currentInstruction;
-//            private PathFinderRouteInstructionWaitHandler waitHanlder;
-//            private PathFinderRouteInstructionSpeedUpAndStopHandler speedUpAndStopHandler;
-//            private PathFinderRouteInstructionSpeedUpAndSlowDownHandler speedUpAndSlowDownHandler;
-//            private PathFinderRouteInstructionSpeedUpAndPassThroughHandler speedUpAndPassThroughHandler;
-//            private Node nextViableNode;
+            public Vector3 GetTargetVelocity(Vector3 userPosition, float scaler = 0.5f)
+            {
+                if (chasingVehicle is null)
+                {
+                    return Vector3.Zero;
+                }
 
-//            private enum PathFinderState
-//            {
-//                Idle,
-//                Deactivated,
-//                CheckingPrimaryDirections,
-//                CheckingSecondaryDirections,
-//                ProcessingNextNode,
-//                ProcessingNextInstruction,
-//            }
+                return (chasingVehicle.Position - userPosition) * scaler + chasingVehicle.Velocity;
+            }
 
-//            private class BasePathFinderStateProcessor
-//            {
-//                private BasePathFinderStateProcessor instance;
-//                protected PathFinderState state;
+            public Vector3? Position
+            {
+                get
+                {
+                    if (chasingVehicle is null)
+                    {
+                        return null;
+                    }
 
-//                public BasePathFinderStateProcessor Instance
-//                {
-//                    get
-//                    {
-//                        if (instance == null)
-//                        {
-//                            instance = new BasePathFinderStateProcessor(state);
-//                        }
+                    return chasingVehicle.Position;
+                }
+            }
 
-//                        return instance;
-//                    }
-//                }
-//                protected BasePathFinderStateProcessor(PathFinderState s)
-//                {
-//                    state = s;
-//                }
+            public void OnTick(Entity entityToDisableCollision)
+            {
+                Init();
 
-//                public void Reset()
-//                {
-//                    instance = new BasePathFinderStateProcessor(state);
-//                }
+                if (chasingVehicle.Driver != driver)
+                {
+                    driver.SetIntoVehicle(chasingVehicle, VehicleSeat.Driver);
+                }
 
-//                public virtual PathFinderState Process(PathFinderState currentState)
-//                {
-//                    if (currentState != state)
-//                    {
-//                        Reset();
-//                        return currentState;
-//                    }
+                chasingVehicle.IsInvincible = true;
+                chasingVehicle.Health = 100;
+                chasingVehicle.IsVisible = true;
 
-//                    return ProcessCurrentState();
-//                }
+                driver.IsInvincible = true;
+                driver.Health = 100;
+                driver.IsVisible = false;
 
-//                protected virtual PathFinderState ProcessCurrentState()
-//                {
-//                    return state;
-//                }
-//            }
+                chasingVehicle.Velocity *= 1.1f;
 
-//            private class BaseNodeFindingPathFinderStateProcessor : BasePathFinderStateProcessor
-//            {
-//                protected BaseNodeFindingPathFinderStateProcessor(PathFinderState s) : base(s) { }
+                SetNoCollision(entityToDisableCollision);
+            }
 
-//                public virtual PathFinderState Process(PathFinderState currentState, out Node nextNode)
-//                {
-//                    if (currentState != state)
-//                    {
-//                        Reset();
-//                        nextNode = null;
-//                        return currentState;
-//                    }
+            public void SetNoCollision(Entity entityToDisableCollision)
+            {
+                if (chasingVehicle == null || driver == null)
+                {
+                    return;
+                }
 
-//                    return ProcessCurrentState(out nextNode);
-//                }
+                chasingVehicle.SetNoCollision(entityToDisableCollision, true);
+                chasingVehicle.SetNoCollision(Game.Player.Character, true);
+                driver.SetNoCollision(entityToDisableCollision, true);
+                driver.SetNoCollision(Game.Player.Character, true);
+            }
 
-//                protected virtual PathFinderState ProcessCurrentState(out Node nextNode)
-//                {
-//                    nextNode = null;
-//                    return state;
-//                }
-//            }
+            public void UpdateStartPosition(Vector3 position)
+            {
+                chasingVehicle.Position = position;
+            }
 
-//            private class PathFinderState_Idle_Processor : BasePathFinderStateProcessor
-//            {
-//                private PathFinderState_Idle_Processor() : base(PathFinderState.Idle)
-//                {
+            public void UpdateCurrentTarget(Vector3 target)
+            {
+                if (currentTargetPosition.Equals(target) || World.GetDistance(target, currentTargetPosition) <= 15.0f)
+                {
+                    return;
+                }
 
-//                }
-//            }
+                ClearAll();
 
-//            private class PathFinderState_Deactivated_Processor : BasePathFinderStateProcessor
-//            {
-//                private PathFinderState_Deactivated_Processor() : base(PathFinderState.Deactivated)
-//                {
+                currentTargetPosition = target;
 
-//                }
-//            }
+                driver.Task.StartHeliMission(chasingVehicle, currentTargetPosition, VehicleMissionType.GoTo, 100000.0f, 1.0f, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
+            }
 
-//            private class BaseDirectionCheckingPathFinderStateProcessor : BaseNodeFindingPathFinderStateProcessor
-//            {
-//                private uint currentDirectionIndex = 0;
+            public void UpdateCurrentTarget(Ped targetPed)
+            {
+                if (targetPed is null)
+                {
+                    return;
+                }
 
-//                protected BaseDirectionCheckingPathFinderStateProcessor(PathFinderState s) : base(s)
-//                {
-//                }
+                if (currentTargetPed != null && targetPed.Handle == currentTargetPed.Handle)
+                {
+                    return;
+                }
 
-//                protected PathFinderDirection CurrentDirection
-//                {
-//                    get
-//                    {
-//                        if (currentDirectionIndex >= Constants.PrimaryDirections.Length)
-//                        {
-//                            throw new IndexOutOfRangeException("Invalid currentDirectionIndex");
-//                        }
+                ClearAll();
 
-//                        return Constants.PrimaryDirections[currentDirectionIndex];
-//                    }
-//                }
+                currentTargetPed = targetPed;
+                driver.Task.StartHeliMission(chasingVehicle, currentTargetPed, VehicleMissionType.Follow, 100000.0f, 1.0f, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
+            }
 
-//                protected override PathFinderState ProcessCurrentState(out Node nextNode)
-//                {
-//                    try
-//                    {
-//                        var currentDirection = CurrentDirection;
-//                    }
-//                    catch (IndexOutOfRangeException)
-//                    {
-
-//                        throw;
-//                    }
-//                }
-
-//                protected void CheckCurrentDirection()
-//                {
-
-//                }
-//            }
-
-//            private class PathFinderState_CheckingPrimaryDirections_Processor : BaseDirectionCheckingPathFinderStateProcessor
-//            {
-//                private PathFinderState_CheckingPrimaryDirections_Processor() : base(PathFinderState.CheckingPrimaryDirections)
-//                {
-//                }
-
-//                protected override sealed PathFinderState ProcessCurrentState(out Node nextNode)
-//                {
-
-//                }
-//            }
-
-//            private class PathFinderState_CheckingSecondaryDirections_Processor : BaseDirectionCheckingPathFinderStateProcessor
-//            {
-//                private PathFinderState_CheckingSecondaryDirections_Processor() : base(PathFinderState.CheckingSecondaryDirections)
-//                {
-
-//                }
-
-//                protected override sealed PathFinderState ProcessCurrentState(out Node nextNode)
-//                {
-
-//                }
-//            }
-
-//            private class PathFinderState_ProcessingNextNode_Processor : BaseNodeFindingPathFinderStateProcessor
-//            {
-//                private PathFinderState_ProcessingNextNode_Processor() : base(PathFinderState.ProcessingNextNode)
-//                {
-
-//                }
-//            }
-
-//            private class PathFinderState_ProcessingNextInstruction_Processor : BasePathFinderStateProcessor
-//            {
-//                private PathFinderState_ProcessingNextInstruction_Processor() : base(PathFinderState.ProcessingNextInstruction)
-//                {
-
-//                }
-//            }
-
-//            private class Node
-//            {
-//                public Vector3 Position;
-
-//                public Node(Vector3 pos)
-//                {
-//                    Position = pos;
-//                }
-//            }
-
-//            public PathFinder()
-//            {
-//                currentState = PathFinderState.Deactivated;
-//                nodes = new Queue<Node>();
-//            }
-
-//            public delegate void PathFinderRouteInstructionWaitHandler();
-
-//            public delegate void PathFinderRouteInstructionSpeedUpAndStopHandler();
-
-//            public delegate void PathFinderRouteInstructionSpeedUpAndSlowDownHandler();
-
-//            public delegate void PathFinderRouteInstructionSpeedUpAndPassThroughHandler();
-
-//            public void RegisterWaitHandler(PathFinderRouteInstructionWaitHandler handler)
-//            {
-//                waitHanlder = handler;
-//            }
-//            public void RegisterSpeedUpAndStopHandler(PathFinderRouteInstructionSpeedUpAndStopHandler handler)
-//            {
-//                speedUpAndStopHandler = handler;
-//            }
-//            public void RegisterSpeedUpAndSlowDownHandler(PathFinderRouteInstructionSpeedUpAndSlowDownHandler handler)
-//            {
-//                speedUpAndSlowDownHandler = handler;
-//            }
-//            public void RegisterSpeedUpAndPassThroughHandler(PathFinderRouteInstructionSpeedUpAndPassThroughHandler handler)
-//            {
-//                speedUpAndPassThroughHandler = handler;
-//            }
-
-//            public void OnTick(Vector3 nextDestination, PathFinderDestinationType type)
-//            {
-//                destination = nextDestination;
-
-//                // Find next node
-//                //  check primary directions facing the destination
-//                SearchForNextNode();
-//                //  if any feasible node is found
-//                //      goto 1
-//                //  otherwise check secondary directions facing the destination
-//                //  if any feasible node is found
-//                //      goto 1
-//                //  otherwise deactivate the path finder
-//                //
-//                // 1:
-//                // check the surroundings of where the node is and determine the instruction
-//            }
-
-//            public void Activate()
-//            {
-//                currentState = PathFinderState.Idle;
-//            }
-
-//            public void Deactivate()
-//            {
-//                currentState = PathFinderState.Deactivated;
-//            }
-
-//            private void SearchForNextNode()
-//            {
-//                CheckPrimaryDirections();
-
-//                if (nextViableNode == null)
-//                {
-//                    CheckSeondaryDirections();
-//                }
-//            }
-
-//            private void CheckPrimaryDirections()
-//            {
-
-//            }
-//        }
-//        enum PathFinderRouteInstructionType
-//        {
-//            Wait,
-//            SpeedUpAndStop,
-//            SpeedUpAndSlowDown,
-//            SpeedUpAndPassThrough,
-//        }
-
-//        internal class PathFinderRouteInstruction
-//        {
-//            private readonly PathFinderRouteInstructionType _type;
-//            public PathFinderRouteInstruction(PathFinderRouteInstructionType type)
-//            {
-//                _type = type;
-//            }
-
-//            public PathFinderRouteInstructionType Type
-//            {
-//                get { return _type; }
-//            }
-//        }
-//    }
-//}
+            private void ClearAll()
+            {
+                driver.Task.ClearAll();
+                currentTargetPed = null;
+                currentTargetPosition = Vector3.Zero;
+            }
+        }
+    }
+}

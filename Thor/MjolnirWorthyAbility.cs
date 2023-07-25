@@ -210,7 +210,7 @@ namespace Thor
             return Game.IsKeyPressed(Keys.H);
         }
 
-        public override void SummonWeapon(bool shootUpwardFirst = false)
+        public override void SummonWeapon()
         {
             Weapon.DetachRope();
             isHoldingWeaponRope = false;

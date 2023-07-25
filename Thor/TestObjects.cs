@@ -85,7 +85,7 @@ namespace Thor
 
         public void OnTick()
         {
-            //if (!Initialized)
+            //if (!initialized)
             //{
             //    Init();
             //}
@@ -177,65 +177,10 @@ namespace Thor
     internal class TestChasingPlane
     {
         private static TestChasingPlane _instance;
-        private bool Initialized;
+        private bool Initialized = false;
         private Vehicle plane;
         private ScriptSettings Settings;
         private Vector3 DefaultSpawnPos;
-
-        private TestChasingPlane() 
-        {
-            Initialized = false;
-            DefaultSpawnPos = new Vector3(-75.0f, -818.0f, 347.0f);
-        }
-        private void Init()
-        {
-            if (Initialized)
-            {
-                return;
-            }
-
-            Settings = ScriptSettings.Load("test-chasing-plane-settings.ini");
-            var savedHandle = Settings.GetValue("Plane", "Handle", -1);
-
-            if (savedHandle != -1)
-            {
-                plane = (Vehicle)Entity.FromHandle(savedHandle);
-            }
-
-            if (plane == null || !plane.Exists() || plane.IsConsideredDestroyed)
-            {
-                var planeModel = new Model(VehicleHash.Akula);
-                planeModel.Request();
-                plane = World.CreateVehicle(planeModel, DefaultSpawnPos);
-                plane.CreateRandomPedOnSeat(VehicleSeat.Driver);
-                var driver = plane.GetPedOnSeat(VehicleSeat.Driver);
-                driver.Task.ChaseWithHelicopter(Game.Player.Character, Vector3.Zero);
-            }
-            //driver.Task.ChaseWithGroundVehicle(Game.Player.Character);
-            //driver.Task.ChaseWithPlane(Game.Player.Character, Vector3.Zero);
-            //driver.Task.VehicleChase(Game.Player.Character);
-
-            Settings.SetValue("Plane", "Handle", plane.Handle);
-            Settings.Save();
-
-            Initialized = true;
-        }
-
-        public void OnTick()
-        {
-            if (!Initialized)
-            {
-                Init();
-                return;
-            }
-
-            //plane.IsCollisionProof = true;
-            //plane.IsExplosionProof = true;
-            //plane.Repair();
-            //plane.IsInvincible = true;
-            //plane.EngineHealth = 1000.0f;
-            plane.MaxSpeed = 100000.0f;
-        }
 
         public static TestChasingPlane Instance
         {
@@ -249,6 +194,43 @@ namespace Thor
                 return _instance;
             }
         }
+
+        public void Init()
+        {
+            if (Initialized)
+            {
+                return;
+            }
+
+            DefaultSpawnPos = Game.Player.Character.Position + Vector3.UnitY * 3.0f + Vector3.UnitZ;
+
+            //Settings = ScriptSettings.Load("test-chasing-plane-settings.ini");
+            //var savedHandle = Settings.GetValue("Plane", "Handle", -1);
+
+
+            //plane = (Vehicle)Entity.FromHandle(savedHandle);
+
+            var planeModel = new Model(VehicleHash.Thruster);
+            planeModel.Request();
+            plane = World.CreateVehicle(planeModel, DefaultSpawnPos);
+            plane.Rotation = new Vector3(45.0f, 45.0f, 45.0f);
+            plane.CreateRandomPedOnSeat(VehicleSeat.Driver);
+            var driver = plane.GetPedOnSeat(VehicleSeat.Driver);
+            driver.Task.StartHeliMission(plane, new Vector3(500.0f, 500.0f, 500.0f), VehicleMissionType.GoTo, 10000.0f, 10.0f, 5, 2, -1, -1, HeliMissionFlags.StartEngineImmediately);
+
+            //Settings.SetValue("Plane", "Handle", plane.Handle);
+            //Settings.Save();
+
+            Initialized = true;
+        }
+
+        public void OnTick()
+        {
+            if (!Initialized)
+            {
+                return;
+            }
+        }
     }
 
     internal static class TestObjects
@@ -258,12 +240,26 @@ namespace Thor
 
         public static void OnTick()
         {
-            if (!Initialized)
+            Init();
+            //HandleTestMjolnirs();
+            HandleTestChasingPlane();
+        }
+
+        private static void HandleTestChasingPlane()
+        {
+            if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
+               Game.IsKeyPressed(Keys.T) && Game.IsKeyPressed(Keys.D2))
             {
-                TestMjolnirList = new List<TestMjolnir>();
-                Initialized = true;
+                TestChasingPlane.Instance.Init();
+
+                return;
             }
 
+            TestChasingPlane.Instance.OnTick();
+        }
+
+        private static void HandleTestMjolnirs()
+        {
             if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
                Game.IsKeyPressed(Keys.T) && Game.IsKeyPressed(Keys.D1))
             {
@@ -276,10 +272,13 @@ namespace Thor
             }
         }
 
-        private static void DrawTestMjolnir()
+        private static void Init()
         {
-            TestMjolnir.Instance.OnTick();
-            //TestChasingPlane.Instance.OnTick();
+            if (!Initialized)
+            {
+                TestMjolnirList = new List<TestMjolnir>();
+                Initialized = true;
+            }
         }
     }
 }
