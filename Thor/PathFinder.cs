@@ -91,20 +91,21 @@ namespace Thor
 
                 chasingVehicle.IsInvincible = true;
                 chasingVehicle.Health = 100;
-                chasingVehicle.IsVisible = true;
+                chasingVehicle.IsVisible = false;
 
                 driver.IsInvincible = true;
                 driver.Health = 100;
+
                 driver.IsVisible = false;
 
-                chasingVehicle.Velocity *= 1.1f;
+                chasingVehicle.Velocity *= 1.05f;
 
                 SetNoCollision(entityToDisableCollision);
             }
 
             public void SetNoCollision(Entity entityToDisableCollision)
             {
-                if (chasingVehicle == null || driver == null)
+                if (chasingVehicle == null || driver == null || entityToDisableCollision == null)
                 {
                     return;
                 }

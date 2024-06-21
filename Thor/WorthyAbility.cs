@@ -66,6 +66,8 @@ namespace Thor
         protected NAudio.Wave.WaveOut weaponCloseToPlayerSoundPlayer;
         protected string soundFileCatchWeapon;
         protected string soundFileWeaponCloseToPed;
+        protected bool isGrabbing = false;
+        protected Entity currentlyGrabbedEntity = null;
 
         protected WorthyAbility()
         {
@@ -218,6 +220,7 @@ namespace Thor
             }
             attachedPed.Weapons.Remove(WeaponHash.Parachute);
             Weapon.OnTick();
+            HandleGrabbingPed();
         }
 
         protected virtual bool IsRenderWeaponCameraKeyPressed()
@@ -611,6 +614,60 @@ namespace Thor
                     SummonWeapon();
                 }
             }
+        }
+
+        protected void HandleGrabbingPed()
+        {
+            if (currentlyGrabbedEntity != null && (!currentlyGrabbedEntity.Exists() || currentlyGrabbedEntity.IsDead))
+            {
+                HandleReleaseGrabbedEntity();
+
+                return;
+            }
+
+            if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
+               Game.IsControlPressed(GTA.Control.ThrowGrenade) && isGrabbing)
+            {
+                HandleReleaseGrabbedEntity();
+                return;
+            }
+
+            if (!Game.IsControlPressed(GTA.Control.VehicleSubDescend) && Game.IsControlPressed(GTA.Control.ThrowGrenade) && !isGrabbing)
+            {
+                var nearbyEnts = World.GetNearbyEntities(Game.Player.Character.Position, 1.5f);
+
+                foreach (var ent in nearbyEnts)
+                {
+                    if ((ent.EntityType == EntityType.Ped && (Ped)ent != Game.Player.Character)
+                        //|| (ent.EntityType == EntityType.Vehicle && !((Vehicle)ent).IsConsideredDestroyed)
+                        )
+                    {
+                        ent.AttachTo(Game.Player.Character.Bones[Bone.IKLeftHand]);
+
+                        if (ent.EntityType == EntityType.Ped)
+                        {
+                            ((Ped)ent).Task.ClearAll();
+                        }
+
+                        currentlyGrabbedEntity = ent;
+                        isGrabbing = true;
+
+                        return;
+                    }
+                }
+
+            }
+        }
+
+        private void HandleReleaseGrabbedEntity()
+        {
+            if (currentlyGrabbedEntity != null)
+            {
+                currentlyGrabbedEntity.Detach();
+                currentlyGrabbedEntity = null;
+            }
+
+            isGrabbing = false;
         }
 
         protected void HandleThrowingWeapon()

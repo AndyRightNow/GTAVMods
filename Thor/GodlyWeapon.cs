@@ -89,21 +89,6 @@ namespace Thor
             {
                 weaponObject.IsPersistent = true;
                 Function.Call(Hash.SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION, weaponObject, false);
-                //Function.Call(Hash.ONLY_CLEAN_UP_OBJECT_WHEN_OUT_OF_RANGE, weaponObject, false);
-
-                //if (weaponCollisionTriggerProp == null)
-                //{
-                //    weaponCollisionTriggerProp = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Bat, 1, weaponObject.Position + Vector3.UnitY);
-                //    ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponCollisionTriggerProp, 1.0f);
-                //    weaponCollisionTriggerProp.IsCollisionEnabled = true;
-                //}
-
-                //weaponCollisionTriggerProp.Position = weaponObject.Position + new Vector3(0.5f, 0.0f, 0.0f);
-                //if (World.GetDistance(weaponCollisionTriggerProp.Position, weaponObject.Position) > 1.0f)
-                //{
-                //    weaponCollisionTriggerProp.Position = weaponObject.Position + Vector3.UnitY;
-                //}
-                //weaponCollisionTriggerProp.Velocity = weaponObject.Velocity + (weaponObject.Position - weaponCollisionTriggerProp.Position) * 20.0f;
 
                 if (weaponObject.HeightAboveGround - prevHeightAboveGround > 50.0f)
                 {
@@ -124,37 +109,6 @@ namespace Thor
                 {
                     isInOutOfRangeIdleState = false;
                 }
-
-                //if (weaponObject.Velocity != Vector3.Zero)
-                //{
-                //    prevNonZeroVelocity = weaponObject.Velocity;
-                //} else if (weaponObject.HeightAboveGround > 1.0f || !weaponObject.IsOnScreen)
-                //{
-                //    weaponObject.Velocity = Vector3.WorldUp * 1.0f;
-
-                //    if (weaponObject.Velocity == Vector3.Zero)
-                //    {
-
-                //    var prevPos = weaponObject.Position;
-                //        Init(new Vector3(
-                //            ADModUtils.Utilities.Random.NextFloat() * 1000.0f,
-                //            ADModUtils.Utilities.Random.NextFloat() * 1000.0f,
-                //            ADModUtils.Utilities.Random.NextFloat(false) * 1000.0f
-                //        ), true);
-                //        weaponObject.Position = prevPos + Vector3.UnitZ * 0.1f;
-                //        weaponObject.Velocity = prevNonZeroVelocity;
-
-                //        //continuousWeaponResetCount++;
-
-                //        //if (continuousWeaponResetCount > 5)
-                //        //{
-                //        //    prevNonZeroVelocity = Vector3.UnitZ * 0.1f;
-                //        //}
-                //    } else
-                //    {
-                //        weaponObject.Velocity = prevNonZeroVelocity;
-                //    }
-                //}
             }
         }
 
