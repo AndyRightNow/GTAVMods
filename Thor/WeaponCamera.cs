@@ -4,12 +4,12 @@ using System.Collections.Generic;
 
 namespace Thor
 {
-    enum MOLNIR_CAMERA_TYPE
+    enum MjolnirCameraType
     {
-        STATIONARY_VIEW_FOLLOW,
-        SIDE_FOLLOW,
-        STATIONARY_REAR,
-        NONE
+        StationaryViewFollow,
+        SideFollow,
+        FarSideFollow,
+        None
     }
 
     class WeaponCamera
@@ -21,14 +21,15 @@ namespace Thor
         private static float CAMERA_POSITION_RESET_INTERVAL = 2000.0f;
         private static float CAMERA_FRONT_DISTANCE_MULTIPLIER = 50.0f;
         private static float CAMERA_SIDE_DISTANCE_MULTIPLIER = 5.0f;
-        private static MOLNIR_CAMERA_TYPE cameraType;
+        private static float CAMERA_FAR_SIDE_DISTANCE_MULTIPLIER = 70.0f;
+        private static MjolnirCameraType cameraType;
         private float lastSetCameraPositionTimestamp;
         private Vector3 currentSideDirection;
 
         private WeaponCamera()
         {
             lastSetCameraPositionTimestamp = DEFAULT_CAMERA_POSITION_NOT_SET;
-            cameraType = MOLNIR_CAMERA_TYPE.NONE;
+            cameraType = MjolnirCameraType.None;
         }
 
         private bool ShouldResetCamera()
@@ -62,13 +63,15 @@ namespace Thor
 
             if (ShouldResetCamera())
             {
-                cameraType = ADModUtils.Utilities.Random.PickOne(new List<MOLNIR_CAMERA_TYPE>()
+                cameraType = ADModUtils.Utilities.Random.PickOne(new List<MjolnirCameraType>()
                     {
-                        MOLNIR_CAMERA_TYPE.SIDE_FOLLOW,
-                        MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW,
-                        MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW,
-                        MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW,
-                        MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW
+                        MjolnirCameraType.SideFollow,
+                        MjolnirCameraType.FarSideFollow,
+                        MjolnirCameraType.FarSideFollow,
+                        MjolnirCameraType.StationaryViewFollow,
+                        MjolnirCameraType.StationaryViewFollow,
+                        MjolnirCameraType.StationaryViewFollow,
+                        MjolnirCameraType.StationaryViewFollow,
                     }.ToArray());
                 lastSetCameraPositionTimestamp = Game.GameTime;
                 currentSideDirection = ADModUtils.Utilities.Math.RandomVectorPerpendicularTo(weaponDirection) * randomNegationFactor;
@@ -77,27 +80,23 @@ namespace Thor
 
             switch (cameraType)
             {
-                case MOLNIR_CAMERA_TYPE.SIDE_FOLLOW:
+                case MjolnirCameraType.SideFollow:
                     hammerTrackCam.Position = weaponObject.Position +
                         currentSideDirection * CAMERA_SIDE_DISTANCE_MULTIPLIER;
                     hammerTrackCam.PointAt(weaponObject);
                     break;
-                case MOLNIR_CAMERA_TYPE.STATIONARY_REAR:
+                case MjolnirCameraType.StationaryViewFollow:
                     if (isJustReset)
                     {
                         hammerTrackCam.Position = weaponObject.Position +
                             weaponDirection * CAMERA_FRONT_DISTANCE_MULTIPLIER +
                             currentSideDirection * CAMERA_SIDE_DISTANCE_MULTIPLIER;
-                        hammerTrackCam.PointAt(weaponObject.Position + weaponDirection * CAMERA_FRONT_DISTANCE_MULTIPLIER);
                     }
+                    hammerTrackCam.PointAt(weaponObject);
                     break;
-                case MOLNIR_CAMERA_TYPE.STATIONARY_VIEW_FOLLOW:
-                    if (isJustReset)
-                    {
-                        hammerTrackCam.Position = weaponObject.Position +
-                            weaponDirection * CAMERA_FRONT_DISTANCE_MULTIPLIER +
-                            currentSideDirection * CAMERA_SIDE_DISTANCE_MULTIPLIER;
-                    }
+                case MjolnirCameraType.FarSideFollow:
+                    hammerTrackCam.Position = weaponObject.Position +
+                        currentSideDirection * CAMERA_FAR_SIDE_DISTANCE_MULTIPLIER;
                     hammerTrackCam.PointAt(weaponObject);
                     break;
                 default:

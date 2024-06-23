@@ -66,6 +66,8 @@ namespace Thor
         protected NAudio.Wave.WaveOut weaponCloseToPlayerSoundPlayer;
         protected string soundFileCatchWeapon;
         protected string soundFileWeaponCloseToPed;
+        protected bool isGrabbing = false;
+        protected Entity currentlyGrabbedEntity = null;
 
         protected WorthyAbility()
         {
@@ -148,7 +150,7 @@ namespace Thor
                 !HasWeapon)
             {
                 weaponJustFinishedAttackingTargetsTimestamp = Game.GameTime;
-                Weapon.FindWaysToMoveToCoord(attachedPed.Position + new Vector3(0.0f, 0.0f, AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS), true);
+                Weapon.FindWaysToMoveToCoord(attachedPed.Position, true);
             }
         }
 
@@ -216,7 +218,9 @@ namespace Thor
                 }
                 HandlePostNotHoldingWeaponOnTick();
             }
+            attachedPed.Weapons.Remove(WeaponHash.Parachute);
             Weapon.OnTick();
+            HandleGrabbingPed();
         }
 
         protected virtual bool IsRenderWeaponCameraKeyPressed()
@@ -521,7 +525,7 @@ namespace Thor
                 }
             }
 
-            if (Game.IsKeyPressed(Keys.J))
+            if (Game.IsKeyPressed(Keys.X))
             {
                 velocity.Z = FLY_UPWARD_VELOCITY;
             }
@@ -533,6 +537,7 @@ namespace Thor
                     velocity += GameplayCamera.Direction * FLY_HORIZONTAL_VELOCITY_LEVEL_1;
                 }
             }
+            
             if (Game.IsControlPressed(GTA.Control.Sprint))
             {
                 velocity += Vector3.Multiply(velocity, FLY_SPRINT_VELOCITY_MULTIPLIER);
@@ -611,6 +616,60 @@ namespace Thor
             }
         }
 
+        protected void HandleGrabbingPed()
+        {
+            if (currentlyGrabbedEntity != null && (!currentlyGrabbedEntity.Exists() || currentlyGrabbedEntity.IsDead))
+            {
+                HandleReleaseGrabbedEntity();
+
+                return;
+            }
+
+            if (Game.IsControlPressed(GTA.Control.VehicleSubDescend) &&
+               Game.IsControlPressed(GTA.Control.ThrowGrenade) && isGrabbing)
+            {
+                HandleReleaseGrabbedEntity();
+                return;
+            }
+
+            if (!Game.IsControlPressed(GTA.Control.VehicleSubDescend) && Game.IsControlPressed(GTA.Control.ThrowGrenade) && !isGrabbing)
+            {
+                var nearbyEnts = World.GetNearbyEntities(Game.Player.Character.Position, 1.5f);
+
+                foreach (var ent in nearbyEnts)
+                {
+                    if ((ent.EntityType == EntityType.Ped && (Ped)ent != Game.Player.Character)
+                        //|| (ent.EntityType == EntityType.Vehicle && !((Vehicle)ent).IsConsideredDestroyed)
+                        )
+                    {
+                        ent.AttachTo(Game.Player.Character.Bones[Bone.IKLeftHand]);
+
+                        if (ent.EntityType == EntityType.Ped)
+                        {
+                            ((Ped)ent).Task.ClearAll();
+                        }
+
+                        currentlyGrabbedEntity = ent;
+                        isGrabbing = true;
+
+                        return;
+                    }
+                }
+
+            }
+        }
+
+        private void HandleReleaseGrabbedEntity()
+        {
+            if (currentlyGrabbedEntity != null)
+            {
+                currentlyGrabbedEntity.Detach();
+                currentlyGrabbedEntity = null;
+            }
+
+            isGrabbing = false;
+        }
+
         protected void HandleThrowingWeapon()
         {
             if (Game.IsControlPressed(GTA.Control.Aim))
@@ -630,7 +689,7 @@ namespace Thor
             }
             else if (Game.IsKeyPressed(Keys.Y))
             {
-                ThrowWeaponOut(false);
+                DropWeapon();
             }
         }
 
@@ -651,7 +710,7 @@ namespace Thor
                     targets.Add(result.HitEntity);
                 }
             }
-            else if (Game.IsControlJustReleased( GTA.Control.Aim) && isCollectingTargets)
+            else if (Game.IsControlJustReleased(GTA.Control.Aim) && isCollectingTargets)
             {
                 isCollectingTargets = false;
                 targets.Clear();
@@ -696,8 +755,18 @@ namespace Thor
             }
         }
 
+        private void DropWeapon()
+        {
+            if (!IsHoldingWeapon)
+            {
+                return;
+            }
 
-        public virtual void SummonWeapon(bool shootUpwardFirst = false)
+            ThrowWeaponOut(false);
+        }
+
+
+        public virtual void SummonWeapon()
         {
             isWeaponAttackingTargets = false;
             targets.Clear();
@@ -706,14 +775,18 @@ namespace Thor
             
             bool isWeaponCloseToPed = false;
             float distanceBetweenWeaponToPedHand = Math.Abs(fromWeaponToPedHand.Length());
-            var weaponToPedHandRaycastResult = World.RaycastCapsule(
+            var weaponToPedHandRaycastTest = ShapeTest.StartTestCapsule(
                 Weapon.Position, 
                 new Vector3(Weapon.Position.X, Weapon.Position.Y, Weapon.Position.Z + MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND), 
                 MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND,
                 IntersectFlags.Peds
             );
+            ShapeTestResult weaponToPedHandRaycastResult;
+            weaponToPedHandRaycastTest.GetResult(out weaponToPedHandRaycastResult);
+            Entity weaponToPedHandRaycastHitEntity = null;
+            weaponToPedHandRaycastResult.TryGetHitEntity(out weaponToPedHandRaycastHitEntity);
 
-            if (weaponToPedHandRaycastResult.HitEntity != null && weaponToPedHandRaycastResult.HitEntity.Equals(attachedPed))
+            if (weaponToPedHandRaycastHitEntity != null && weaponToPedHandRaycastHitEntity.Equals(attachedPed))
             {
                 AnimationActions randomCatchingAction = ADModUtils.Utilities.Random.PickOne(
                     new List<AnimationActions>
@@ -728,7 +801,7 @@ namespace Thor
                     attachedPed,
                     catchDictName,
                     catchAnimName,
-                    AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation,
+                    AnimationFlags.UpperBodyOnly | AnimationFlags.Secondary,
                     CATCHING_WEAPON_ANIMATION_DURATION
                 );
                 NativeHelper.PlayThunderFx(attachedPed, WEAPON_HOLDING_HAND_ID, 0.8f);
@@ -770,14 +843,8 @@ namespace Thor
                 attachedPed,
                 dictName,
                 animName,
-                AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation
+                AnimationFlags.UpperBodyOnly | AnimationFlags.Secondary
             );
-
-            if (shootUpwardFirst)
-            {
-                Weapon.WeaponObject.Velocity += new Vector3(0.0f, 0.0f, 1000.0f);
-                Script.Wait(500);
-            }
 
             Weapon.SetSummonStatus(true, attachedPed, isWeaponCloseToPed);
             Weapon.FindWaysToMoveToCoord(rightHandBonePos, true);

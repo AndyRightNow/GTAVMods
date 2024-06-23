@@ -57,30 +57,71 @@ namespace ADModUtils
 
         public static class Math
         {
+            public static float DegreePerRadian = 57.2958f;
+
             public static Vector3 DirectionToRotation(Vector3 dir, float roll = 0.0f)
             {
                 dir = dir.Normalized;
                 Vector3 rot = new Vector3();
-                rot.Z = - RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(dir.X, dir.Y)));
+                rot.Z = -RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(dir.X, dir.Y)));
                 Vector3 vec = new Vector3(dir.Z, new Vector3(dir.X, dir.Y, 0.0f).Length(), 0.0f).Normalized;
-                rot.X = RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(vec.X, vec.Y)));
+                var x = RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(vec.X, vec.Y)));
+                rot.X = System.Math.Abs(x);
+
                 rot.Y = roll;
                 return rot;
+            }
+            public static Quaternion DirectionToQuaternion(Vector3 forward, Vector3 dir)
+            {
+                var normalizedDir = dir.Normalized;
+                var normalizedForward = forward.Normalized;
+
+                return Quaternion.Normalize(
+                    new Quaternion(
+                        Vector3.Cross(normalizedForward, normalizedDir).Normalized,
+                        DegreesToRadians(Vector3.Angle(normalizedForward, normalizedDir))
+                    )
+                );
+            }
+
+            public static Vector3 QuaternionToEulerAngles(Quaternion q)
+            {
+                Vector3 angles = new Vector3();
+
+                // roll (x-axis rotation)
+
+                double sinr_cosp = 2 * (q.W * q.X + q.Y * q.Z);
+                double cosr_cosp = 1 - 2 * (q.X * q.X + q.Y * q.Y);
+                angles.X = Convert.ToSingle(System.Math.Atan2(sinr_cosp, cosr_cosp));
+
+                // pitch (y-axis rotation)
+                double sinp = 2 * (q.W * q.Y - q.Z * q.X);
+                if (System.Math.Abs(sinp) >= 1)
+                    angles.Y = Convert.ToSingle((System.Math.PI / 2) * (sinp < 0 ? -1 : 1)); // use 90 degrees if out of range
+                else
+                    angles.Y = Convert.ToSingle(System.Math.Asin(sinp));
+
+                // yaw (z-axis rotation)
+                double siny_cosp = 2 * (q.W * q.Z + q.X * q.Y);
+                double cosy_cosp = 1 - 2 * (q.Y * q.Y + q.Z * q.Z);
+                angles.Z = Convert.ToSingle(System.Math.Atan2(siny_cosp, cosy_cosp));
+
+                return angles * DegreePerRadian;
             }
 
             public static float RadiansToDegrees(float radians)
             {
-                return radians * 57.2958f;
+                return radians * DegreePerRadian;
+            }
+
+            public static float DegreesToRadians(float degrees)
+            {
+                return degrees / DegreePerRadian;
             }
 
             public static float Angle(Vector2 v1, Vector2 v2)
             {
                 return Convert.ToSingle(System.Math.Atan2(v1.X * v2.Y - v1.Y * v2.X, Vector2.Dot(v1, v2)) * 180 / System.Math.PI);
-            }
-
-            public static float HorizontalLength(Vector3 v)
-            {
-                return Convert.ToSingle(System.Math.Sqrt(v.X * v.X + v.Y * v.Y));
             }
 
             public static bool CloseTo(float source, float target, float delta)
@@ -102,10 +143,10 @@ namespace ADModUtils
                 if (target.Z == 0.0f)
                 {
                     z = Random.NextFloat();
-                    
+
                     if (target.Y != 0.0f)
                     {
-                        y = -(target.X * x / target.Y);   
+                        y = -(target.X * x / target.Y);
                     }
                 }
                 else
@@ -140,7 +181,7 @@ namespace ADModUtils
             {
                 if (Game.GameTime - previouslyFiredGameTime >= interval)
                 {
-                    this.handler();
+                    handler();
                     previouslyFiredGameTime = Game.GameTime;
                 }
             }
@@ -162,7 +203,8 @@ namespace ADModUtils
                 var audio = new NAudio.Wave.AudioFileReader(filename);
                 player.Init(audio);
                 player.Play();
-                player.PlaybackStopped += (object sender, NAudio.Wave.StoppedEventArgs a) => {
+                player.PlaybackStopped += (object sender, NAudio.Wave.StoppedEventArgs a) =>
+                {
                     player.Dispose();
                     player = null;
                     audio.Dispose();

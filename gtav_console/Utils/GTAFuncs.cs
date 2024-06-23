@@ -188,7 +188,7 @@ namespace DeveloperConsole {
         }
 
         public static void ShowMouseThisFrame() {
-            Function.Call(Hash._SET_MOUSE_CURSOR_ACTIVE_THIS_FRAME);
+            Function.Call(Hash.SET_MOUSE_CURSOR_THIS_FRAME);
         }
 
         public static int GetNumNetworkPlayers() {
@@ -300,9 +300,9 @@ namespace DeveloperConsole {
         public static float GetTextWidth(string s, Font f, float scale) {
             Function.Call(Hash.SET_TEXT_FONT, (int) f);
             Function.Call(Hash.SET_TEXT_SCALE, scale, scale);
-            Function.Call(Hash._BEGIN_TEXT_COMMAND_GET_WIDTH, "STRING"); //SET_TEXT_ENTRY_FOR_WIDTH
+            Function.Call(Hash.BEGIN_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, "STRING"); //SET_TEXT_ENTRY_FOR_WIDTH
             Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, s);
-            return Function.Call<float>(Hash._END_TEXT_COMMAND_GET_WIDTH, 1); //_GET_TEXT_SCREEN_WIDTH
+            return Function.Call<float>(Hash.END_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, 1); //_GET_TEXT_SCREEN_WIDTH
         }
 
 
@@ -379,7 +379,6 @@ namespace DeveloperConsole {
                 i--;
                 Script.Wait(0);
             }
-            int localId = -1;
             return RequestEntityControl(p.Character, time);
         }
 

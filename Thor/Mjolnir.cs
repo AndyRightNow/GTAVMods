@@ -16,6 +16,7 @@ namespace Thor
         private Bone hammerRopeAttachedPedBoneId;
         private Entity hammerRopeAttachedIntermediateEnt;
         private NAudio.Wave.WaveOut hammerWhirlingSoundPlayer;
+        private Vector3 AttachedIntermediateEntOffset = Vector3.UnitX * 0.05f;
         private bool isWhirling;
 
         public Mjolnir() : base(WeaponHash.Hammer)
@@ -31,6 +32,8 @@ namespace Thor
                     AnimationActions.ThrowHammer5
                 }.ToArray();
         }
+
+        public static Vector3 LocalForwardVector = Vector3.UnitY;
 
         public override void OnTick()
         {
@@ -49,40 +52,52 @@ namespace Thor
             }
             if (hammerRopeAttachedPed != null)
             {
-                hammerRope.Length = 0;
-                hammerRope.Length = HAMMER_ROPE_LENGTH;
+                //hammerRope.Length = 0;
+                //hammerRope.Length = HAMMER_ROPE_LENGTH;
                 return;
             }
             HandleWeaponAvailability();
-            HandleWeaponSummonRotation();
+            HandleWeaponInAirRotation();
             isWhirling = false;
+
         }
 
-        private void HandleWeaponSummonRotation()
+        public void PointAt(Vector3 direction, bool shouldLerp = true)
+        {
+            var prevQua = weaponObject.Quaternion;
+
+            weaponObject.Quaternion = Quaternion.Zero;
+
+            Quaternion targetQua = Quaternion.Normalize(
+                Utilities.Math.DirectionToQuaternion(weaponObject.ForwardVector, direction) *
+                Utilities.Math.DirectionToQuaternion(Vector3.UnitZ, LocalForwardVector)
+            );
+
+            if (shouldLerp)
+            {
+                weaponObject.Quaternion = Quaternion.Lerp(prevQua, targetQua, HAMMER_ROTATION_UPWARD_LERP_RATIO);
+            }
+            else
+            {
+                weaponObject.Quaternion = targetQua;
+            }
+        }
+
+        private void HandleWeaponInAirRotation()
         {
             if (IsMoving && weaponObject.IsInAir)
             {
                 if (isBeingSummoned && isCloseToSummoningPed)
                 {
-                    weaponObject.Rotation = Vector3.Lerp(
-                        weaponObject.Rotation,
-                        ADModUtils.Utilities.Math.DirectionToRotation(summoningPedForwardDirection),
-                        HAMMER_ROTATION_UPWARD_LERP_RATIO
-                    );
-
+                    PointAt(Vector3.WorldUp);
                 }
                 else
                 {
-                    //@todo change to averaged velocity vector across multiple frames
-                    weaponObject.Rotation = Vector3.Lerp(
-                        weaponObject.Rotation,
-                        ADModUtils.Utilities.Math.DirectionToRotation(weaponObject.Velocity.Normalized) + new Vector3(-90.0f, 0.0f, 0.0f),
-                        0.5f
-                    );
+                    PointAt(weaponObject.Velocity.Normalized);
                 }
             }
         }
-        
+
         public override Vector3 Velocity
         {
             set
@@ -111,7 +126,7 @@ namespace Thor
 
         protected Vector3 GetHammerRopeAttachPosition(Entity weaponObject)
         {
-            return weaponObject.Position + new Vector3(0.0f, 0.0f, -0.1f);
+            return weaponObject.Position + new Vector3(0.0f, 0.0f, -0.15f);
         }
 
         public void Whirl(ADModUtils.Plane hammerWhirlingPlane, bool physically = true, Entity weaponObj = null, bool lerp = false)
@@ -135,8 +150,6 @@ namespace Thor
             {
                 var velocity = (hammerPosProjOnPlane - weaponObj.Position) * 1.0f;
 
-                RotateToDirection(weaponObj, (weaponObj.Position - planeCenter).Normalized);
-
                 velocity += ((perpHammerPosProjOnPlaneWorldPoint - planeCenter) * 1500.0f);
                 velocity += ((weaponObj.Position - planeCenter) * 500.0f);
                 if (lerp)
@@ -148,6 +161,9 @@ namespace Thor
                 {
                     weaponObj.Velocity = velocity;
                 }
+
+                RotateToDirection(weaponObj, (weaponObj.Position - planeCenter).Normalized);
+
             }
             else
             {
@@ -159,6 +175,13 @@ namespace Thor
             }
         }
 
+        public Vector3 ConvertToHammerHeadDirection(Vector3 dir)
+        {
+            var right = Vector3.Cross(dir, Vector3.WorldUp);
+
+            return Vector3.Cross(dir, right).Normalized;
+        }
+
         public void AttachHammerRopeTo(Ped ped, Bone boneId)
         {
             if (weaponObject == null)
@@ -167,29 +190,36 @@ namespace Thor
             }
 
             DetachRope();
+            var planeCenter = ped.Bones[boneId].Position;
 
             if (hammerRope == null)
             {
-                hammerRope = World.AddRope(RopeType.ThickRope, Vector3.Zero, Vector3.Zero, HAMMER_ROPE_LENGTH, 0.0f, false);
-                hammerRope.ActivatePhysics();
+                hammerRope = World.AddRope(RopeType.ThickRope, planeCenter, Vector3.Zero, HAMMER_ROPE_LENGTH, 0.0f, false);
             }
             if (hammerRopeAttachedIntermediateEnt == null)
             {
-                var planeCenter = ped.Bones[boneId].Position;
                 hammerRopeAttachedIntermediateEnt = ADModUtils.NativeHelper.CreateWeaponObject(WeaponHash.Grenade, 1, planeCenter);
+                hammerRopeAttachedIntermediateEnt.IsCollisionEnabled = true;
+                hammerRopeAttachedIntermediateEnt.SetNoCollision(ped, true);
                 hammerRopeAttachedIntermediateEnt.IsVisible = false;
             }
 
-            weaponObject.Rotation = ADModUtils.Utilities.Math.DirectionToRotation(Vector3.WorldNorth);
+
             var hammerAttachPos = GetHammerRopeAttachPosition(weaponObject);
 
-            hammerRopeAttachedIntermediateEnt.AttachTo(ped, ped.Bones[boneId].Position);
+            hammerRopeAttachedIntermediateEnt.AttachTo(ped.Bones[boneId]);
+
+            // Reset weapon rotation so that the attach position is normalized
+            weaponObject.Rotation = Vector3.Zero;
+
             hammerRope.Connect(hammerRopeAttachedIntermediateEnt, hammerRopeAttachedIntermediateEnt.Position, weaponObject, hammerAttachPos, HAMMER_ROPE_LENGTH);
+            hammerRope.ActivatePhysics();
+
             weaponObject.SetNoCollision(ped, true);
             hammerRopeAttachedPed = ped;
             hammerRopeAttachedPedBoneId = boneId;
 
-            ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponObject, 1000000.0f);
+            //ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponObject, 1000000.0f);
         }
 
         public void DetachRope()
@@ -199,6 +229,10 @@ namespace Thor
                 hammerRope.Detach(hammerRopeAttachedIntermediateEnt);
                 hammerRopeAttachedPed = null;
                 hammerRopeAttachedIntermediateEnt.Detach();
+                hammerRopeAttachedIntermediateEnt.Delete();
+                hammerRopeAttachedIntermediateEnt = null;
+                hammerRope.Delete();
+                hammerRope = null;
             }
             ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponObject, WEAPON_MASS);
         }

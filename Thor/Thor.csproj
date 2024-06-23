@@ -22,6 +22,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -31,6 +32,10 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup>
+    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="NAudio, Version=1.8.4.0, Culture=neutral, processorArchitecture=MSIL">
@@ -55,6 +60,9 @@
     <Compile Include="GodlyWeapon.cs" />
     <Compile Include="Mjolnir.cs" />
     <Compile Include="MjolnirWorthyAbility.cs" />
+    <Compile Include="PathFinder.cs" />
+    <Compile Include="_LEGACY_PathFinder.cs" />
+    <Compile Include="TestObjects.cs" />
     <Compile Include="WeaponCamera.cs" />
     <Compile Include="NativeHelper.cs" />
     <Compile Include="Thor.cs" />
@@ -75,6 +83,8 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetPath)" "C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V\scripts" /y</PostBuildEvent>
+    <PostBuildEvent>copy "$(TargetPath)" "C:\SteamLibrary\steamapps\common\Grand Theft Auto V\scripts" /y
+REM copy "$(ProjectDir)\..\lib\*" "C:\SteamLibrary\steamapps\common\Grand Theft Auto V\scripts" /y
+REM copy "$(ProjectDir)\resources\*.wav" "C:\SteamLibrary\steamapps\common\Grand Theft Auto V\scripts" /y</PostBuildEvent>
   </PropertyGroup>
 </Project>
