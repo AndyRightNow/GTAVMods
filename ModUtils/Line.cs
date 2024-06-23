@@ -1,5 +1,5 @@
-﻿using GTA.Math;
-using System.Drawing;
+﻿using System.Drawing;
+using CitizenFX.Core;
 
 namespace ADModUtils
 {

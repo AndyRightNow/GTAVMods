@@ -1,7 +1,6 @@
-﻿using GTA;
-using GTA.Math;
-using GTA.Native;
-using System.Drawing;
+﻿using System.Drawing;
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
 
 namespace ADModUtils
 {

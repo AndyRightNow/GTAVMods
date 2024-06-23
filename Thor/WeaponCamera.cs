@@ -1,5 +1,6 @@
-﻿using GTA;
-using GTA.Math;
+﻿
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
 using System.Collections.Generic;
 
 namespace Thor
@@ -57,7 +58,8 @@ namespace Thor
             {
                 hammerTrackCam = World.CreateCamera(weaponObject.Position, Vector3.Zero, CAMERA_FOV);
             }
-            Vector3 weaponDirection = weaponObject.Velocity.Normalized;
+            Vector3 weaponDirection = weaponObject.Velocity;
+            weaponDirection.Normalize();
             int randomNegationFactor = ADModUtils.Utilities.Random.RandomNegation();
             bool isJustReset = false;
 

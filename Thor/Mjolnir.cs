@@ -1,7 +1,6 @@
 ﻿using ADModUtils;
-using GTA;
-using GTA.Math;
-using GTA.Native;
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
 using System;
 using System.Collections.Generic;
 
@@ -89,11 +88,13 @@ namespace Thor
             {
                 if (isBeingSummoned && isCloseToSummoningPed)
                 {
-                    PointAt(Vector3.WorldUp);
+                    PointAt(Vector3.Up);
                 }
                 else
                 {
-                    PointAt(weaponObject.Velocity.Normalized);
+                    var normalizedVel = weaponObject.Velocity;
+                    normalizedVel.Normalize();
+                    PointAt(normalizedVel);
                 }
             }
         }
@@ -138,10 +139,9 @@ namespace Thor
             }
 
             var planeCenter = hammerWhirlingPlane.Center;
-            var hammerPosProjOnPlane =
-                planeCenter +
-                Vector3.ProjectOnPlane(weaponObj.Position - planeCenter, hammerWhirlingPlane.Normal).Normalized *
-                planeCenter.DistanceTo(weaponObj.Position);
+            var projected = Utilities.Math.ProjectOnPlane(weaponObj.Position - planeCenter, hammerWhirlingPlane.Normal);
+            projected.Normalize();
+            var hammerPosProjOnPlane = planeCenter + projected * (weaponObj.Position - planeCenter).Length();
             var hammerPosProjOnPlanePlanePoint = hammerWhirlingPlane.GetPlaneCoord(hammerPosProjOnPlane);
             var perpHammerPosProjOnPlanePlanePoint = new Vector2(-hammerPosProjOnPlanePlanePoint.Y, hammerPosProjOnPlanePlanePoint.X);
             var perpHammerPosProjOnPlaneWorldPoint = hammerWhirlingPlane.GetWorldCoord(perpHammerPosProjOnPlanePlanePoint);
@@ -162,24 +162,38 @@ namespace Thor
                     weaponObj.Velocity = velocity;
                 }
 
-                RotateToDirection(weaponObj, (weaponObj.Position - planeCenter).Normalized);
+                var weaponDir = weaponObj.Position - planeCenter;
+                weaponDir.Normalize();
+
+                RotateToDirection(weaponObj, weaponDir);
 
             }
             else
             {
-                var nextHammerPos = planeCenter + (hammerPosProjOnPlane - planeCenter).Normalized;
-                var perpHammerPosProjOnPlaneWorldVec = (perpHammerPosProjOnPlaneWorldPoint - hammerPosProjOnPlane).Normalized;
-                nextHammerPos = planeCenter + (nextHammerPos + perpHammerPosProjOnPlaneWorldVec - planeCenter).Normalized * 0.3f;
+                var toProjectedPosDir = hammerPosProjOnPlane - planeCenter;
+                toProjectedPosDir.Normalize();
+                var nextHammerPos = planeCenter + toProjectedPosDir;
+                var toPerpHammerProjPosDir = perpHammerPosProjOnPlaneWorldPoint - hammerPosProjOnPlane;
+                toPerpHammerProjPosDir.Normalize();
+                var perpHammerPosProjOnPlaneWorldVec = toPerpHammerProjPosDir;
+                var nextHammerDir = nextHammerPos + perpHammerPosProjOnPlaneWorldVec - planeCenter;
+                nextHammerPos = planeCenter + nextHammerDir * 0.3f;
                 weaponObj.Position = nextHammerPos;
-                RotateToDirection(weaponObj, (nextHammerPos - planeCenter).Normalized);
+                var toNextHammerPosDir = nextHammerPos - planeCenter;
+                toProjectedPosDir.Normalize();
+                RotateToDirection(weaponObj, toNextHammerPosDir);
             }
         }
 
         public Vector3 ConvertToHammerHeadDirection(Vector3 dir)
         {
-            var right = Vector3.Cross(dir, Vector3.WorldUp);
+            var right = Vector3.Cross(dir, Vector3.Up);
 
-            return Vector3.Cross(dir, right).Normalized;
+            var headDir = Vector3.Cross(dir, right);
+
+            headDir.Normalize();
+
+            return headDir;
         }
 
         public void AttachHammerRopeTo(Ped ped, Bone boneId)
@@ -212,7 +226,7 @@ namespace Thor
             // Reset weapon rotation so that the attach position is normalized
             weaponObject.Rotation = Vector3.Zero;
 
-            hammerRope.Connect(hammerRopeAttachedIntermediateEnt, hammerRopeAttachedIntermediateEnt.Position, weaponObject, hammerAttachPos, HAMMER_ROPE_LENGTH);
+            ADModUtils.NativeHelper.AttachEntitiesToRope(hammerRope.Handle, hammerRopeAttachedIntermediateEnt, hammerRopeAttachedIntermediateEnt.Position, weaponObject, hammerAttachPos, HAMMER_ROPE_LENGTH);
             hammerRope.ActivatePhysics();
 
             weaponObject.SetNoCollision(ped, true);
@@ -226,7 +240,7 @@ namespace Thor
         {
             if (hammerRope != null && hammerRopeAttachedPed != null && hammerRopeAttachedIntermediateEnt != null)
             {
-                hammerRope.Detach(hammerRopeAttachedIntermediateEnt);
+                hammerRope.DetachEntity(hammerRopeAttachedIntermediateEnt);
                 hammerRopeAttachedPed = null;
                 hammerRopeAttachedIntermediateEnt.Detach();
                 hammerRopeAttachedIntermediateEnt.Delete();

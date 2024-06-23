@@ -1,4 +1,4 @@
-﻿using GTA.Math;
+﻿using CitizenFX.Core;
 
 namespace ADModUtils
 {
@@ -17,18 +17,21 @@ namespace ADModUtils
             Normal = normal;
             Center = point;
             XAxis = Utilities.Math.RandomVectorPerpendicularTo(normal);
-            YAxis = Vector3.Cross(normal, XAxis).Normalized;
+            var yAxis = Vector3.Cross(normal, XAxis);
+            yAxis.Normalize();
+            YAxis = yAxis;
         }
         
         public Vector2 GetPlaneCoord(Vector3 worldPoint)
         {
-            var cenetrToWorldPoint = worldPoint - Center;
+            var centerToWorldPoint = worldPoint - Center;
 
-            var worldPointXVec = Vector3.Project(cenetrToWorldPoint, XAxis);
-            var worldPointYVec = Vector3.Project(cenetrToWorldPoint, YAxis);
-
-            bool isXPositive = Vector3.Dot(worldPointXVec.Normalized, XAxis) >= 0.0f;
-            bool isYPositive = Vector3.Dot(worldPointYVec.Normalized, YAxis) >= 0.0f;
+            var worldPointXVec = Utilities.Math.Project(centerToWorldPoint, XAxis);
+            var worldPointYVec = Utilities.Math.Project(centerToWorldPoint, YAxis);
+            worldPointXVec.Normalize();
+            worldPointYVec.Normalize();
+            bool isXPositive = Vector3.Dot(worldPointXVec, XAxis) >= 0.0f;
+            bool isYPositive = Vector3.Dot(worldPointYVec, YAxis) >= 0.0f;
 
             float x = worldPointXVec.Length() * (isXPositive ? 1 : -1);
             float y = worldPointYVec.Length() * (isYPositive ? 1 : -1);

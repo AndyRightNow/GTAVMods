@@ -1,4 +1,6 @@
-﻿using GTA.Math;
+﻿
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
 
 namespace Thor
 {
@@ -17,9 +19,10 @@ namespace Thor
 
         public void Render()
         {
-            var len = start.DistanceTo(end);
+            var len = (end - start).Length();
             var scale = len * 0.4f;
             var middle = (start + end) / 2;
+
 
             var startToEnd = ADModUtils.Utilities.Math.DirectionToRotation(end - start);
             var endToStart = ADModUtils.Utilities.Math.DirectionToRotation(start - end);

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using GTA;
-using GTA.Math;
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
 
 namespace ADModUtils
 {
@@ -59,27 +59,42 @@ namespace ADModUtils
         {
             public static float DegreePerRadian = 57.2958f;
 
+            public static Vector3 Project(Vector3 vector, Vector3 onNormal) => onNormal * Vector3.Dot(vector, onNormal) / Vector3.Dot(onNormal, onNormal);
+            public static Vector3 ProjectOnPlane(Vector3 vector, Vector3 planeNormal) => (vector - Project(vector, planeNormal));
+
             public static Vector3 DirectionToRotation(Vector3 dir, float roll = 0.0f)
             {
-                dir = dir.Normalized;
+                dir.Normalize();
                 Vector3 rot = new Vector3();
                 rot.Z = -RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(dir.X, dir.Y)));
-                Vector3 vec = new Vector3(dir.Z, new Vector3(dir.X, dir.Y, 0.0f).Length(), 0.0f).Normalized;
+                Vector3 vec = new Vector3(dir.Z, new Vector3(dir.X, dir.Y, 0.0f).Length(), 0.0f);
+                vec.Normalize();
                 var x = RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(vec.X, vec.Y)));
                 rot.X = System.Math.Abs(x);
 
                 rot.Y = roll;
                 return rot;
             }
+            public static float Angle(Vector3 from, Vector3 to)
+            {
+                from.Normalize();
+                to.Normalize();
+
+                double dot = Vector3.Dot(from, to);
+                return (float)(System.Math.Acos((dot)) * (180.0 / System.Math.PI));
+            }
+
             public static Quaternion DirectionToQuaternion(Vector3 forward, Vector3 dir)
             {
-                var normalizedDir = dir.Normalized;
-                var normalizedForward = forward.Normalized;
+                dir.Normalize();
+                forward.Normalize();
+                var cross = Vector3.Cross(forward, dir);
+                cross.Normalize();
 
                 return Quaternion.Normalize(
                     new Quaternion(
-                        Vector3.Cross(normalizedForward, normalizedDir).Normalized,
-                        DegreesToRadians(Vector3.Angle(normalizedForward, normalizedDir))
+                        cross,
+                        DegreesToRadians(Angle(forward, dir))
                     )
                 );
             }
@@ -156,7 +171,12 @@ namespace ADModUtils
 
                 var result = new Vector3(x, y, z);
 
-                return normalized ? result.Normalized : result;
+                if (normalized)
+                {
+                    result.Normalize();
+                }
+
+                return result;
             }
         }
 
@@ -195,6 +215,39 @@ namespace ADModUtils
             rhs = temp;
         }
 
+        public static Entity[] GetNearbyEntities(Vector3 position, float radius)
+        {
+            Ped[] peds = API.GetGamePool("CPed");
+            Entity[] objs = API.GetGamePool("CObject");
+            Vehicle[] vehs = API.GetGamePool("CVehicle");
+
+            var entities = new List<Entity>();
+
+            foreach (var ped in peds)
+            {
+                if (Vector3.Distance(ped.Position, position) <= radius)
+                {
+                    entities.Add(ped); 
+                }
+            }
+            foreach (var obj in objs)
+            {
+                if (Vector3.Distance(obj.Position, position) <= radius)
+                {
+                    entities.Add(obj);
+                }
+            }
+            foreach (var veh in vehs)
+            {
+                if (Vector3.Distance(veh.Position, position) <= radius)
+                {
+                    entities.Add(veh);
+                }
+            }
+
+            return entities.ToArray();
+        }
+
         public static class Audio
         {
             public static void Play(string filename)
@@ -211,6 +264,15 @@ namespace ADModUtils
                     audio = null;
                 };
             }
+        }
+        public enum EulerRotationOrder
+        {
+            XYZ = 0,
+            XZY = 1,
+            YXZ = 2,
+            YZX = 3,
+            ZXY = 4,
+            ZYX = 5,
         }
     }
 }

@@ -1,8 +1,8 @@
-﻿using GTA;
-using GTA.Math;
-using GTA.Native;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
+using System.Runtime.InteropServices;
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
 
 namespace ADModUtils
 {
@@ -63,6 +63,11 @@ namespace ADModUtils
             return AnimationNames[(int)action];
         }
 
+        public static void AttachEntitiesToRope(int ropeHandle, Entity entity1, Vector3 position1, Entity entity2, Vector3 position2, float length)
+        {
+            Function.Call(Hash.ATTACH_ENTITIES_TO_ROPE, ropeHandle, entity1.Handle, entity2.Handle, position1.X, position1.Y, position1.Z, position2.X, position2.Y, position2.Z, length, 0, 0, 0, 0);
+        }
+
         public string GetParticleSetName(uint fx)
         {
             return ParticleEffectSetNames[(int)fx];
@@ -112,7 +117,7 @@ namespace ADModUtils
                 }
             }
 
-            return Bone.IKRoot;
+            return Bone.IK_Root;
         }
 
         public static void PlayPlayerAnimation(Ped ped, string dictName, string animName, AnimationFlags flag, int duration = -1, bool checkIsPlaying = true)
@@ -253,17 +258,87 @@ namespace ADModUtils
                 line.Draw();
             }
         }
+        public enum VehicleMissionType
+        {
+            None = 0,
+            Cruise = 1,
+            Ram = 2,
+            Block = 3,
+            GoTo = 4,
+            Stop = 5,
+            Attack = 6,
+            Follow = 7,
+            Flee = 8,
+            Circle = 9,
+            Escort = 12,
+            GoToRacing = 14,
+            FollowRecording = 15,
+            PoliceBehaviour = 16,
+            Land = 19,
+            LandAndWait = 20,
+            Crash = 21,
+            PullOver = 22,
+            HeliProtect = 23
+        }
+
+        /// <summary>Gives the helicopter a mission.</summary>
+        /// <param name="heli">The helicopter.</param>
+        /// <param name="target">The target <see cref="Vehicle"/>.</param>
+        /// <param name="missionType">The vehicle mission type.</param>
+        /// <param name="cruiseSpeed">The cruise speed for the task.</param>
+        /// <param name="targetReachedDist">distance (in meters) at which heli thinks it's arrived. Also used as the hover distance for <see cref="VehicleMissionType.Attack"/> and <see cref="VehicleMissionType.Circle"/></param>
+        /// <param name="flightHeight">The Z coordinate the heli tries to maintain (i.e. 30 == 30 meters above sea level).</param>
+        /// <param name="minHeightAboveTerrain">The height in meters that the heli will try to stay above terrain (ie 20 == always tries to stay at least 20 meters above ground).</param>
+        /// <param name="heliOrientation">The orientation the heli tries to be in (<c>0f</c> to <c>360f</c>). Use <c>-1f</c> if not bothered. <c>-1f</c> Should be used in 99% of the times.</param>
+        /// <param name="slowDownDistance">In general, get more control with big number and more dynamic with smaller. Setting to <c>-1</c> means use default tuning(<c>100</c>).</param>
+        /// <param name="missionFlags">The heli mission flags for the task.</param>
+        public void StartHeliMission(Vehicle heli, Vehicle target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
+        {
+            Function.Call(Hash.TASK_HELI_MISSION, _ped.Handle, heli.Handle, target.Handle, 0, 0f, 0f, 0f, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
+        }
+
+        /// <summary>Gives the helicopter a mission.</summary>
+        /// <param name="heli">The helicopter.</param>
+        /// <param name="target">The target <see cref="Ped"/>.</param>
+        /// <param name="missionType">The vehicle mission type.</param>
+        /// <param name="cruiseSpeed">The cruise speed for the task.</param>
+        /// <param name="targetReachedDist">distance (in meters) at which heli thinks it's arrived. Also used as the hover distance for <see cref="VehicleMissionType.Attack"/> and <see cref="VehicleMissionType.Circle"/></param>
+        /// <param name="flightHeight">The Z coordinate the heli tries to maintain (i.e. 30 == 30 meters above sea level).</param>
+        /// <param name="minHeightAboveTerrain">The height in meters that the heli will try to stay above terrain (ie 20 == always tries to stay at least 20 meters above ground).</param>
+        /// <param name="heliOrientation">The orientation the heli tries to be in (<c>0f</c> to <c>360f</c>). Use <c>-1f</c> if not bothered. <c>-1f</c> Should be used in 99% of the times.</param>
+        /// <param name="slowDownDistance">In general, get more control with big number and more dynamic with smaller. Setting to <c>-1</c> means use default tuning(<c>100</c>).</param>
+        /// <param name="missionFlags">The heli mission flags for the task.</param>
+        public void StartHeliMission(Vehicle heli, Ped target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
+        {
+            Function.Call(Hash.TASK_HELI_MISSION, _ped.Handle, heli.Handle, 0, target.Handle, 0f, 0f, 0f, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
+        }
+
+        /// <summary>Gives the helicopter a mission.</summary>
+        /// <param name="heli">The helicopter.</param>
+        /// <param name="target">The target coordinate.</param>
+        /// <param name="missionType">The vehicle mission type.</param>
+        /// <param name="cruiseSpeed">The cruise speed for the task.</param>
+        /// <param name="targetReachedDist">distance (in meters) at which heli thinks it's arrived. Also used as the hover distance for <see cref="VehicleMissionType.Attack"/> and <see cref="VehicleMissionType.Circle"/></param>
+        /// <param name="flightHeight">The Z coordinate the heli tries to maintain (i.e. 30 == 30 meters above sea level).</param>
+        /// <param name="minHeightAboveTerrain">The height in meters that the heli will try to stay above terrain (ie 20 == always tries to stay at least 20 meters above ground).</param>
+        /// <param name="heliOrientation">The orientation the heli tries to be in (<c>0f</c> to <c>360f</c>). Use <c>-1f</c> if not bothered. <c>-1f</c> Should be used in 99% of the times.</param>
+        /// <param name="slowDownDistance">In general, get more control with big number and more dynamic with smaller. Setting to <c>-1</c> means use default tuning(<c>100</c>).</param>
+        /// <param name="missionFlags">The heli mission flags for the task.</param>
+        public void StartHeliMission(Vehicle heli, Vector3 target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
+        {
+            Function.Call(Hash.TASK_HELI_MISSION, _ped.Handle, heli.Handle, 0, 0, target.X, target.Y, target.Z, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
+        }
 
         public static void DrawBox(Vector3 a, Vector3 b, Color col)
         {
             Function.Call(Hash.DRAW_BOX, a.X, a.Y, a.Z, b.X, b.Y, b.Z, col.R, col.G, col.B, col.A);
         }
 
-        public static IntersectFlags IntersectAllObjects
+        public static IntersectOptions IntersectAllObjects
         {
             get
             {
-                return IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.MissionEntities | IntersectFlags.Map;
+                return IntersectOptions.Objects | IntersectOptions.Peds1 | IntersectOptions.MissionEntities | IntersectOptions.Map;
             }
         }
 
@@ -276,5 +351,26 @@ namespace ADModUtils
         public string[] ParticleEffectNames { get; private set; }
         public float MeleeHitForce { get; private set; }
         public int MeleeHitPedDamage { get; private set; }
+
+        [StructLayout(LayoutKind.Explicit, Size = 0x18)]
+        internal struct NativeVector3
+        {
+            [FieldOffset(0x00)]
+            internal float X;
+            [FieldOffset(0x08)]
+            internal float Y;
+            [FieldOffset(0x10)]
+            internal float Z;
+
+            internal NativeVector3(float x, float y, float z)
+            {
+                X = x;
+                Y = y;
+                Z = z;
+            }
+
+            public static implicit operator Vector3(NativeVector3 value) => new Vector3(value.X, value.Y, value.Z);
+            public static implicit operator NativeVector3(Vector3 value) => new NativeVector3(value.X, value.Y, value.Z);
+        }
     }
 }

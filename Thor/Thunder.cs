@@ -1,5 +1,6 @@
-﻿using GTA;
-using GTA.Math;
+﻿
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
 using System;
 using System.Collections.Generic;
 
@@ -43,7 +44,7 @@ namespace Thor
             {
                 var raycast = World.Raycast(from, to, ADModUtils.NativeHelper.IntersectAllObjects);
 
-                if (raycast.DidHit && raycast.HitEntity != null)
+                if (raycast.DitHit && raycast.HitEntity != null)
                 {
                     var ent = raycast.HitEntity;
 
@@ -72,7 +73,8 @@ namespace Thor
             }
 
             var startToEnd = end - start;
-            var direction = (end - start).Normalized;
+            var direction = startToEnd;
+            direction.Normalize();
             var len = startToEnd.Length();
             List<float> stops = new List<float>();
             var rand = ADModUtils.Utilities.Random.SystemRandomInstance;

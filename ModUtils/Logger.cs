@@ -7,13 +7,6 @@ namespace ADModUtils
 {
     public class Logger
     {
-        private static DeveloperConsole.DeveloperConsole developerConsole;
-
-        public static void Init(DeveloperConsole.DeveloperConsole developerConsole)
-        {
-            Logger.developerConsole = developerConsole;
-        }
-
         private static string FormatMessage(string logLevel, params string[] message)
         {
             var datetime = DateTime.Now;
@@ -67,12 +60,6 @@ namespace ADModUtils
 
         public static void LogConsole(string logLevel, params string[] message)
         {
-            if (developerConsole == null)
-            {
-                return;
-            }
-
-            developerConsole.PrintLine(FormatMessage(logLevel, message));
         }
     }
 }

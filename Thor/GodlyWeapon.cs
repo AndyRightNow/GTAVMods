@@ -1,12 +1,10 @@
-﻿using ADModUtils;
-using GTA;
-using GTA.Math;
-using GTA.Native;
-using GTA.UI;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using Thor.PathFinder;
+using ADModUtils;
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
+using CitizenFX.Core.UI;
 
 namespace Thor
 {
@@ -57,11 +55,15 @@ namespace Thor
                 {
                     outOfRangeIdleRandomVelocityChangeInterval = (int)ADModUtils.Utilities.Random.NextFloat(false) * 1000 + 1000;
 
-                    outOfRangeIdleRandomVelocity = new Vector3(
-                            ADModUtils.Utilities.Random.NextFloat(),
-                            ADModUtils.Utilities.Random.NextFloat(),
-                            ADModUtils.Utilities.Random.NextFloat()
-                        ).Normalized * ADModUtils.Utilities.Random.NextFloat(false) * 30.0f;
+                    var outOfRangeIdleRandomVelocityDir = new Vector3(
+                        ADModUtils.Utilities.Random.NextFloat(),
+                        ADModUtils.Utilities.Random.NextFloat(),
+                        ADModUtils.Utilities.Random.NextFloat()
+                    );
+
+                    outOfRangeIdleRandomVelocityDir.Normalize();
+
+                    outOfRangeIdleRandomVelocity = outOfRangeIdleRandomVelocityDir * ADModUtils.Utilities.Random.NextFloat(false) * 30.0f;
                 }
 
                 weaponObject.Velocity = Vector3.Lerp(
@@ -88,7 +90,7 @@ namespace Thor
                 weaponObject.Exists())
             {
                 weaponObject.IsPersistent = true;
-                Function.Call(Hash.SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION, weaponObject, false);
+                API.FreezeEntityPosition(weaponObject.Handle, false);
 
                 if (weaponObject.HeightAboveGround - prevHeightAboveGround > 50.0f)
                 {
@@ -103,9 +105,9 @@ namespace Thor
                     prevHeightAboveGround = weaponObject.HeightAboveGround;
                 }
 
-                var raycastDownwardResult = World.Raycast(weaponObject.Position, Vector3.UnitZ * -1000.0f, IntersectFlags.Map);
+                var raycastDownwardResult = World.Raycast(weaponObject.Position, Vector3.UnitZ * -1000.0f, IntersectOptions.Map);
 
-                if (raycastDownwardResult.DidHit)
+                if (raycastDownwardResult.DitHit)
                 {
                     isInOutOfRangeIdleState = false;
                 }
@@ -232,7 +234,7 @@ namespace Thor
 
             newWeaponObject = ActivateWeaponPhysics(newWeaponObject);
 
-            Blip weaponBlip = newWeaponObject.AddBlip();
+            Blip weaponBlip = newWeaponObject.AttachBlip();
 
             weaponBlip.IsFriendly = true;
             weaponBlip.Name = "GodlyWeapon";
@@ -245,7 +247,8 @@ namespace Thor
             if (IsMoving)
             {
                 ADModUtils.NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
-                var fxDirection = -weaponObject.Velocity.Normalized;
+                var fxDirection = -weaponObject.Velocity;
+                fxDirection.Normalize();
                 var speed = Function.Call<float>(Hash.GET_ENTITY_SPEED, weaponObject);
                 Thunder.Instance.Shoot(weaponObject.Position, weaponObject.Position + fxDirection * speed * 0.08f, -1, -1, false);
             }
@@ -266,7 +269,7 @@ namespace Thor
                 return;
             }
 
-            var entities = World.GetNearbyEntities(weaponObject.Position, APPLY_FORCE_RADIUS);
+            var entities = Utilities.GetNearbyEntities(weaponObject.Position, APPLY_FORCE_RADIUS);
 
             foreach (var ent in entities)
             {
@@ -320,8 +323,8 @@ namespace Thor
             }
             catch (Exception e)
             {
-                Notification.Show("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.");
-                ADModUtils.Logger.Log("ERROR", e.ToString());
+                Screen.ShowNotification("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.");
+                Logger.Log("ERROR", e.ToString());
             }
         }
 
@@ -388,7 +391,8 @@ namespace Thor
             {
                 return;
             }
-            Vector3 moveDirection = (newPosition - Position).Normalized;
+            Vector3 moveDirection = (newPosition - Position);
+            moveDirection.Normalize();
             var velocity = blendInVelocity;
             if (slowDownIfClose)
             {

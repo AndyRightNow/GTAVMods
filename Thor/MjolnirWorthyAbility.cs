@@ -1,6 +1,5 @@
-﻿using ADModUtils;
-using GTA;
-using GTA.Math;
+﻿using CitizenFX.Core;
+using CitizenFX.Core.Native;
 using System.Windows.Forms;
 
 namespace Thor
@@ -63,7 +62,7 @@ namespace Thor
         {
             if (weaponHoverWhirlingPlane == null)
             {
-                weaponHoverWhirlingPlane = new ADModUtils.Plane(Vector3.WorldUp, Vector3.Zero);
+                weaponHoverWhirlingPlane = new ADModUtils.Plane(Vector3.Up, Vector3.Zero);
             }
 
             if (isFlying && isHoverWhirling)
@@ -80,7 +79,7 @@ namespace Thor
                 {
                     var boneCoord = attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position;
 
-                    weaponWhirlingPlane = new ADModUtils.Plane(Vector3.Cross(attachedPed.ForwardVector, Vector3.WorldUp), boneCoord);
+                    weaponWhirlingPlane = new ADModUtils.Plane(Vector3.Cross(attachedPed.ForwardVector, Vector3.Up), boneCoord);
 
                     ADModUtils.NativeHelper.PlayPlayerAnimation(
                         attachedPed,
@@ -145,7 +144,9 @@ namespace Thor
         }
         protected override void HandleMidIsFlying(Vector3 velocity, Vector3 weaponHoldingHandCoord)
         {
-            var velocityAndUpDot = Vector3.Dot(velocity.Normalized, Vector3.WorldUp);
+            var normalizedVelocity = velocity;
+            velocity.Normalize();
+            var velocityAndUpDot = Vector3.Dot(normalizedVelocity, Vector3.Up);
             if (velocityAndUpDot >= 0.85f &&
                 velocityAndUpDot <= 1.0f)
             {
@@ -156,8 +157,8 @@ namespace Thor
             {
                 isHoverWhirling = false;
                 SetHeldWeaponVisible(true);
-                Weapon.RotateToDirection(attachedPed.Weapons.CurrentWeaponObject, velocity.Normalized);
-                attachedPed.Weapons.CurrentWeaponObject.Position = weaponHoldingHandCoord + velocity.Normalized * 0.3f;
+                Weapon.RotateToDirection(attachedPed.Weapons.CurrentWeaponObject, normalizedVelocity);
+                attachedPed.Weapons.CurrentWeaponObject.Position = weaponHoldingHandCoord + normalizedVelocity * 0.3f;
             }
             if (isHoverWhirling)
             {

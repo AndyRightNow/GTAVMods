@@ -1,5 +1,5 @@
-﻿using GTA;
-using GTA.Math;
+﻿using CitizenFX.Core;
+using CitizenFX.Core.Native;
 using System.Collections.Generic;
 
 namespace Thor

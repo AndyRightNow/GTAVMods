@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Thor</RootNamespace>
     <AssemblyName>Thor</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -38,12 +38,12 @@
     <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="CitizenFX.Core.Client, Version=0.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\CitizenFX.Core.Client.1.0.8633\lib\net45\CitizenFX.Core.Client.dll</HintPath>
+    </Reference>
     <Reference Include="NAudio, Version=1.8.4.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\lib\NAudio.dll</HintPath>
-    </Reference>
-    <Reference Include="ScriptHookVDotNet3">
-      <HintPath>..\lib\ScriptHookVDotNet3.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -72,14 +72,13 @@
     <Compile Include="WorthyAbility.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\gtav_console\DeveloperConsole.csproj">
-      <Project>{effe7239-0a6b-4dec-bb24-6cb563ec48a7}</Project>
-      <Name>DeveloperConsole</Name>
-    </ProjectReference>
     <ProjectReference Include="..\ModUtils\ModUtils.csproj">
       <Project>{e2efc415-090c-448d-b1a5-919ac269f3f6}</Project>
       <Name>ModUtils</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

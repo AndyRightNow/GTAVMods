@@ -1,6 +1,6 @@
 ﻿using ADModUtils;
-using GTA;
-using GTA.Math;
+using CitizenFX.Core;
+using CitizenFX.Core.Native;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,16 +36,16 @@ namespace Thor
                 }
             }
 
-            private void Init()
+            private async void Init()
             {
                 if (initialized)
                 {
                     return;
                 }
 
-                var planeModel = new Model(VehicleHash.Thruster);
+                var planeModel = new Model(VehicleHash.Thrust);
                 planeModel.Request();
-                chasingVehicle = World.CreateVehicle(planeModel, DEFAULT_SPAWN_POS);
+                chasingVehicle = await World.CreateVehicle(planeModel, DEFAULT_SPAWN_POS);
                 chasingVehicle.CreateRandomPedOnSeat(VehicleSeat.Driver);
                 driver = chasingVehicle.GetPedOnSeat(VehicleSeat.Driver);
 
@@ -132,6 +132,7 @@ namespace Thor
 
                 currentTargetPosition = target;
 
+                API.TaskHeliMission()
                 driver.Task.StartHeliMission(chasingVehicle, currentTargetPosition, VehicleMissionType.GoTo, 100000.0f, 1.0f, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
             }
 
