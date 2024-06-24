@@ -404,18 +404,28 @@ namespace Thor
 
         public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose)
         {
+            bool isHasObstaclesInBetweenReady = false;
+            bool curHasObstaclesInBetween = HasObstaclesInBetween(newPosition, out isHasObstaclesInBetweenReady);
 
-            bool curHasObstaclesInBetween = HasObstaclesInBetween(newPosition);
+            Logger.LogConsole("[Info]", "curHasObstaclesInBetween", "" + curHasObstaclesInBetween, "isHasObstaclesInBetweenReady", "" + isHasObstaclesInBetweenReady);
 
-            if (curHasObstaclesInBetween && !IsInOpenAir())
+            var isIsInOpenAirReady = true;
+            var isInOpenAir = false;
+            // IsInOpenAir(out isIsInOpenAirReady);
+
+            Logger.LogConsole("[Info]", "isInOpenAir", "" + isInOpenAir, "isIsInOpenAirReady", "" + isIsInOpenAirReady);
+
+            if ((!isHasObstaclesInBetweenReady || curHasObstaclesInBetween) && (!isIsInOpenAirReady || !isInOpenAir))
             {
                 if (PathFinder.PathFinder.Instance.Position is null)
                 {
+                    Logger.LogConsole("[Warning]", "PathFinder position is null, exiting method");
                     return;
                 }
 
-                if (!prevHasObstaclesInBetween && curHasObstaclesInBetween)
+                if (isHasObstaclesInBetweenReady && !prevHasObstaclesInBetween && curHasObstaclesInBetween)
                 {
+                    Logger.LogConsole("[Info]", "Obstacle status changed, updating start position");
                     PathFinder.PathFinder.Instance.UpdateStartPosition(weaponObject.Position);
                 }
 
@@ -430,36 +440,141 @@ namespace Thor
             prevHasObstaclesInBetween = curHasObstaclesInBetween;
 
             MoveToCoord(newPosition, slowDownIfClose, Vector3.Zero);
+            Logger.LogConsole("[Info]", "Moving directly to coordinates without pathfinder");
         }
+
+
+
+
+
+        private static float MAX_SHAPE_TEST_TIMEOUT = 2000;
+        private ShapeTestHandle CurrentHasObstaclesInBetweenTestHandle;
+        private bool IsCurrentHasObstaclesInBetweenTestOngoing;
+        private float LastHasObstaclesInBetweenTestTime = 0;
+        protected bool HasObstaclesInBetween(Vector3 newPosition, out bool isReady)
+        {
+            var currentWeaponPos = weaponObject.Position;
+            isReady = true;
+
+            if (Game.GameTime - LastHasObstaclesInBetweenTestTime >= MAX_SHAPE_TEST_TIMEOUT)
+            {
+                Logger.LogConsole("[Info]", "HasObstaclesInBetween Passed Timeout, Reset");
+                IsCurrentHasObstaclesInBetweenTestOngoing = false;
+            }
+
+            if (!IsCurrentHasObstaclesInBetweenTestOngoing)
+            {
+                IsCurrentHasObstaclesInBetweenTestOngoing = true;
+                LastHasObstaclesInBetweenTestTime = Game.GameTime;
+                CurrentHasObstaclesInBetweenTestHandle = ShapeTest.StartTestCapsule(currentWeaponPos, newPosition, 0.5f, IntersectFlags.Map, null, ShapeTestOptions.IgnoreGlass);
+
+                if (CurrentHasObstaclesInBetweenTestHandle.IsRequestFailed)
+                {
+
+                    Logger.LogConsole("[Info]", "HasObstaclesInBetween Request Failed");
+                    isReady = false;
+                    IsCurrentHasObstaclesInBetweenTestOngoing = false;
+                    return false;
+                }
+            }
+
+            ShapeTestResult raycastResult;
+            var raycastStatus = CurrentHasObstaclesInBetweenTestHandle.GetResult(out raycastResult);
+
+            if (raycastStatus != ShapeTestStatus.Ready)
+            {
+                Logger.LogConsole("[Info]", "HasObstaclesInBetween ShapeTestStatus NOT READY");
+                isReady = false;
+                return false;
+            }
+            IsCurrentHasObstaclesInBetweenTestOngoing = false;
+
+            return raycastResult.DidHit && World.GetDistance(currentWeaponPos, raycastResult.HitPosition) <= 100.0f;
+        }
+
 
         private static float OPEN_AIR_TEST_RADIUS = 10.0f;
-
-        protected bool HasObstaclesInBetween(Vector3 newPosition)
+        private ShapeTestHandle CurrentIsInOpenAirTestCapsuleXHandle;
+        private ShapeTestHandle CurrentIsInOpenAirTestCapsuleYHandle;
+        private ShapeTestHandle CurrentIsInOpenAirTestCapsuleZHandle;
+        private bool IsCurrentIsInOpenAirTestCapsuleOngoing;
+        private float LastIsInOpenAirTestTime = 0;
+        protected bool IsInOpenAir(out bool isReady)
         {
             var currentWeaponPos = weaponObject.Position;
+            isReady = true;
 
-            var raycastTest = ShapeTest.StartTestCapsule(currentWeaponPos, newPosition, 0.1f, IntersectFlags.Map);
-            ShapeTestResult raycastResult;
+            if (Game.GameTime - LastIsInOpenAirTestTime >= MAX_SHAPE_TEST_TIMEOUT)
+            {
+                IsCurrentIsInOpenAirTestCapsuleOngoing = false;
+            }
 
-            raycastTest.GetResult(out raycastResult);
+            if (!IsCurrentIsInOpenAirTestCapsuleOngoing)
+            {
+                IsCurrentIsInOpenAirTestCapsuleOngoing = true;
+                LastIsInOpenAirTestTime = Game.GameTime;
+                CurrentIsInOpenAirTestCapsuleXHandle = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitX * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitX * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map, null, ShapeTestOptions.IgnoreGlass);
 
-            return raycastResult.DidHit && World.GetDistance(currentWeaponPos, raycastResult.HitPosition) <= 20.0f;
-        }
+                if (CurrentIsInOpenAirTestCapsuleXHandle.IsRequestFailed)
+                {
+                    Logger.LogConsole("[Info]", "IsInOpenAir Request Failed");
+                    IsCurrentIsInOpenAirTestCapsuleOngoing = false;
+                    isReady = false;
+                    return false;
+                }
 
+                CurrentIsInOpenAirTestCapsuleYHandle = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitY * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitY * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map, null, ShapeTestOptions.IgnoreGlass);
 
-        protected bool IsInOpenAir()
-        {
-            var currentWeaponPos = weaponObject.Position;
-            var raycastXTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitX * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitX * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
-            var raycastYTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitY * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitY * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
-            var raycastZTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitZ * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitZ * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
+                if (CurrentIsInOpenAirTestCapsuleYHandle.IsRequestFailed)
+                {
+                    Logger.LogConsole("[Info]", "IsInOpenAir Request Failed");
+                    IsCurrentIsInOpenAirTestCapsuleOngoing = false;
+                    isReady = false;
+                    return false;
+                }
+
+                CurrentIsInOpenAirTestCapsuleZHandle = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitZ * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitZ * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map, null, ShapeTestOptions.IgnoreGlass);
+
+                if (CurrentIsInOpenAirTestCapsuleZHandle.IsRequestFailed)
+                {
+                    Logger.LogConsole("[Info]", "IsInOpenAir Request Failed");
+                    IsCurrentIsInOpenAirTestCapsuleOngoing = false;
+                    isReady = false;
+                    return false;
+                }
+            }
+
             ShapeTestResult raycastXResult;
             ShapeTestResult raycastYResult;
             ShapeTestResult raycastZResult;
 
-            raycastXTest.GetResult(out raycastXResult);
-            raycastYTest.GetResult(out raycastYResult);
-            raycastZTest.GetResult(out raycastZResult);
+            var raycastXResultStatus = CurrentIsInOpenAirTestCapsuleXHandle.GetResult(out raycastXResult);
+
+
+            if (raycastXResultStatus != ShapeTestStatus.Ready)
+            {
+                Logger.LogConsole("[Info]", "IsInOpenAir ShapeTestStatus NOT READY");
+                isReady = false;
+                return false;
+            }
+
+            var raycastYResultStatus = CurrentIsInOpenAirTestCapsuleYHandle.GetResult(out raycastYResult);
+            if (raycastXResultStatus != ShapeTestStatus.Ready)
+            {
+                Logger.LogConsole("[Info]", "IsInOpenAir ShapeTestStatus NOT READY");
+                isReady = false;
+                return false;
+            }
+
+            var raycastZResultStatus = CurrentIsInOpenAirTestCapsuleZHandle.GetResult(out raycastZResult);
+            if (raycastXResultStatus != ShapeTestStatus.Ready)
+            {
+                Logger.LogConsole("[Info]", "IsInOpenAir ShapeTestStatus NOT READY");
+                isReady = false;
+                return false;
+            }
+
+            IsCurrentIsInOpenAirTestCapsuleOngoing = false;
 
             return !raycastXResult.DidHit && !raycastYResult.DidHit && !raycastZResult.DidHit;
         }
