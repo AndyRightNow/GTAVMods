@@ -209,19 +209,24 @@ namespace Thor
                 ShowWeaponPFX();
                 HandleAttackingTargets();
 
-                if (IsRenderWeaponCameraKeyPressed())
-                {
-                    Weapon.RenderWeaponTrackCam();
-                }
-                else
-                {
-                    Weapon.CancelRenderWeaponTrackCam();
-                }
+                HandleRenderWeaponCamera();
                 HandlePostNotHoldingWeaponOnTick();
             }
             attachedPed.Weapons.Remove(WeaponHash.Parachute);
             Weapon.OnTick();
             HandleGrabbingPed();
+        }
+
+        private void HandleRenderWeaponCamera()
+        {
+            if (IsRenderWeaponCameraKeyPressed() && !HasWeapon)
+            {
+                Weapon.RenderWeaponTrackCam();
+            }
+            else
+            {
+                Weapon.CancelRenderWeaponTrackCam();
+            }
         }
 
         protected virtual bool IsRenderWeaponCameraKeyPressed()
@@ -539,7 +544,7 @@ namespace Thor
                     velocity += GameplayCamera.Direction * FLY_HORIZONTAL_VELOCITY_LEVEL_1;
                 }
             }
-            
+
             if (Game.IsControlPressed(0, CitizenFX.Core.Control.Sprint))
             {
                 velocity += Vector3.Multiply(velocity, FLY_SPRINT_VELOCITY_MULTIPLIER);
@@ -774,12 +779,12 @@ namespace Thor
             targets.Clear();
             Vector3 rightHandBonePos = attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position;
             Vector3 fromWeaponToPedHand = rightHandBonePos - Weapon.Position;
-            
+
             bool isWeaponCloseToPed = false;
             float distanceBetweenWeaponToPedHand = Math.Abs(fromWeaponToPedHand.Length());
             var weaponToPedHandRaycastTest = ShapeTest.StartTestCapsule(
-                Weapon.Position, 
-                new Vector3(Weapon.Position.X, Weapon.Position.Y, Weapon.Position.Z + MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND), 
+                Weapon.Position,
+                new Vector3(Weapon.Position.X, Weapon.Position.Y, Weapon.Position.Z + MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND),
                 MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND,
                 IntersectFlags.Peds
             );
