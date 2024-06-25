@@ -281,6 +281,28 @@ namespace ADModUtils
             HeliProtect = 23
         }
 
+        public enum HeliMissionFlags
+        {
+            AttainRequestedOrientation = 1,
+            DontModifyOrientation = 2,
+            DontModifyPitch = 4,
+            DontModifyThrottle = 8,
+            DontModifyRoll = 16,
+            LandOnArrival = 32,
+            DontDoAvoidance = 64,
+            StartEngineImmediately = 128,
+            ForceHeightMapAvoidance = 256,
+            DontClampProbesToDestination = 512,
+            EnableTimeslicingWhenPossible = 1024,
+            CircleOppositeDirection = 2048,
+            MaintainHeightAboveTerrain = 4096,
+            IgnoreHiddenEntitiesDuringLand = 8192,
+            DisableAllHeightMapAvoidance = 16384,
+
+            None = 0,
+            HeightMapOnlyAvoidance = ForceHeightMapAvoidance | DontDoAvoidance
+        }
+
         /// <summary>Gives the helicopter a mission.</summary>
         /// <param name="heli">The helicopter.</param>
         /// <param name="target">The target <see cref="Vehicle"/>.</param>
