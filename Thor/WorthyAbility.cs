@@ -207,20 +207,24 @@ namespace Thor
                 Weapon.ApplyForcesToNearbyEntities();
                 ShowWeaponPFX();
                 HandleAttackingTargets();
-
-                if (IsRenderWeaponCameraKeyPressed())
-                {
-                    Weapon.RenderWeaponTrackCam();
-                }
-                else
-                {
-                    Weapon.CancelRenderWeaponTrackCam();
-                }
+                HandleRenderWeaponCamera();
                 HandlePostNotHoldingWeaponOnTick();
             }
             attachedPed.Weapons.Remove(WeaponHash.Parachute);
             Weapon.OnTick();
             HandleGrabbingPed();
+        }
+
+        private void HandleRenderWeaponCamera()
+        {
+            if (IsRenderWeaponCameraKeyPressed() && !HasWeapon)
+            {
+                Weapon.RenderWeaponTrackCam();
+            }
+            else
+            {
+                Weapon.CancelRenderWeaponTrackCam();
+            }
         }
 
         protected virtual bool IsRenderWeaponCameraKeyPressed()
