@@ -9,7 +9,7 @@ namespace Thor
     public class Mjolnir : GodlyWeapon<Mjolnir>
     {
         private static float HAMMER_ROPE_LENGTH = 0.19f;
-        private static string SOUND_FILE_WHIRLING_HAMMER = "./scripts/whirling-hammer.wav";
+        private static string SOUND_FILE_WHIRLING_HAMMER = "./whirling-hammer.wav";
         private Rope hammerRope;
         private Ped hammerRopeAttachedPed;
         private Bone hammerRopeAttachedPedBoneId;

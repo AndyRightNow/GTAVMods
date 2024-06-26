@@ -9,6 +9,7 @@ using System.Windows.Forms;
 using ADModUtils;
 using CitizenFX.Core.UI;
 using System.Threading.Tasks;
+using ModUtils;
 
 namespace Thor
 {
@@ -532,7 +533,7 @@ namespace Thor
                 }
             }
 
-            if (Game.IsKeyPressed(Keys.X))
+            if (Controls.IsKeyPressed("x"))
             {
                 velocity.Z = FLY_UPWARD_VELOCITY;
             }
@@ -683,18 +684,18 @@ namespace Thor
             {
                 CitizenFX.Core.UI.Screen.Hud.ShowComponentThisFrame(HudComponent.Reticle);
 
-                if (Game.IsKeyPressed(Keys.T))
+                if (Controls.IsKeyPressed("t"))
                 {
                     ThrowWeaponOnTargets();
                     isCollectingTargets = false;
                 }
-                else if (Game.IsKeyPressed(Keys.U))
+                else if (Controls.IsKeyPressed("u"))
                 {
                     isCollectingTargets = false;
                     ThrowAndFlyWithWeapon();
                 }
             }
-            else if (Game.IsKeyPressed(Keys.Y))
+            else if (Controls.IsKeyPressed("y"))
             {
                 DropWeapon();
             }

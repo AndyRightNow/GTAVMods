@@ -15,6 +15,50 @@ namespace ADModUtils
         NarrowLegs = 2,
         WideLegs = 3,
     }
+    public enum VehicleMissionType
+    {
+        None = 0,
+        Cruise = 1,
+        Ram = 2,
+        Block = 3,
+        GoTo = 4,
+        Stop = 5,
+        Attack = 6,
+        Follow = 7,
+        Flee = 8,
+        Circle = 9,
+        Escort = 12,
+        GoToRacing = 14,
+        FollowRecording = 15,
+        PoliceBehaviour = 16,
+        Land = 19,
+        LandAndWait = 20,
+        Crash = 21,
+        PullOver = 22,
+        HeliProtect = 23
+    }
+
+    public enum HeliMissionFlags
+    {
+        AttainRequestedOrientation = 1,
+        DontModifyOrientation = 2,
+        DontModifyPitch = 4,
+        DontModifyThrottle = 8,
+        DontModifyRoll = 16,
+        LandOnArrival = 32,
+        DontDoAvoidance = 64,
+        StartEngineImmediately = 128,
+        ForceHeightMapAvoidance = 256,
+        DontClampProbesToDestination = 512,
+        EnableTimeslicingWhenPossible = 1024,
+        CircleOppositeDirection = 2048,
+        MaintainHeightAboveTerrain = 4096,
+        IgnoreHiddenEntitiesDuringLand = 8192,
+        DisableAllHeightMapAvoidance = 16384,
+
+        None = 0,
+        HeightMapOnlyAvoidance = ForceHeightMapAvoidance | DontDoAvoidance
+    }
 
     public class NativeHelper
     {
@@ -258,50 +302,7 @@ namespace ADModUtils
                 line.Draw();
             }
         }
-        public enum VehicleMissionType
-        {
-            None = 0,
-            Cruise = 1,
-            Ram = 2,
-            Block = 3,
-            GoTo = 4,
-            Stop = 5,
-            Attack = 6,
-            Follow = 7,
-            Flee = 8,
-            Circle = 9,
-            Escort = 12,
-            GoToRacing = 14,
-            FollowRecording = 15,
-            PoliceBehaviour = 16,
-            Land = 19,
-            LandAndWait = 20,
-            Crash = 21,
-            PullOver = 22,
-            HeliProtect = 23
-        }
-
-        public enum HeliMissionFlags
-        {
-            AttainRequestedOrientation = 1,
-            DontModifyOrientation = 2,
-            DontModifyPitch = 4,
-            DontModifyThrottle = 8,
-            DontModifyRoll = 16,
-            LandOnArrival = 32,
-            DontDoAvoidance = 64,
-            StartEngineImmediately = 128,
-            ForceHeightMapAvoidance = 256,
-            DontClampProbesToDestination = 512,
-            EnableTimeslicingWhenPossible = 1024,
-            CircleOppositeDirection = 2048,
-            MaintainHeightAboveTerrain = 4096,
-            IgnoreHiddenEntitiesDuringLand = 8192,
-            DisableAllHeightMapAvoidance = 16384,
-
-            None = 0,
-            HeightMapOnlyAvoidance = ForceHeightMapAvoidance | DontDoAvoidance
-        }
+        
 
         /// <summary>Gives the helicopter a mission.</summary>
         /// <param name="heli">The helicopter.</param>
@@ -314,9 +315,9 @@ namespace ADModUtils
         /// <param name="heliOrientation">The orientation the heli tries to be in (<c>0f</c> to <c>360f</c>). Use <c>-1f</c> if not bothered. <c>-1f</c> Should be used in 99% of the times.</param>
         /// <param name="slowDownDistance">In general, get more control with big number and more dynamic with smaller. Setting to <c>-1</c> means use default tuning(<c>100</c>).</param>
         /// <param name="missionFlags">The heli mission flags for the task.</param>
-        public void StartHeliMission(Vehicle heli, Vehicle target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
+        public static void StartHeliMission(Ped ped, Vehicle heli, Vehicle target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
         {
-            Function.Call(Hash.TASK_HELI_MISSION, _ped.Handle, heli.Handle, target.Handle, 0, 0f, 0f, 0f, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
+            Function.Call(Hash.TASK_HELI_MISSION, ped.Handle, heli.Handle, target.Handle, 0, 0f, 0f, 0f, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
         }
 
         /// <summary>Gives the helicopter a mission.</summary>
@@ -330,9 +331,9 @@ namespace ADModUtils
         /// <param name="heliOrientation">The orientation the heli tries to be in (<c>0f</c> to <c>360f</c>). Use <c>-1f</c> if not bothered. <c>-1f</c> Should be used in 99% of the times.</param>
         /// <param name="slowDownDistance">In general, get more control with big number and more dynamic with smaller. Setting to <c>-1</c> means use default tuning(<c>100</c>).</param>
         /// <param name="missionFlags">The heli mission flags for the task.</param>
-        public void StartHeliMission(Vehicle heli, Ped target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
+        public static void StartHeliMission(Ped ped, Vehicle heli, Ped target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
         {
-            Function.Call(Hash.TASK_HELI_MISSION, _ped.Handle, heli.Handle, 0, target.Handle, 0f, 0f, 0f, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
+            Function.Call(Hash.TASK_HELI_MISSION, ped.Handle, heli.Handle, 0, target.Handle, 0f, 0f, 0f, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
         }
 
         /// <summary>Gives the helicopter a mission.</summary>
@@ -346,9 +347,9 @@ namespace ADModUtils
         /// <param name="heliOrientation">The orientation the heli tries to be in (<c>0f</c> to <c>360f</c>). Use <c>-1f</c> if not bothered. <c>-1f</c> Should be used in 99% of the times.</param>
         /// <param name="slowDownDistance">In general, get more control with big number and more dynamic with smaller. Setting to <c>-1</c> means use default tuning(<c>100</c>).</param>
         /// <param name="missionFlags">The heli mission flags for the task.</param>
-        public void StartHeliMission(Vehicle heli, Vector3 target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
+        public static void StartHeliMission(Ped ped, Vehicle heli, Vector3 target, VehicleMissionType missionType, float cruiseSpeed, float targetReachedDist, int flightHeight, int minHeightAboveTerrain, float heliOrientation = -1f, float slowDownDistance = -1f, HeliMissionFlags missionFlags = HeliMissionFlags.None)
         {
-            Function.Call(Hash.TASK_HELI_MISSION, _ped.Handle, heli.Handle, 0, 0, target.X, target.Y, target.Z, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
+            Function.Call(Hash.TASK_HELI_MISSION, ped.Handle, heli.Handle, 0, 0, target.X, target.Y, target.Z, (int)missionType, cruiseSpeed, targetReachedDist, heliOrientation, flightHeight, minHeightAboveTerrain, slowDownDistance, (int)missionFlags);
         }
 
         public static void DrawBox(Vector3 a, Vector3 b, Color col)

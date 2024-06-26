@@ -132,8 +132,7 @@ namespace Thor
 
                 currentTargetPosition = target;
 
-                API.TaskHeliMission()
-                driver.Task.StartHeliMission(chasingVehicle, currentTargetPosition, VehicleMissionType.GoTo, 100000.0f, 1.0f, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
+                ADModUtils.NativeHelper.StartHeliMission(driver, chasingVehicle, currentTargetPosition, ADModUtils.VehicleMissionType.GoTo, 100000.0f, 1.0f, -1, 5, -1, -1, ADModUtils.HeliMissionFlags.StartEngineImmediately);
             }
 
             public void UpdateCurrentTarget(Ped targetPed)
@@ -151,7 +150,7 @@ namespace Thor
                 ClearAll();
 
                 currentTargetPed = targetPed;
-                driver.Task.StartHeliMission(chasingVehicle, currentTargetPed, VehicleMissionType.Follow, 100000.0f, 1.0f, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
+                ADModUtils.NativeHelper.StartHeliMission(driver, chasingVehicle, currentTargetPed, ADModUtils.VehicleMissionType.Follow, 100000.0f, 1.0f, -1, 5, -1, -1, ADModUtils.HeliMissionFlags.StartEngineImmediately);
             }
 
             private void ClearAll()

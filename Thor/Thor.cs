@@ -5,6 +5,7 @@ using System;
 using System.Windows.Forms;
 using ADModUtils;
 using System.Threading.Tasks;
+using ModUtils;
 
 namespace Thor
 {
@@ -21,6 +22,8 @@ namespace Thor
             mjolnirAbility = MjolnirWorthyAbility.Instance;
             previousPedHash = -1;
             abilityHasBeenTurnedOff = false;
+
+            Controls.Init();
         }
 
         public async Task OnTick()
@@ -56,7 +59,7 @@ namespace Thor
             // ctrl + a + o
             if (Game.IsControlPressed(0, CitizenFX.Core.Control.VehicleSubDescend) &&
                Game.IsControlPressed(0, CitizenFX.Core.Control.ScriptPadLeft) &&
-               Game.IsKeyPressed(Keys.O))
+               Controls.IsKeyPressed("o"))
             {
                 abilityHasBeenTurnedOff = false;
                 CitizenFX.Core.UI.Screen.ShowNotification("The Thor ability has been turned on.");

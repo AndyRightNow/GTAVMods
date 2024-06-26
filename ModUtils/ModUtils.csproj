@@ -52,6 +52,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Controls.cs" />
     <Compile Include="IntersectFlags.cs" />
     <Compile Include="Line.cs" />
     <Compile Include="Logger.cs" />
@@ -72,6 +73,6 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetPath)" "C:\SteamLibrary\steamapps\common\Grand Theft Auto V\scripts" /y</PostBuildEvent>
+    <PostBuildEvent>copy "$(TargetPath)" "C:\Users\narut\AppData\Local\FiveM\FiveM.app\plugins" /y</PostBuildEvent>
   </PropertyGroup>
 </Project>

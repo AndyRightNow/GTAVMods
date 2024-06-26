@@ -1,6 +1,8 @@
 ﻿using CitizenFX.Core;
 using CitizenFX.Core.Native;
 using System.Windows.Forms;
+using ADModUtils;
+using ModUtils;
 
 namespace Thor
 {
@@ -19,8 +21,8 @@ namespace Thor
             isHoldingWeaponRope = false;
             isHoverWhirling = false;
             Weapon = Mjolnir.Instance;
-            soundFileCatchWeapon = "./scripts/catch-hammer.wav";
-            soundFileWeaponCloseToPed = "./scripts/hammer-close-to-player.wav";
+            soundFileCatchWeapon = "./catch-hammer.wav";
+            soundFileWeaponCloseToPed = "./hammer-close-to-player.wav";
         }
 
         public override void RemoveAbility()
@@ -73,7 +75,7 @@ namespace Thor
 
         protected void HandleWhirlingWeapon()
         {
-            if (Game.IsKeyPressed(Keys.Z))
+            if (Controls.IsKeyPressed("z"))
             {
                 if (isHoldingWeaponRope)
                 {
@@ -101,7 +103,7 @@ namespace Thor
 
         protected void HandleDropAndHoldWeaponRope()
         {
-            if (Game.IsKeyPressed(Keys.Z))
+            if (Controls.IsKeyPressed("z"))
             {
                 DropAndHoldWeaponRope();
             }
@@ -203,12 +205,12 @@ namespace Thor
 
         protected override bool IsRenderWeaponCameraKeyPressed()
         {
-            return Game.IsKeyPressed(Keys.R);
+            return Game.IsControlPressed(0, CitizenFX.Core.Control.Reload);
         }
 
         protected override bool IsSummonWeaponKeyPressed()
         {
-            return Game.IsKeyPressed(Keys.H);
+            return Controls.IsKeyPressed("h");
         }
 
         public override void SummonWeapon()
