@@ -9,10 +9,6 @@ using GTA.Native;
 namespace DeveloperConsole {
     public class DefaultCommands : Script {
         private DeveloperConsole _developerConsole;
-        private bool _godEnabled;
-        private bool _forceFieldEnabled;
-        private bool _noClipEnabled;
-        private Blip _lastWaypoint;
         private Player _player;
 
         public DefaultCommands() {

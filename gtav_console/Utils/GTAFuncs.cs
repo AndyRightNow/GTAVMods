@@ -208,7 +208,9 @@ namespace DeveloperConsole {
         }
 
         public static Vector3 GetGroundPos(Vector2 pos) {
-            var height = World.GetGroundHeight(pos);
+            float height;
+            if (!World.GetGroundHeight(new Vector3(pos.X, pos.Y, 1000.0f), out height))
+                throw new InvalidOperationException("Ground collision is not loaded at that location.");
             return new Vector3(pos.X, pos.Y, height + 1);
         }
 
@@ -369,16 +371,9 @@ namespace DeveloperConsole {
         }
 
 
-        public static unsafe Entity RequestEntityControl(Player p, int time = 10000) {
-            int netId = -1;
-            Function.Call(Hash.NETWORK_HANDLE_FROM_PLAYER, p.Handle, &netId, 13);
-            DeveloperConsole.Instance.PrintDebug("NET ID FOR " + p.Name + ": " + netId);
-            Function.Call(Hash.NETWORK_REQUEST_CONTROL_OF_NETWORK_ID, netId);
-            int i = time;
-            while (!Function.Call<bool>(Hash.NETWORK_HAS_CONTROL_OF_NETWORK_ID, netId) && i > 0) {
-                i--;
-                Script.Wait(0);
-            }
+        public static Entity RequestEntityControl(Player p, int time = 10000) {
+            // NETWORK_HANDLE_FROM_PLAYER writes 13 slots, not a single network ID.
+            // Request control of the entity directly, without that invalid buffer.
             return RequestEntityControl(p.Character, time);
         }
 

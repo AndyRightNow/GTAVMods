@@ -10,18 +10,17 @@ namespace Thor
     public class Mjolnir : GodlyWeapon<Mjolnir>
     {
         private static float HAMMER_ROPE_LENGTH = 0.19f;
-        private static string SOUND_FILE_WHIRLING_HAMMER = "./scripts/whirling-hammer.wav";
         private Rope hammerRope;
         private Ped hammerRopeAttachedPed;
         private Bone hammerRopeAttachedPedBoneId;
         private Entity hammerRopeAttachedIntermediateEnt;
-        private NAudio.Wave.WaveOut hammerWhirlingSoundPlayer;
+        private readonly AudioClip hammerWhirlingSoundPlayer;
         private Vector3 AttachedIntermediateEntOffset = Vector3.UnitX * 0.05f;
         private bool isWhirling;
 
         public Mjolnir() : base(WeaponHash.Hammer)
         {
-            hammerWhirlingSoundPlayer = new NAudio.Wave.WaveOut();
+            hammerWhirlingSoundPlayer = new AudioClip(AudioClip.ResourcePath("whirling-hammer.wav"));
             isWhirling = false;
             throwActions = new List<AnimationActions>
                 {
@@ -40,11 +39,7 @@ namespace Thor
             base.OnTick();
             if (isWhirling)
             {
-                if (hammerWhirlingSoundPlayer.PlaybackState != NAudio.Wave.PlaybackState.Playing)
-                {
-                    hammerWhirlingSoundPlayer.Init(new NAudio.Wave.AudioFileReader(SOUND_FILE_WHIRLING_HAMMER));
-                    hammerWhirlingSoundPlayer.Play();
-                }
+                hammerWhirlingSoundPlayer.Play(restart: false);
             }
             else
             {
@@ -184,6 +179,7 @@ namespace Thor
 
         public void AttachHammerRopeTo(Ped ped, Bone boneId)
         {
+            Logger.Event("INFO", "rope.attach", "ped", ped.Handle, "bone", boneId.ToString());
             if (weaponObject == null)
             {
                 return;
@@ -224,17 +220,36 @@ namespace Thor
 
         public void DetachRope()
         {
-            if (hammerRope != null && hammerRopeAttachedPed != null && hammerRopeAttachedIntermediateEnt != null)
+            if (hammerRope != null) Logger.Event("INFO", "rope.detach");
+            hammerRopeAttachedPed = null;
+            if (hammerRopeAttachedIntermediateEnt != null)
             {
-                hammerRope.Detach(hammerRopeAttachedIntermediateEnt);
-                hammerRopeAttachedPed = null;
                 hammerRopeAttachedIntermediateEnt.Detach();
                 hammerRopeAttachedIntermediateEnt.Delete();
                 hammerRopeAttachedIntermediateEnt = null;
+            }
+            if (hammerRope != null)
+            {
                 hammerRope.Delete();
                 hammerRope = null;
             }
-            ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponObject, WEAPON_MASS);
+            if (weaponObject != null && weaponObject.Exists())
+                ADModUtils.NativeHelper.SetObjectPhysicsParams(weaponObject, WEAPON_MASS);
+        }
+
+        public void StopEffects()
+        {
+            isWhirling = false;
+            hammerWhirlingSoundPlayer.Stop();
+            DetachRope();
+        }
+
+        public void Dispose()
+        {
+            try { StopEffects(); }
+            finally { hammerWhirlingSoundPlayer.Dispose(); }
+            WeaponObject = null;
+            DestroyWeaponTrackCam();
         }
 
         protected override bool ShouldApplyForcesToNearbyEntities()

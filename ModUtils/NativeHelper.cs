@@ -1,4 +1,4 @@
-﻿using GTA;
+using GTA;
 using GTA.Math;
 using GTA.Native;
 using System.Collections.Generic;
@@ -122,9 +122,15 @@ namespace ADModUtils
                 return;
             }
             Function.Call(Hash.REQUEST_ANIM_DICT, dictName);
-            if (!Function.Call<bool>(Hash.HAS_ANIM_DICT_LOADED, dictName))
+            int started = Game.GameTime;
+            while (!Function.Call<bool>(Hash.HAS_ANIM_DICT_LOADED, dictName))
             {
-                Function.Call(Hash.REQUEST_ANIM_DICT, dictName);
+                if (unchecked(Game.GameTime - started) >= 1000)
+                {
+                    Logger.Throttled("WARN", "animation.timeout." + dictName, 10000, "dictionary", dictName, "animation", animName);
+                    return;
+                }
+                Script.Yield();
             }
 
             Function.Call(Hash.TASK_PLAY_ANIM, ped, dictName, animName, 8.0f, 1.0f, duration, (int)flag, -8.0f, 0, 0, 0);
@@ -132,11 +138,6 @@ namespace ADModUtils
 
         public static bool IsEntityPlayingAnim(Entity ent, string dictName, string animName)
         {
-            Function.Call(Hash.REQUEST_ANIM_DICT, dictName);
-            if (!Function.Call<bool>(Hash.HAS_ANIM_DICT_LOADED, dictName))
-            {
-                Function.Call(Hash.REQUEST_ANIM_DICT, dictName);
-            }
             return Function.Call<bool>(Hash.IS_ENTITY_PLAYING_ANIM, ent, dictName, animName, 3);
         }
 
@@ -145,11 +146,16 @@ namespace ADModUtils
             Function.Call(Hash.SET_ENTITY_VELOCITY, entity, velocity.X, velocity.Y, velocity.Z);
         }
 
-        public static Prop CreateWeaponObject(WeaponHash weaponHash, int amountCount, Vector3 position, bool showWorldModel = true, float heading = 1.0f)
+        public static Prop CreateWeaponObject(WeaponHash weaponHash, int amountCount, Vector3 position, bool showWorldModel = true, float scale = 1.0f)
         {
-            new WeaponAsset(weaponHash).Request(3000);
-
-            return Function.Call<Prop>(Hash.CREATE_WEAPON_OBJECT, (int)weaponHash, amountCount, position.X, position.Y, position.Z, showWorldModel, heading);
+            Logger.Event("INFO", "asset.weapon.request", "weapon", weaponHash.ToString(), "position", position.ToString(), "scale", scale);
+            if (!new WeaponAsset(weaponHash).Request(3000))
+                throw new System.InvalidOperationException("Could not load weapon asset " + weaponHash);
+            // Supply the complete current native signature; the seventh parameter is scale.
+            var prop = Function.Call<Prop>(Hash.CREATE_WEAPON_OBJECT, (int)weaponHash, amountCount,
+                position.X, position.Y, position.Z, showWorldModel, scale, false, false, 0);
+            Logger.Event(prop == null ? "ERROR" : "INFO", "asset.weapon.created", "weapon", weaponHash.ToString(), "handle", prop?.Handle);
+            return prop;
         }
 
         public static void DrawLine(Vector3 start, Vector3 end, Color color)
@@ -172,45 +178,47 @@ namespace ADModUtils
             Function.Call(Hash.SET_PED_CURRENT_WEAPON_VISIBLE, ped, visible, 0, 0, 0);
         }
 
-        private static void BeforePlayingParticleFx(string effectSetName)
+        private static bool BeforePlayingParticleFx(string effectSetName)
         {
             Function.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
+            if (!Function.Call<bool>(Hash.HAS_NAMED_PTFX_ASSET_LOADED, effectSetName)) return false;
             Function.Call(Hash.USE_PARTICLE_FX_ASSET, effectSetName);
+            return true;
         }
 
         public static void PlayParticleFx(string effectSetName, string effect, Entity entity, float scale = 1.0f)
         {
-            BeforePlayingParticleFx(effectSetName);
+            if (!BeforePlayingParticleFx(effectSetName)) return;
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY, effect, entity, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
         }
 
         public static void PlayParticleFx(string effectSetName, string effect, Entity entity, Vector3 pos, float scale = 1.0f)
         {
-            BeforePlayingParticleFx(effectSetName);
+            if (!BeforePlayingParticleFx(effectSetName)) return;
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY, effect, entity, pos.X, pos.Y, pos.Z, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
         }
 
         public static void PlayParticleFx(string effectSetName, string effect, Ped ped, Bone boneId, float scale = 1.0f)
         {
-            BeforePlayingParticleFx(effectSetName);
+            if (!BeforePlayingParticleFx(effectSetName)) return;
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, (int)boneId, scale, 0, 0, 0);
         }
 
         public static void PlayParticleFx(string effectSetName, string effect, Vector3 pos, Vector3 rot, float scale = 1.0f)
         {
-            BeforePlayingParticleFx(effectSetName);
+            if (!BeforePlayingParticleFx(effectSetName)) return;
             Function.Call(Hash.START_PARTICLE_FX_NON_LOOPED_AT_COORD, effect, pos.X, pos.Y, pos.Z, rot.X, rot.Y, rot.Z, scale, 0, 0, 0);
         }
 
         public static int PlayParticleFxLooped(string effectSetName, string effect, Ped ped, Bone boneId, float scale = 1.0f)
         {
-            BeforePlayingParticleFx(effectSetName);
+            if (!BeforePlayingParticleFx(effectSetName)) return 0;
             return Function.Call<int>(Hash.START_PARTICLE_FX_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, (int)boneId, scale, 0, 0, 0);
         }
 
         public static int PlayParticleFxLooped(string effectSetName, string effect, Vector3 pos, Vector3 rot, float scale = 1.0f)
         {
-            BeforePlayingParticleFx(effectSetName);
+            if (!BeforePlayingParticleFx(effectSetName)) return 0;
             return Function.Call<int>(Hash.START_PARTICLE_FX_LOOPED_AT_COORD, effect, pos.X, pos.Y, pos.Z, rot.X, rot.Y, rot.Z, scale, 0, 0, 0);
         }
 
@@ -263,7 +271,7 @@ namespace ADModUtils
         {
             get
             {
-                return IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.MissionEntities | IntersectFlags.Map;
+                return IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.Vehicles | IntersectFlags.Map;
             }
         }
 

@@ -1,0 +1,27 @@
+<Project>
+  <PropertyGroup>
+    <!-- SHVDN hosts the .NET Framework CLR, including on Enhanced. -->
+    <TargetFramework>net48</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>AnyCPU;x64</Platforms>
+    <Configurations>Debug;Release;Build</Configurations>
+    <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Deterministic>true</Deterministic>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ScriptHookVDotNetDirectory>$(MSBuildThisFileDirectory).deps\shvdne</ScriptHookVDotNetDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="ScriptHookVDotNet3">
+      <HintPath>$(ScriptHookVDotNetDirectory)\ScriptHookVDotNet3.dll</HintPath>
+      <Private Condition="'$(MSBuildProjectName)' == 'ModUtilsTest'">true</Private>
+      <Private Condition="'$(MSBuildProjectName)' != 'ModUtilsTest'">false</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="RequireEnhancedApi" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(ScriptHookVDotNetDirectory)\ScriptHookVDotNet3.dll')"
+           Text="Enhanced API missing. Run powershell -File scripts/Restore-Dependencies.ps1 first." />
+  </Target>
+</Project>

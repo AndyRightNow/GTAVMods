@@ -38,18 +38,46 @@ namespace Thor
 
             private void Init()
             {
-                if (initialized)
+                if (initialized && chasingVehicle != null && chasingVehicle.Exists() &&
+                    driver != null && driver.Exists())
                 {
                     return;
                 }
+                if (initialized) Dispose();
 
                 var planeModel = new Model(VehicleHash.Thruster);
-                planeModel.Request();
-                chasingVehicle = World.CreateVehicle(planeModel, DEFAULT_SPAWN_POS);
-                chasingVehicle.CreateRandomPedOnSeat(VehicleSeat.Driver);
-                driver = chasingVehicle.GetPedOnSeat(VehicleSeat.Driver);
+                if (!planeModel.Request(3000))
+                    throw new InvalidOperationException("Could not load the pathfinder vehicle model.");
+                try
+                {
+                    chasingVehicle = World.CreateVehicle(planeModel, DEFAULT_SPAWN_POS);
+                    if (chasingVehicle == null)
+                        throw new InvalidOperationException("Could not create the pathfinder vehicle.");
+                    driver = chasingVehicle.CreateRandomPedOnSeat(VehicleSeat.Driver);
+                    if (driver == null)
+                        throw new InvalidOperationException("Could not create the pathfinder driver.");
+                }
+                catch
+                {
+                    Dispose();
+                    throw;
+                }
+                finally { planeModel.MarkAsNoLongerNeeded(); }
 
                 initialized = true;
+                Logger.Event("INFO", "pathfinder.created", "driver", driver.Handle, "vehicle", chasingVehicle.Handle);
+            }
+
+            public void Dispose()
+            {
+                if (driver != null || chasingVehicle != null) Logger.Event("INFO", "pathfinder.dispose", "driver", driver?.Handle, "vehicle", chasingVehicle?.Handle);
+                driver?.Delete();
+                chasingVehicle?.Delete();
+                driver = null;
+                chasingVehicle = null;
+                currentTargetPed = null;
+                currentTargetPosition = Vector3.Zero;
+                initialized = false;
             }
 
             public bool IsRelatedEntity(Entity entity)

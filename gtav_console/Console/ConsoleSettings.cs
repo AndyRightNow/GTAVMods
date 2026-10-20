@@ -24,7 +24,7 @@ namespace DeveloperConsole {
         public static string CursorCharacter = "|";
 
         public static Keys[] HideKeys = {
-            Keys.F4, Keys.Oemtilde
+            Keys.F8
         };
 
         public static int Alpha = 175;
