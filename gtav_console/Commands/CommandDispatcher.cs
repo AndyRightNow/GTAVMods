@@ -147,10 +147,18 @@ namespace DeveloperConsole {
                 foreach (var argset in ExpectedArgs) {
                     i++;
                     if (argset.Count != toks.Count) continue;
-                    if (argset.Count == 0 && toks.Count == 0) return i;
-                    var argTypes = argset.Select(x => x.Type);
-                    var tokTypes = toks.Select(x => x.Type);
-                    if (argTypes.SequenceEqual(tokTypes, new TokenTypeComparer())) return i;
+                    var matches = true;
+                    for (var argument = 0; argument < argset.Count; argument++) {
+                        var expected = argset[argument].Type;
+                        var actual = toks[argument].Type;
+                        if (actual == null
+                            ? expected.IsValueType && Nullable.GetUnderlyingType(expected) == null
+                            : !expected.IsAssignableFrom(actual)) {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    if (matches) return i;
                 }
                 return -1;
             }
@@ -158,15 +166,6 @@ namespace DeveloperConsole {
             /// <summary>
             /// Compares types for use in commands
             /// </summary>
-            private class TokenTypeComparer : IEqualityComparer<Type> {
-                public bool Equals(Type actual, Type expected) {
-                    return expected.BaseType == actual.BaseType;
-                }
-
-                public int GetHashCode(Type obj) {
-                    return obj.BaseType.GetHashCode();
-                }
-            }
         }
 
         /// <summary>

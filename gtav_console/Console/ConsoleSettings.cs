@@ -13,10 +13,12 @@ namespace DeveloperConsole {
         public const Keys DelKey = Keys.Delete;
         public const Keys BackSpaceKey = Keys.Back;
 
-        public static string Version =
-            FileVersionInfo.GetVersionInfo(typeof (DeveloperConsole).Assembly.Location).ProductVersion != "9.9.9.9"
-                ? FileVersionInfo.GetVersionInfo(typeof (DeveloperConsole).Assembly.Location).ProductVersion
-                : "DEV";
+        public static string Version = DisplayVersion(
+            FileVersionInfo.GetVersionInfo(typeof(DeveloperConsole).Assembly.Location).ProductVersion);
+
+        internal static string DisplayVersion(string productVersion) {
+            return productVersion == "9.9.9.9" ? "DEV" : productVersion;
+        }
 
         public static int NumLines = 15;
         public static float FontSize = .3F;

@@ -16,7 +16,8 @@ namespace ADModUtils
         private readonly string directory, fallbackDirectory;
         private readonly long maxBytes;
         private readonly int retainedFiles;
-        private readonly Stopwatch clock = Stopwatch.StartNew();
+        private readonly ILogClock clock;
+        private readonly ILogStorage storage;
         private readonly string sessionId = Guid.NewGuid().ToString("N");
         private readonly int processId = Process.GetCurrentProcess().Id;
         private long sequence, length, retryAfterMs;
@@ -26,7 +27,15 @@ namespace ADModUtils
         public long DroppedRecords { get; private set; }
 
         public SessionLog(string directory, string fallbackDirectory, long maxBytes = 5 * 1024 * 1024, int retainedFiles = 10)
+            : this(directory, fallbackDirectory, new FileLogStorage(), new LogClock(), maxBytes, retainedFiles)
         {
+        }
+
+        public SessionLog(string directory, string fallbackDirectory, ILogStorage storage, ILogClock clock,
+            long maxBytes = 5 * 1024 * 1024, int retainedFiles = 10)
+        {
+            this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
+            this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
             this.directory = directory;
             this.fallbackDirectory = fallbackDirectory;
             this.maxBytes = Math.Max(1024, maxBytes);
@@ -35,7 +44,7 @@ namespace ADModUtils
         }
 
         private string NewPath(string folder) => Path.Combine(folder, "Thor-" +
-            DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" +
+            clock.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" +
             processId + "-" + sessionId + "-" + (++part) + ".jsonl");
 
         public void Write(string level, string name, IDictionary<string, object> data = null)
@@ -44,7 +53,7 @@ namespace ADModUtils
             {
                 if (clock.ElapsedMilliseconds < retryAfterMs) { DroppedRecords++; return; }
                 var row = new Dictionary<string, object> {
-                    { "utc", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) },
+                    { "utc", clock.UtcNow.ToString("O", CultureInfo.InvariantCulture) },
                     { "elapsedMs", clock.ElapsedMilliseconds }, { "session", sessionId },
                     { "sequence", ++sequence }, { "process", processId },
                     { "thread", Thread.CurrentThread.ManagedThreadId }, { "level", level },
@@ -81,18 +90,18 @@ namespace ADModUtils
         private static bool IsStorageFailure(Exception ex) => ex is IOException || ex is UnauthorizedAccessException;
         private void Append(byte[] bytes)
         {
-            using (var stream = new FileStream(FilePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
-                stream.Write(bytes, 0, bytes.Length);
+            storage.Append(FilePath, bytes);
             length += bytes.Length;
         }
         private void Prepare()
         {
             var folder = Path.GetDirectoryName(FilePath);
-            Directory.CreateDirectory(folder);
+            storage.CreateDirectory(folder);
             // Only our own logs; tolerate files held by another game/script domain.
-            foreach (var old in new DirectoryInfo(folder).GetFiles("Thor-*.jsonl").OrderByDescending(f => f.LastWriteTimeUtc).Skip(retainedFiles - 1))
+            foreach (var old in storage.GetLogFiles(folder).Where(file => file.Path != FilePath)
+                .OrderByDescending(f => f.LastWriteTimeUtc).Skip(retainedFiles - 1))
             {
-                try { if (old.FullName != FilePath) old.Delete(); }
+                try { storage.Delete(old.Path); }
                 catch (Exception ex) when (IsStorageFailure(ex)) { }
             }
         }
@@ -100,7 +109,7 @@ namespace ADModUtils
         {
             if (value == null) return "null";
             if (value is bool b) return b ? "true" : "false";
-            if (value is byte || value is short || value is int || value is long || value is uint || value is ulong || value is decimal)
+            if (value is byte || value is sbyte || value is short || value is ushort || value is int || value is long || value is uint || value is ulong || value is decimal)
                 return Convert.ToString(value, CultureInfo.InvariantCulture);
             if (value is float || value is double)
             {

@@ -1,295 +1,222 @@
-﻿using System;
+using System;
 using System.CodeDom.Compiler;
-using GTA;
-using Microsoft.CSharp;
-using System.Linq;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
+using GTAVMods.Game;
+using System.Globalization;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using GTA;
+using GTA.Math;
+using Microsoft.CSharp;
 
 namespace DeveloperConsole {
-    internal class CommandParser {
-        private const string CODEBLOCK_OPEN = "{";
-        private const string CODEBLOCK_CLOSE = "}";
-        private const string STRING_OPEN = "\"";
-        private const string STRING_CLOSE = STRING_OPEN;
+    /// <summary>Primitive values used by the console's expressions.</summary>
+    public interface ICommandEnvironment {
+        object Player { get; }
+        object Character { get; }
+        bool IsInVehicle { get; }
+        object Vehicle { get; }
+        Vector3 Position { get; }
+        string PlayerName { get; }
+        int PlayerHandle { get; }
+        int NetworkPlayerIndex { get; }
+        CompilerResults Compile(CompilerParameters parameters, string source);
+    }
 
-        private String _data;
-        private readonly IDeveloperConsole _console;
-        private List<CommandToken> _tokens = new List<CommandToken>();
-        public List<CommandToken> Tokens {
-            get {
-                return _tokens;
-            }
+    internal sealed class LiveCommandEnvironment : ICommandEnvironment {
+        private readonly GameServices _game;
+        public LiveCommandEnvironment() : this(GtaRuntime.Create()) { }
+        internal LiveCommandEnvironment(GameServices game) { _game = game; }
+        public object Player { [GamePrimitive] get { return Game.Player; } }
+        public object Character { [GamePrimitive] get { return Game.Player.Character; } }
+        public bool IsInVehicle { [GamePrimitive] get { return Game.Player.Character.IsInVehicle(); } }
+        public object Vehicle { [GamePrimitive] get { return Game.Player.Character.CurrentVehicle; } }
+        public Vector3 Position { [GamePrimitive] get { return Game.Player.Character.Position; } }
+        public string PlayerName { [GamePrimitive] get { return Game.Player.Name; } }
+        public int PlayerHandle { [GamePrimitive] get { return Game.Player.Handle; } }
+        public int NetworkPlayerIndex { get { return _game.ConsolePlayers.Index(_game.Host.PlayerPed); } }
+
+        public CompilerResults Compile(CompilerParameters parameters, string source) {
+            using (var provider = new CSharpCodeProvider())
+                return provider.CompileAssemblyFromSource(parameters, source);
         }
+    }
 
-        private String _segments = "";
-        private bool _isString = false;
-        private bool _isCodeBlock = false;
+    internal sealed class CommandParser {
+        public List<CommandToken> Tokens { get; } = new List<CommandToken>();
 
-        public CommandParser(String data, IDeveloperConsole console) {
-            _data = data;
-            _console = console;
-            Parse();
-        }
+        public CommandParser(string data, IDeveloperConsole console)
+            : this(data, console, new LiveCommandEnvironment()) { }
 
-        private void Parse()
-        {
-            _segments = "";
-            _isString = false;
-            _isCodeBlock = false;
-
-            foreach (String __s in Regex.Split(_data, @"[\s\r\n]+").Where(s => s != string.Empty)) {
-                String s = __s;
-
-                if (_isString) { //Begining of string was found, end not yet found
-                    if (IsEndOfString(s)) { //Found end of string
-                        TrimStringEnd(ref s);
-                        AddSegment(s);
-                        AddToken(CommandTokenKind.String);
-                    } else { // Found string contents
-                        ReplaceStringLiterals(ref s);
-                        AddSegment(s);
-                    }
-                } else if (_isCodeBlock) { //Begining of codeblock was found, end not yet found
-                    if (IsEndOfCodeBlock(s)) { //Found end of code block
-                        TrimCodeBlockEnd(ref s);
-                        AddSegment(s);
-                        AddToken(CommandTokenKind.CodeBlock);
-                    } else { // Found codeblock contents
-                        ReplaceCodeBlockLiterals(ref s);
-                        AddSegment(s);
-                    }
-                } else {
-
-                    if (IsStartOfCodeBlock(s)) { //Found begining of code block
-                        TrimCodeBlockStart(ref s);
-
-                        if (IsEndOfCodeBlock(s)) { //This is also the end of the code block
-                            TrimCodeBlockEnd(ref s);
-                            AddToken(CommandTokenKind.CodeBlock, s);
-                        } else {
-                            _isCodeBlock = true;
-                            AddSegment(s);
-                        }
-                    } else if (IsStartOfString(s)) { //Found begining of string
-                        TrimStringStart(ref s);
-
-                        if (IsEndOfString(s)) { //This is also the end of the string
-                            TrimStringEnd(ref s);
-                            AddToken(CommandTokenKind.String, s);
-                        } else {
-                            _isString = true;
-                            AddSegment(s);
-                        }
-                    } else if (IsNumeric(s)) { //Found number
-                        AddToken(CommandTokenKind.Number, s);
-                    } else { //Found word
-                        AddToken(CommandTokenKind.Word, s);
-                    }
+        public CommandParser(string data, IDeveloperConsole console, ICommandEnvironment environment) {
+            var position = 0;
+            while (position < data.Length) {
+                if (char.IsWhiteSpace(data[position])) {
+                    position++;
+                    continue;
                 }
+                var kind = CommandTokenKind.Word;
+                var end = '\0';
+                if (data[position] == '"') {
+                    kind = CommandTokenKind.String;
+                    end = '"';
+                    position++;
+                } else if (data[position] == '{') {
+                    kind = CommandTokenKind.CodeBlock;
+                    end = '}';
+                    position++;
+                }
+                var value = new StringBuilder();
+                var depth = 1;
+                var codeQuote = '\0';
+                var verbatimString = false;
+                while (position < data.Length) {
+                    var character = data[position++];
+                    if (end == '\0') {
+                        if (char.IsWhiteSpace(character)) break;
+                    } else {
+                        if (character == '\\' && codeQuote != '\0' && !verbatimString && position < data.Length) {
+                            value.Append(character).Append(data[position++]);
+                            continue;
+                        }
+                        if (codeQuote == '\0' && character == '\\' && position < data.Length && data[position] == end) {
+                            value.Append(data[position++]);
+                            continue;
+                        }
+                        if (kind == CommandTokenKind.CodeBlock) {
+                            if (codeQuote == '\0') {
+                                if (character == '"' || character == '\'') {
+                                    codeQuote = character;
+                                    verbatimString = character == '"' && value.Length > 0 && value[value.Length - 1] == '@';
+                                }
+                                if (character == '{') depth++;
+                                if (character == '}') depth--;
+                            } else if (character == codeQuote) {
+                                if (verbatimString && position < data.Length && data[position] == '"') {
+                                    value.Append(character).Append(data[position++]);
+                                    continue;
+                                }
+                                codeQuote = '\0';
+                                verbatimString = false;
+                            }
+                            if (depth == 0) break;
+                        } else if (character == end) break;
+                    }
+                    value.Append(character);
+                }
+                var text = value.ToString();
+                double number;
+                if (kind == CommandTokenKind.Word &&
+                    double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+                    kind = CommandTokenKind.Number;
+                // Parsing and diagnostics must never execute expressions.
+                console.PrintDebug("Found token -> " + kind + " : " + text);
+                Tokens.Add(new CommandToken(kind, text, console, environment));
             }
-
-            if (_segments != "") {
-                if (_isString) AddToken(CommandTokenKind.String);
-                else if (_isCodeBlock) AddToken(CommandTokenKind.CodeBlock);
-            }
-        }
-
-
-        private void AddSegment(String s) {
-            if (_segments != "") _segments += " ";
-            _segments += s;
-        }
-
-        private void AddToken(CommandTokenKind k, String data) {
-            var tok = new CommandToken(k, data, _console);
-            _console.PrintDebug("Found token -> " + k + " : " + data + " : " + tok.Eval.GetType().FullName);
-            _tokens.Add(tok);
-            _segments = "";
-            _isString = false;
-            _isCodeBlock = false;
-        }
-
-        private void AddToken(CommandTokenKind k) {
-            AddToken(k, _segments);
-        }
-
-        private void ReplaceStringLiterals(ref String s) {
-            s = s.Replace("\\" + STRING_CLOSE, "");
-        }
-
-        private void ReplaceCodeBlockLiterals(ref String s) {
-            s = s.Replace("\\" + CODEBLOCK_CLOSE, "");
-        }
-
-        private void TrimStringEnd(ref String s) {
-            if(IsEndOfString(s)) s = s.Remove(s.Length - 1, STRING_CLOSE.Length);
-        }
-
-        private void TrimCodeBlockEnd(ref String s) {
-            if (IsEndOfCodeBlock(s)) s = s.Remove(s.Length - 1, CODEBLOCK_CLOSE.Length);
-        }
-
-        private void TrimStringStart(ref String s) {
-            s = s.Substring(STRING_OPEN.Length);
-        }
-
-        private void TrimCodeBlockStart(ref String s) {
-            s = s.Substring(CODEBLOCK_OPEN.Length);
-        }
-
-        private bool IsNumeric(String s) {
-            int i;
-            double d;
-            return int.TryParse(s, out i) || double.TryParse(s, out d);
-        }
-
-        private bool IsEndOfCodeBlock(String s) {
-            return s.EndsWith(CODEBLOCK_CLOSE);
-        }
-
-        private bool IsStartOfCodeBlock(String s) {
-            return s.StartsWith(CODEBLOCK_OPEN);
-        }
-
-        private bool IsStartOfString(String s) {
-            return s.StartsWith(STRING_OPEN);
-        }
-
-        private bool IsEndOfString(String s) {
-            return s.EndsWith(STRING_CLOSE) && !s.EndsWith("\\" + STRING_CLOSE);
         }
     }
 
-    public enum CommandTokenKind {
-        Word,
-        Number,
-        String,
-        CodeBlock
-    }
+    public enum CommandTokenKind { Word, Number, String, CodeBlock }
 
     public class CommandToken {
         private readonly IDeveloperConsole _console;
+        private readonly ICommandEnvironment _environment;
+        private bool _evaluated;
+        private object _value;
 
-        public CommandToken(CommandTokenKind kind, string data, IDeveloperConsole console) {
+        public CommandToken(CommandTokenKind kind, string data, IDeveloperConsole console)
+            : this(kind, data, console, new LiveCommandEnvironment()) { }
+
+        public CommandToken(CommandTokenKind kind, string data, IDeveloperConsole console,
+            ICommandEnvironment environment) {
             _console = console;
+            _environment = environment;
             Kind = kind;
             String = data;
         }
 
-        public CommandTokenKind Kind { get; private set; }
-        public string String { get; private set; }
+        public CommandTokenKind Kind { get; }
+        public string String { get; }
 
+        /// <summary>Evaluate once, so argument validation cannot repeat side effects.</summary>
         public object Eval {
             get {
-                switch (Kind) {
-                    case CommandTokenKind.Word:
-                        switch (String.ToLower()) {
-                            case "true":
-                            case "on":
-                            case "enable":
-                                return true;
-                            case "false":
-                            case "off":
-                            case "disable":
-                                return false;
-                            case "self":
-                                return Game.Player;
-                            case "self.character":
-                            case "self.ped":
-                                return Game.Player.Character;
-                            case "self.vehicle":
-                                return Game.Player.Character.IsInVehicle() ? Game.Player.Character.CurrentVehicle : null;
-                            case "self.pos":
-                            case "self.position":
-                                return Game.Player.Character.Position;
-                            case "self.name":
-                                return Game.Player.Name;
-                            case "self.id":
-                            case "self.handle":
-                                return Game.Player.Handle;
-                            default:
-                                return String;
-                        }
-                    case CommandTokenKind.CodeBlock:
-                        try {
-                            return CSharpEval(String);
-                        }
-                        catch (Exception) {
-                            return null;
-                        }
-                    case CommandTokenKind.Number:
-                        if (String.Contains('.')) return Convert.ToDouble(String);
-                        return Convert.ToInt32(String);
-                    default:
-                        return String;
+                if (!_evaluated) {
+                    _value = Evaluate();
+                    _evaluated = true;
                 }
+                return _value;
             }
         }
 
-        public Type Type {
-            get { return Eval.GetType(); }
+        public Type Type { get { return Eval?.GetType(); } }
+
+        private object Evaluate() {
+            switch (Kind) {
+                case CommandTokenKind.Word:
+                    switch (String.ToLowerInvariant()) {
+                        case "true": case "on": case "enable": return true;
+                        case "false": case "off": case "disable": return false;
+                        case "self": return _environment.Player;
+                        case "self.character": case "self.ped": return _environment.Character;
+                        case "self.vehicle": return _environment.IsInVehicle ? _environment.Vehicle : null;
+                        case "self.pos": case "self.position": return _environment.Position;
+                        case "self.name": return _environment.PlayerName;
+                        case "self.id": case "self.handle": return _environment.PlayerHandle;
+                        default: return String;
+                    }
+                case CommandTokenKind.CodeBlock:
+                    try {
+                        return CSharpEval(String);
+                    } catch (Exception error) {
+                        _console.PrintError("C# evaluation failed: " + error.Message);
+                        return null;
+                    }
+                case CommandTokenKind.Number:
+                    int integer;
+                    if (int.TryParse(String, NumberStyles.Integer, CultureInfo.InvariantCulture, out integer))
+                        return integer;
+                    return double.Parse(String, NumberStyles.Float, CultureInfo.InvariantCulture);
+                default: return String;
+            }
         }
 
-        private object CSharpEval(string cs) {
-            var c = new CSharpCodeProvider();
-            var cp = new CompilerParameters();
-
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
-                try {
-                    var location = assembly.Location;
-                    if (!string.IsNullOrEmpty(location)) cp.ReferencedAssemblies.Add(location);
-                }
-                catch (NotSupportedException) {
-                }
-            }
-
-            cp.ReferencedAssemblies.Add(typeof (DeveloperConsole).Assembly.Location);
-
-            foreach (var s in DeveloperConsole.RegisteredScripts)
-                cp.ReferencedAssemblies.Add(s.Key.GetType().Assembly.Location);
-
-            cp.CompilerOptions = "/t:library";
-            cp.GenerateInMemory = true;
-
-            var code = "using System;\n";
-            code += "using System.Drawing;\n";
-            code += "using System.Windows.Forms;\n";
-            code += "using GTA;\n";
-            code += "using GTA.Math;\n";
-            code += "using GTA.Native;\n";
-            code += "using DeveloperConsole;\n";
-
-            code += "namespace DeveloperConsoleCodeEval{ \n";
-            code += "public class DeveloperConsoleCodeEval{ \n";
-            code += "public object EvalCode(){\n";
-            code += "Player PLAYER = Game.Player; \n";
-            code += "Ped PED = PLAYER.Character;\n";
-            code += "int MP_ID = Function.Call<int>(Hash.NETWORK_GET_PLAYER_INDEX, PED.Handle);\n";
-
-            code += cs + ";\n";
-            code += "return null; \n";
-            code += "} \n";
-            code += "} \n";
-            code += "}\n";
-
-            var cr = c.CompileAssemblyFromSource(cp, code);
-            if (cr.Errors.Count > 0) {
-                _console.PrintError("C# ERROR: " + cr.Errors[0].ErrorText + " at " + cr.Errors[0].Line + ":" +
-                                    cr.Errors[0].Column);
+        internal object CSharpEval(string source) {
+            var parameters = new CompilerParameters { CompilerOptions = "/t:library", GenerateInMemory = true };
+            AddReferences(parameters, AppDomain.CurrentDomain.GetAssemblies());
+            foreach (var script in DeveloperConsole.RegisteredScripts)
+                parameters.ReferencedAssemblies.Add(script.Key.GetType().Assembly.Location);
+            var code = "using System;\nusing System.Drawing;\nusing System.Windows.Forms;\n" +
+                "using GTA;\nusing GTA.Math;\nusing GTA.Native;\nusing DeveloperConsole;\n" +
+                "namespace DeveloperConsoleCodeEval { public class DeveloperConsoleCodeEval { " +
+                "private ICommandEnvironment context; " +
+                "public Player PLAYER { get { return (Player)context.Player; } } " +
+                "public Ped PED { get { return (Ped)context.Character; } } " +
+                "public int MP_ID { get { return context.NetworkPlayerIndex; } } " +
+                "public Vector3 POS { get { return context.Position; } } " +
+                "public object EvalCode(ICommandEnvironment environment) { context = environment;\n" +
+                source + ";\nreturn null;\n} } }";
+            var result = _environment.Compile(parameters, code);
+            if (result.Errors.HasErrors) {
+                var error = result.Errors.Cast<CompilerError>().First(e => !e.IsWarning);
+                _console.PrintError("C# ERROR: " + error.ErrorText + " at " + error.Line + ":" + error.Column);
                 return null;
             }
+            var instance = result.CompiledAssembly.CreateInstance("DeveloperConsoleCodeEval.DeveloperConsoleCodeEval");
+            if (instance == null) return null;
+            return instance.GetType().GetMethod("EvalCode").Invoke(instance, new object[] { _environment });
+        }
 
-            var a = cr.CompiledAssembly;
-            var o = a.CreateInstance("DeveloperConsoleCodeEval.DeveloperConsoleCodeEval");
-
-            if (o != null) {
-                var t = o.GetType();
-                var mi = t.GetMethod("EvalCode");
-                var s = mi.Invoke(o, null);
-                return s;
+        internal static void AddReferences(CompilerParameters parameters, IEnumerable<Assembly> assemblies) {
+            foreach (var assembly in assemblies) {
+                try {
+                    var location = assembly.Location;
+                    if (!string.IsNullOrEmpty(location)) parameters.ReferencedAssemblies.Add(location);
+                } catch (NotSupportedException) {
+                    // Dynamic assemblies cannot be compiler references.
+                }
             }
-            return null;
         }
     }
 }

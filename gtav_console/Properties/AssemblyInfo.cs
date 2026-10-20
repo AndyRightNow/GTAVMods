@@ -37,3 +37,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyFileVersion("9.9.9.9")]
 
 [assembly:InternalsVisibleTo("DeveloperConsole.UnitTests")]
+[assembly:InternalsVisibleTo("ModUtilsTest")]

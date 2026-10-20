@@ -10,6 +10,7 @@
     <Reference Include="PresentationFramework" />
     <Reference Include="System.Xaml" />
     <Reference Include="WindowsBase" />
+    <ProjectReference Include="..\GameBridge\GameBridge.csproj" />
     <Compile Remove="Example.cs" />
   </ItemGroup>
 </Project>

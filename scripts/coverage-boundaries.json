@@ -1,0 +1,735 @@
+{
+  "schemaVersion": 1,
+  "bindings": [
+    {
+      "assembly": "DeveloperConsole",
+      "method": "GTA.Math.Vector3 DeveloperConsole.LiveCommandEnvironment::get_Position()",
+      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Boolean DeveloperConsole.LiveCommandEnvironment::get_IsInVehicle()",
+      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Int16 DeveloperConsole.WindowsKeyboardNative::KeyState(System.Int32)",
+      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Int32 DeveloperConsole.LiveCommandEnvironment::get_PlayerHandle()",
+      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Int32 DeveloperConsole.LiveConsolePlatform::get_GameTime()",
+      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Int32 DeveloperConsole.WindowsKeyboardNative::get_CurrentProcess()",
+      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Int32 DeveloperConsole.WindowsKeyboardNative::ToUnicode(System.UInt32,System.Byte[],System.Text.StringBuilder)",
+      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Int32 DeveloperConsole.WindowsKeyboardNative::WindowProcess(System.IntPtr)",
+      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.IntPtr DeveloperConsole.WindowsKeyboardNative::ForegroundWindow()",
+      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Object DeveloperConsole.LiveCommandEnvironment::get_Character()",
+      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Object DeveloperConsole.LiveCommandEnvironment::get_Player()",
+      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Object DeveloperConsole.LiveCommandEnvironment::get_Vehicle()",
+      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Single DeveloperConsole.LiveConsolePlatform::get_Height()",
+      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Single DeveloperConsole.LiveConsolePlatform::get_Width()",
+      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.String DeveloperConsole.LiveCommandEnvironment::get_PlayerName()",
+      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.String DeveloperConsole.WindowsClipboardNative::Read()",
+      "reason": "Direct Windows clipboard read/write only; STA ownership, joining and error propagation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.DefaultCommands::.ctor()",
+      "reason": "SHVDNE Script constructor registering the covered console callback."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::.ctor()",
+      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::OnAborted(System.Object,System.EventArgs)",
+      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::OnKeyDown(System.Object,System.Windows.Forms.KeyEventArgs)",
+      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::OnKeyUp(System.Object,System.Windows.Forms.KeyEventArgs)",
+      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::OnTick(System.Object,System.EventArgs)",
+      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.LiveConsolePlatform::DrawRectangle(System.Drawing.Point,System.Drawing.Size,System.Drawing.Color)",
+      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.LiveConsolePlatform::DrawText(System.String,System.Drawing.Point,System.Single,System.Drawing.Color,GTA.UI.Font)",
+      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.ScriptRegistration::.ctor(GTA.Script,DeveloperConsole.DeveloperConsole/OnConsoleAttached)",
+      "reason": "SHVDNE abort-event wiring/forwarding; register and unregister collection behavior remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.ScriptRegistration::OnAborted(System.Object,System.EventArgs)",
+      "reason": "SHVDNE abort-event wiring/forwarding; register and unregister collection behavior remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void DeveloperConsole.WindowsClipboardNative::Write(System.String)",
+      "reason": "Direct Windows clipboard read/write only; STA ownership, joining and error propagation remain covered."
+    },
+    {
+      "assembly": "DeveloperConsole",
+      "method": "System.Void ScriptExtender::RegisterConsoleScript(GTA.Script,DeveloperConsole.DeveloperConsole/OnConsoleAttached)",
+      "reason": "Registers the SHVDNE Script lifecycle binding; the registration collection behavior remains covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Quaternion GTAVMods.Game.GtaEntities::Quaternion(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaOutputs::EntityQuaternion(System.Int32,System.Single&,System.Single&,System.Single&,System.Single&)",
+      "reason": "Raw native out-pointer allocation/copy only; measured NativeOutputs assembles and tests XYZW components without normalization."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Vector3 GTAVMods.Game.GtaCameras::get_GameplayDirection()",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Vector3 GTAVMods.Game.GtaCameras::get_GameplayPosition()",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Vector3 GTAVMods.Game.GtaCameras::get_GameplayRotation()",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Vector3 GTAVMods.Game.GtaEntities::ForwardVector(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Vector3 GTAVMods.Game.GtaEntities::Position(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Vector3 GTAVMods.Game.GtaEntities::Rotation(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Vector3 GTAVMods.Game.GtaEntities::Velocity(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Math.Vector3 GTAVMods.Game.GtaPeds::BonePosition(System.Int32,GTA.Bone)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Native.InputArgument GTAVMods.Game.GtaArgumentMarshaller::Convert(System.Object)",
+      "reason": "SHVDNE InputArgument constructor resolves the native runtime; argument iteration and ordering remain covered in NativeInvoker."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.WeaponHash GTAVMods.Game.GtaWeapons::Current(System.Int32)",
+      "reason": "Direct SHVDNE weapon observation or operation; weapon ownership and request policy remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaWorldQueries::Capsule(GTA.Math.Vector3,GTA.Math.Vector3,System.Single,GTA.IntersectFlags,System.Boolean&,System.Int32&,GTA.Math.Vector3&)",
+      "reason": "Direct SHVDNE shape-test invocation and output transport; measured GtaWorld assembles RayHit and tests terrain/zero/miss semantics. Handle null conversion is measured in GameHandles."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaWorldQueries::Raycast(GTA.Math.Vector3,GTA.Math.Vector3,GTA.IntersectFlags,System.Int32,System.Boolean&,System.Int32&,GTA.Math.Vector3&)",
+      "reason": "Direct SHVDNE raycast invocation and output transport; measured GtaWorld assembles RayHit and tests terrain/zero/miss semantics. Handle null conversion is measured in GameHandles."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaEntityLifetimeBindings::Exists(System.Int32)",
+      "reason": "Direct entity existence native observation. Measured HandleLifetime confirms deletion, handles prior absence and reports silent refusal."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaCameraLifetimeBindings::Exists(System.Int32)",
+      "reason": "Direct SHVDNE camera existence observation. Measured HandleLifetime confirms deletion, handles prior absence and reports silent refusal."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaRopeLifetimeBindings::Exists(System.Int32)",
+      "reason": "Direct SHVDNE rope existence observation. Measured HandleLifetime confirms deletion, handles prior absence and reports silent refusal."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaEntities::HasBeenDamagedBy(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaEntities::IsDead(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaEntities::IsInAir(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaEntities::IsTouching(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaHost::get_IsEnhanced()",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaHost::get_IsPaused()",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaInput::IsControlJustReleased(GTA.Control)",
+      "reason": "Direct SHVDNE key/control observation; interpretation and state transitions remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaInput::IsControlPressed(GTA.Control)",
+      "reason": "Direct SHVDNE key/control observation; interpretation and state transitions remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaInput::IsKeyPressed(System.Windows.Forms.Keys)",
+      "reason": "Direct SHVDNE key/control observation; interpretation and state transitions remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaOutputs::LastDamageBone(System.Int32,System.Int32&)",
+      "reason": "Raw native out-pointer allocation/copy only; callers cover result interpretation and coordinate calculations."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaOutputs::WorldToScreen(System.Single,System.Single,System.Single,System.Single&,System.Single&)",
+      "reason": "Raw scalar native call and out-pointer allocation/copy only; measured NativeOutputs maps XYZ and preserves screen coordinates and validity."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaPeds::IsInCombatAgainst(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaPeds::IsInMeleeCombat(System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaPeds::IsInVehicle(System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaPeds::IsRagdoll(System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaPeds::IsRunning(System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaPeds::IsSprinting(System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaPeds::IsWalking(System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaWeapons::HasWeapon(System.Int32,GTA.WeaponHash)",
+      "reason": "Direct SHVDNE weapon observation or operation; weapon ownership and request policy remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaWeapons::RequestAsset(GTA.WeaponHash,System.Int32)",
+      "reason": "Direct SHVDNE weapon observation or operation; weapon ownership and request policy remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaWorld::GetGroundHeight(GTA.Math.Vector3,System.Single&)",
+      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaWorld::RequestModel(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaCameras::Create(GTA.Math.Vector3,GTA.Math.Vector3,System.Single)",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaCameras::get_RenderingCamera()",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaEntities::AddBlip(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaEntities::Health(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaEntities::ModelHash(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaHost::get_GameTime()",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaHost::get_PlayerHandle()",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaHost::get_PlayerPed()",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaPeds::MaxHealth(System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaRopes::Create(GTA.RopeType,GTA.Math.Vector3,GTA.Math.Vector3,System.Single,System.Single,System.Boolean)",
+      "reason": "Direct SHVDNE rope creation or operation with caller-supplied arguments; rope lifecycle decisions remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaWeapons::CurrentObject(System.Int32)",
+      "reason": "Direct SHVDNE weapon observation or operation; weapon ownership and request policy remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaWorld::CreateDriver(System.Int32)",
+      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaWorld::CreateVehicle(System.Int32,GTA.Math.Vector3)",
+      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32 GTAVMods.Game.GtaWorld::VehicleDriver(System.Int32)",
+      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Int32[] GTAVMods.Game.GtaWorld::NearbyEntities(GTA.Math.Vector3,System.Single)",
+      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Single GTAVMods.Game.GtaEntities::HeightAboveGround(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Single GTAVMods.Game.GtaHost::get_LastFrameTime()",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Version GTAVMods.Game.GtaHost::get_FileVersion()",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameraLifetimeBindings::Delete(System.Int32)",
+      "reason": "Direct SHVDNE camera deletion request only. Measured HandleLifetime confirms absence and retains ownership on refusal or failure."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameras::PointAt(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameras::SetActive(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameras::SetHeadingLimits(System.Single,System.Single)",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameras::SetPitchLimits(System.Single,System.Single)",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameras::SetPosition(System.Int32,GTA.Math.Vector3)",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameras::Shake(GTA.CameraShake,System.Single)",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameras::StartRendering()",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaCameras::StopRendering()",
+      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::ApplyForce(System.Int32,GTA.Math.Vector3)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::AttachToBone(System.Int32,System.Int32,GTA.Bone)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntityLifetimeBindings::Delete(System.Int32)",
+      "reason": "Direct SHVDNE deletion request only. Measured HandleLifetime confirms absence and preserves caller ownership on refusal or failure."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::Detach(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::ResetOpacity(System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetBlipFriendly(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetBlipName(System.Int32,System.String)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetBulletProof(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetCollisionEnabled(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetCollisionProof(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetExplosionProof(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetFireProof(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetHealth(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetInvincible(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetMeleeProof(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetNoCollision(System.Int32,System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetOpacity(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetPersistent(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetPosition(System.Int32,GTA.Math.Vector3)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetQuaternion(System.Int32,GTA.Math.Quaternion)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetRotation(System.Int32,GTA.Math.Vector3)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetVelocity(System.Int32,GTA.Math.Vector3)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaEntities::SetVisible(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaHost::Notify(System.String)",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaHost::Wait(System.Int32)",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaHost::Yield()",
+      "reason": "Direct SHVDNE host observation, scheduler or notification call; host policy remains in covered controllers."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaNative::Call(GTA.Native.Hash,GTA.Native.InputArgument[])",
+      "reason": "Direct SHVDNE Function.Call entry point with the supplied native hash and marshaled arguments."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::ApplyDamage(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::ClearTasks(System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::SetCanRagdoll(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::SetCanSufferCriticalHits(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::SetDiesOnLowHealth(System.Int32,System.Boolean)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::SetIntoVehicle(System.Int32,System.Int32,GTA.VehicleSeat)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::SetMaxHealth(System.Int32,System.Int32)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::StartHeliMissionToPed(System.Int32,System.Int32,System.Int32,GTA.VehicleMissionType,System.Single,System.Single,System.Int32,System.Int32,System.Int32,System.Single,GTA.HeliMissionFlags)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaPeds::StartHeliMissionToPosition(System.Int32,System.Int32,GTA.Math.Vector3,GTA.VehicleMissionType,System.Single,System.Single,System.Int32,System.Int32,System.Int32,System.Single,GTA.HeliMissionFlags)",
+      "reason": "Direct SHVDNE ped/task property or operation; target selection and argument calculations remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaRopes::ActivatePhysics(System.Int32)",
+      "reason": "Direct SHVDNE rope creation or operation with caller-supplied arguments; rope lifecycle decisions remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaRopes::Connect(System.Int32,System.Int32,GTA.Math.Vector3,System.Int32,GTA.Math.Vector3,System.Single)",
+      "reason": "Direct SHVDNE rope creation or operation with caller-supplied arguments; rope lifecycle decisions remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaRopeLifetimeBindings::Delete(System.Int32)",
+      "reason": "Direct SHVDNE rope deletion request only. Measured HandleLifetime confirms absence and retains ownership on refusal or failure."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaWeapons::Give(System.Int32,GTA.WeaponHash,System.Int32,System.Boolean,System.Boolean)",
+      "reason": "Direct SHVDNE weapon observation or operation; weapon ownership and request policy remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaWeapons::Remove(System.Int32,GTA.WeaponHash)",
+      "reason": "Direct SHVDNE weapon observation or operation; weapon ownership and request policy remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaWeapons::Select(System.Int32,GTA.WeaponHash,System.Boolean)",
+      "reason": "Direct SHVDNE weapon observation or operation; weapon ownership and request policy remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaWorld::DrawMarker(GTA.MarkerType,GTA.Math.Vector3,GTA.Math.Vector3,GTA.Math.Vector3,GTA.Math.Vector3,System.Drawing.Color)",
+      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaWorld::ReleaseModel(System.Int32)",
+      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "T GTAVMods.Game.GtaNative::Call(GTA.Native.Hash,GTA.Native.InputArgument[])",
+      "reason": "Direct SHVDNE Function.Call entry point with the supplied native hash and marshaled arguments."
+    },
+    {
+      "assembly": "ModUtils",
+      "method": "NAudio.Wave.IWavePlayer ADModUtils.UtilityPrimitives::CreateAudioOutput()",
+      "reason": "Direct NAudio output-device construction; reader ownership, initialization, playback and cleanup remain covered through IWavePlayer."
+    },
+    {
+      "assembly": "ModUtils",
+      "method": "System.Int32 ADModUtils.UtilityPrimitives::GameTime()",
+      "reason": "Direct SHVDNE game-clock observation; interval arithmetic and timer policy remain covered."
+    },
+    {
+      "assembly": "ModUtils",
+      "method": "System.Void ADModUtils.Utilities/Timer::.ctor(System.Int32,ADModUtils.Utilities/Timer/TimerHandler)",
+      "reason": "Default-constructor binding selects the SHVDNE game clock; validation, initial clock sampling and timer decisions remain in the covered injectable constructor."
+    },
+    {
+      "assembly": "Thor",
+      "method": "System.Void Thor.Thor::.ctor()",
+      "reason": "SHVDNE Script lifecycle construction/event forwarding; composition, start, tick, key and cleanup behavior remain covered."
+    },
+    {
+      "assembly": "Thor",
+      "method": "System.Void Thor.Thor::OnAborted(System.Object,System.EventArgs)",
+      "reason": "SHVDNE Script lifecycle construction/event forwarding; composition, start, tick, key and cleanup behavior remain covered."
+    },
+    {
+      "assembly": "Thor",
+      "method": "System.Void Thor.Thor::OnKeyDown(System.Object,System.Windows.Forms.KeyEventArgs)",
+      "reason": "SHVDNE Script lifecycle construction/event forwarding; composition, start, tick, key and cleanup behavior remain covered."
+    },
+    {
+      "assembly": "Thor",
+      "method": "System.Void Thor.Thor::OnTick(System.Object,System.EventArgs)",
+      "reason": "SHVDNE Script lifecycle construction/event forwarding; composition, start, tick, key and cleanup behavior remain covered."
+    }
+  ]
+}

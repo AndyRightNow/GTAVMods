@@ -1,5 +1,6 @@
 ﻿using GTA.Math;
 using System.Drawing;
+using GTAVMods.Game;
 
 namespace ADModUtils
 {
@@ -18,9 +19,9 @@ namespace ADModUtils
 
         private Color Color { get; }
 
-        public void Draw()
+        public void Draw(IDrawingAccess drawing)
         {
-            NativeHelper.DrawLine(Start, End, Color);
+            drawing.DrawLine(Start, End, Color);
         }
 
         public override string ToString()

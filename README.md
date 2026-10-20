@@ -192,7 +192,26 @@ save and wrote to the existing SHVDNE log with DirectStorageFix installed.
   verify cameras, ropes, audio and hidden pathfinder entities are cleaned up.
 - Open F8 and F4 independently. Check all logs for errors after a sustained session.
 
-Unit tests cover random-selection edge cases, conservative build recognition,
-resource paths, missing audio, locked/unwritable logs, JSON escaping, concurrent
-writes and retention. They do not simulate the GTA engine,
-native calls, input, rendering, physics or live reloads.
+The shared build requires **100% executable line and branch coverage** in Thor,
+ModUtils, DeveloperConsole and GameBridge. It fails before packaging if tests
+fail, a line or branch is uncovered, or the fresh coverage report does not match
+the compiled source inventory. CI preserves reports even on failure.
+
+Gameplay runs against focused engine interfaces in tests. Scripted observations
+and recorded primitive commands exercise the real recall, catch, throw, flight,
+targeting, ropes, cameras, health, input interpretation and cleanup logic.
+Console, audio ownership, numerical helpers and diagnostics are also covered.
+The same production assemblies ship in the package, including `GameBridge.dll`.
+The [engine contracts](docs/engine-contracts.md) define units, timing, failure
+results and resource ownership. Tests distinguish requests from observed
+completion, exercise clock rollover and cleanup retries, and verify native
+argument mappings without simulating physics.
+
+Only individually reviewed game/OS binding methods are outside the measurement;
+no gameplay class or assembly is excluded. See [the coverage gate guide](docs/coverage-gate.md)
+for the exact boundary manifest, deterministic test design and local workflow.
+The [mutation workflow](docs/mutation-testing.md) tests whether assertions detect
+deliberate behavior changes and records surviving mutations for review.
+These tests do not certify GTA physics, rendered output, keyboard delivery,
+audible playback or native compatibility. Keep the live checks above after
+runtime or gameplay changes.

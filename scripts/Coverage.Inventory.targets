@@ -1,0 +1,35 @@
+<Project>
+  <!-- Imported only by Build.ps1. A missing additional output forces CoreCompile
+       to run even when ordinary outputs are current. Otherwise a BeforeTargets
+       hook could assign fresh source hashes to an older, skipped compilation. -->
+  <PropertyGroup Condition="'$(CoverageRunDirectory)' != ''">
+    <_CoverageCompileMarker>$(CoverageRunDirectory)/inputs/$(AssemblyName).compile-required</_CoverageCompileMarker>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(CoverageRunDirectory)' != ''">
+    <CustomAdditionalCompileOutputs Include="$(_CoverageCompileMarker)" />
+  </ItemGroup>
+  <Target Name="HashCoverageCompilerInputs" BeforeTargets="CoreCompile"
+          Condition="'$(CoverageRunDirectory)' != ''">
+    <Error Condition="Exists('$(_CoverageCompileMarker)')"
+           Text="Coverage compilation marker must remain absent: $(_CoverageCompileMarker)" />
+    <GetFileHash Files="@(Compile)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_CoverageHashedCompile" />
+    </GetFileHash>
+  </Target>
+  <Target Name="RecordCoverageCompilerInputs" AfterTargets="CoreCompile"
+          Condition="'$(CoverageRunDirectory)' != ''">
+    <ItemGroup>
+      <_CoverageRecord Include="Project|$(MSBuildProjectFullPath)" />
+      <_CoverageRecord Include="AssemblyName|$(AssemblyName)" />
+      <_CoverageRecord Include="Configuration|$(Configuration)" />
+      <_CoverageRecord Include="TargetPath|$(TargetPath)" />
+      <_CoverageRecord Include="IsTestProject|$(IsTestProject)" />
+      <_CoverageRecord Include="NuGetPackageRoot|$(NuGetPackageRoot)" />
+      <_CoverageRecord Include="Compile|%(Compile.FullPath)" />
+      <_CoverageRecord Include="CompileHash|%(_CoverageHashedCompile.FullPath)|%(_CoverageHashedCompile.FileHash)" />
+    </ItemGroup>
+    <MakeDir Directories="$(CoverageRunDirectory)/inputs" />
+    <WriteLinesToFile File="$(CoverageRunDirectory)/inputs/$(AssemblyName).txt"
+                      Lines="@(_CoverageRecord)" Overwrite="true" Encoding="UTF-8" />
+  </Target>
+</Project>

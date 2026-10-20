@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModUtils", "ModUtils\ModUti
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DeveloperConsole", "gtav_console\DeveloperConsole.csproj", "{EFFE7239-0A6B-4DEC-BB24-6CB563EC48A7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameBridge", "GameBridge\GameBridge.csproj", "{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Build|Any CPU = Build|Any CPU
@@ -69,6 +71,18 @@ Global
 		{EFFE7239-0A6B-4DEC-BB24-6CB563EC48A7}.Release|Any CPU.Build.0 = Release|Any CPU
 		{EFFE7239-0A6B-4DEC-BB24-6CB563EC48A7}.Release|x64.ActiveCfg = Release|x64
 		{EFFE7239-0A6B-4DEC-BB24-6CB563EC48A7}.Release|x64.Build.0 = Release|x64
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Build|Any CPU.ActiveCfg = Release|Any CPU
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Build|Any CPU.Build.0 = Release|Any CPU
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Build|x64.ActiveCfg = Release|Any CPU
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Build|x64.Build.0 = Release|Any CPU
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Debug|x64.ActiveCfg = Debug|x64
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Debug|x64.Build.0 = Debug|x64
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Release|x64.ActiveCfg = Release|x64
+		{18B7AFFB-6397-4B58-A24D-02BEFBB1F8DE}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
