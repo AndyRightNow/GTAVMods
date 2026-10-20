@@ -77,6 +77,10 @@ namespace ModUtilsTest
                 "Give's equipNow flag permits a later equip; it does not promise an immediate switch.");
             Assert.IsTrue(game.Weapons.Select(10, WeaponHash.Hammer, false));
             Assert.AreEqual(WeaponHash.Unarmed, game.Weapons.Current(10));
+            Assert.IsTrue(game.Weapons.Select(10, WeaponHash.Hammer, true));
+            Assert.AreEqual(WeaponHash.Hammer, game.Weapons.Current(10));
+            Assert.AreEqual(0, game.Weapons.CurrentObject(10),
+                "Immediate selection does not promise that a weapon object has been observed.");
             game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20);
             game.Weapons.Remove(10, WeaponHash.Parachute);
             Assert.AreEqual(20, game.Weapons.CurrentObject(10), "Removing another weapon must not detach the held one.");

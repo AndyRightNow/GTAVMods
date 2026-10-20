@@ -261,8 +261,15 @@ namespace ModUtilsTest
             storage.Existing.Add(new LogFile("newest", clock.UtcNow));
             storage.Existing.Add(new LogFile("locked", clock.UtcNow.AddDays(-1)));
             storage.Existing.Add(new LogFile("oldest", clock.UtcNow.AddDays(-2)));
-            storage.BeforeDelete = path => { if (path == "locked") throw new IOException("locked"); };
+            var attemptedDeletes = new List<string>();
+            storage.BeforeDelete = path =>
+            {
+                attemptedDeletes.Add(path);
+                if (path == "locked") throw new IOException("locked");
+            };
             log.Write("INFO", "retained");
+            CollectionAssert.AreEqual(new[] { "locked", "oldest" }, attemptedDeletes,
+                "Retention must skip the active/newest files and continue after an old file cannot be deleted.");
             CollectionAssert.AreEqual(new[] { "oldest" }, storage.Deleted);
             Assert.AreEqual("retained", LogJson.Text(storage.Records.Single(), "event"));
             Assert.AreEqual(0L, log.DroppedRecords);
@@ -340,7 +347,8 @@ namespace ModUtilsTest
                     console.Press(System.Windows.Forms.Keys.F8);
                     console.Draw();
                     Assert.IsTrue(console.Platform.Text.Any(line => line.Text.Contains(marker + " console")));
-                    Assert.IsFalse(console.Platform.Text.Any(line => line.Text.Contains(marker + " file-only")));
+                    Assert.HasCount(1, console.Platform.Text.Where(line => line.Text.Contains(marker)).ToArray(),
+                        "Only LogConsole while attached may mirror these calls; structured, throttled, plain and detached messages stay in the file.");
                     var records = File.ReadAllLines(Logger.LogFilePath).Select(LogJson.Parse).ToArray();
                     Assert.AreEqual("42", LogJson.Text(records.Single(record => LogJson.Text(record, "event") == marker), "data/value"));
                     Assert.AreEqual("7", LogJson.Text(records.Single(record => LogJson.Text(record, "event") == marker + "-throttle"), "data/value"));

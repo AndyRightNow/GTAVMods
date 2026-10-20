@@ -102,16 +102,18 @@ namespace ModUtilsTest {
                 CollectionAssert.AreEqual(new object[] { "abc" }, fixture.Native.Calls[3].Arguments);
                 CollectionAssert.AreEqual(new object[] { 1 }, fixture.Native.Calls[4].Arguments);
                 fixture.Native.Returns(Hash.GET_HASH_KEY, 123);
-                foreach (var test in new (Action Action, Hash Hash, object[] Expected)[] {
-                    (() => game.StatSetInt("number", 17, true), Hash.STAT_SET_INT, new object[] { 123, 17, true }),
-                    (() => game.StatSetFloat("float", .7f, false), Hash.STAT_SET_FLOAT, new object[] { 123, .7f, false }),
-                    (() => game.StatSetBool("flag", true, false), Hash.STAT_SET_BOOL, new object[] { 123, true, false }),
-                    (() => game.CreateAmbientPickup("pickup", new Vector3(1, 2, 3), 40), Hash.CREATE_AMBIENT_PICKUP,
+                foreach (var test in new (Action Action, string Name, Hash Hash, object[] Expected)[] {
+                    (() => game.StatSetInt("number", 17, true), "number", Hash.STAT_SET_INT, new object[] { 123, 17, true }),
+                    (() => game.StatSetFloat("float", .7f, false), "float", Hash.STAT_SET_FLOAT, new object[] { 123, .7f, false }),
+                    (() => game.StatSetBool("flag", true, false), "flag", Hash.STAT_SET_BOOL, new object[] { 123, true, false }),
+                    (() => game.CreateAmbientPickup("pickup", new Vector3(1, 2, 3), 40), "pickup", Hash.CREATE_AMBIENT_PICKUP,
                         new object[] { 123, 1f, 2f, 3f, 0, 40, 0, false, true })
                 }) {
                     fixture.Native.Calls.Clear();
                     test.Action();
+                    Assert.AreEqual(2, fixture.Native.Calls.Count);
                     Assert.AreEqual(Hash.GET_HASH_KEY, fixture.Native.Calls[0].Hash);
+                    CollectionAssert.AreEqual(new object[] { test.Name }, fixture.Native.Calls[0].Arguments);
                     Assert.AreEqual(test.Hash, fixture.Native.Calls[1].Hash);
                     CollectionAssert.AreEqual(test.Expected, fixture.Native.Calls[1].Arguments);
                 }
@@ -212,7 +214,7 @@ namespace ModUtilsTest {
         }
 
         [TestMethod]
-        public void EntityControlRequestsYieldUntilSuccessOrExactRetryLimitAndUseActualNetworkId() {
+        public void EntityControlRequestsYieldUntilSuccessOrElapsedTimeoutAndUseActualNetworkId() {
             using (var fixture = new ConsoleFixture(false)) {
                 var attempts = 0;
                 fixture.Native.Queries[Hash.NETWORK_HAS_CONTROL_OF_ENTITY] = a => ++attempts == 3;

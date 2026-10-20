@@ -465,15 +465,20 @@ namespace ModUtilsTest
         {
             var f = Holding();
             f.Game.AddEntity(60).DamagedBy.Add(10); f.Peds.Add(60);
-            f.Game.AddEntity(61);
+            f.Game.AddEntity(61); f.Peds.Add(61);
             f.Game.World.Nearby = (position, radius) => new[] { 10, 20, 60, 61 };
             f.Player.InMeleeCombat = true; f.Player.InVehicle = true;
             f.Ability.OnTick(false);
             Assert.IsFalse(f.Game.Calls.Any(call => call.Name == "entity.force"));
+            Assert.IsFalse(f.Game.Calls.Any(call => call.Name == "ped.damage"),
+                "Being in a vehicle must suppress melee damage as well as knockback.");
             f.Player.InVehicle = false;
             f.Ability.OnTick(false);
             var force = f.Game.Calls.Single(call => call.Name == "entity.force");
             CollectionAssert.AreEqual(new object[] { 60, Vector3.UnitY * 250 }, force.Arguments);
+            CollectionAssert.AreEqual(new object[] { 60, 100 },
+                f.Game.Calls.Single(call => call.Name == "ped.damage").Arguments,
+                "Only the pedestrian reported hit receives full-power melee damage.");
         }
 
         [TestMethod]
@@ -873,20 +878,29 @@ namespace ModUtilsTest
             f.Game.Host.OnWait = milliseconds => f.HoldHammer();
             for (int i = 0; i < 2; i++)
             {
+                f.Game.Host.GameTime = i * 500;
                 f.Player.Weapons.Clear();
                 f.Game.World.Capsules.Enqueue(new RayHit(true, 10, Vector3.Zero));
                 f.Ability.SummonWeapon();
             }
             Assert.HasCount(16, f.Game.Native.Calls.Where(call => call.Hash == Hash.FORCE_LIGHTNING_FLASH).ToArray());
             Assert.AreEqual(2, f.Audio.Clips["catch-hammer.wav"].Plays);
+            Func<int> boneEffects = () => f.Game.Native.Calls.Count(call => call.Hash == Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE);
+            Assert.AreEqual(10, boneEffects(), "Each catch emits one hand effect and four body effects.");
             f.PrepareHoverObjects(); f.ClearTerrainRay(); f.Ability.OnTick(false);
             f.Player.Weapons.Clear(); f.Player.CurrentWeapon = WeaponHash.Unarmed; f.Player.CurrentWeaponObject = 0;
-            f.Game.Host.GameTime = 1; f.ClearTerrainRay(); f.Ability.OnTick(false);
-            f.Game.Host.GameTime = 1001; f.ClearTerrainRay(); f.Ability.OnTick(false);
-            var glowing = f.Game.Native.Calls.Count(call => call.Hash == Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE);
-            Assert.IsTrue(glowing > 2);
-            f.Game.Host.GameTime = 10002; f.ClearTerrainRay(); f.Ability.OnTick(false);
-            Assert.AreEqual(glowing, f.Game.Native.Calls.Count(call => call.Hash == Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE));
+            f.Game.Host.GameTime = 501; f.ClearTerrainRay(); f.Ability.OnTick(false);
+            f.Game.Host.GameTime = 999; f.ClearTerrainRay(); f.Ability.OnTick(false);
+            Assert.AreEqual(10, boneEffects(), "The original one-second interval has not elapsed yet.");
+            f.Game.Host.GameTime = 1000; f.ClearTerrainRay(); f.Ability.OnTick(false);
+            Assert.AreEqual(14, boneEffects(),
+                "The second catch must preserve the first catch's timer instead of postponing the next four body effects to 1500 ms.");
+            f.ClearTerrainRay(); f.Ability.OnTick(false);
+            Assert.AreEqual(14, boneEffects(), "Repeating a frame timestamp must not fire the effect twice.");
+            f.Game.Host.GameTime = 2000; f.ClearTerrainRay(); f.Ability.OnTick(false);
+            Assert.AreEqual(18, boneEffects(), "One additional interval emits exactly one set of four body effects.");
+            f.Game.Host.GameTime = 10502; f.ClearTerrainRay(); f.Ability.OnTick(false);
+            Assert.AreEqual(18, boneEffects(), "Expired power stops the periodic body effects.");
         }
 
         [TestMethod]

@@ -194,7 +194,9 @@ namespace ModUtilsTest {
             var failure = Assert.ThrowsExactly<InvalidOperationException>(() => finder.OnTick(20));
             StringAssert.Contains(failure.Message, driverFailure ? "driver" : "vehicle");
             Assert.AreEqual("world.releaseModel", game.Calls.Last().Name);
-            Assert.AreEqual(driverFailure ? 1 : 0, game.Calls.Count(c => c.Name == "entity.delete"));
+            CollectionAssert.AreEqual(driverFailure ? new[] { 30 } : Array.Empty<int>(),
+                game.Calls.Where(c => c.Name == "entity.delete").Select(c => (int)c.Arguments[0]).ToArray(),
+                "Partial rollback must delete only the vehicle acquired by this creation attempt.");
             Assert.IsNull(finder.Position);
             Assert.IsFalse(finder.IsRelatedEntity(0));
             finder.Dispose();
