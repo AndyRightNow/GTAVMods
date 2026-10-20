@@ -93,6 +93,13 @@ into the game or install assemblies into the GAC.
   and trigger, an observable expected outcome, and the regression it prevents.
   This applies to gameplay, engine contracts, utilities, diagnostics and CI
   guardrails. Name and organize cases by the behavior being protected.
+- Keep test folders, namespaces, classes and the review catalogue aligned with
+  `ThorTest/README.md`. Group player scenarios by feature, then behavior; place
+  pure helpers under `PureFunctions` and shared fixtures/fakes under `Support`.
+  Give each scenario one home based on its primary expectation. Feature-specific
+  fallback belongs with that feature; pausing, explicit retry and script reload
+  belong under lifecycle recovery. Do not recreate catch-all module, contract or
+  wiring suites, or duplicate scenarios to make them appear in several groups.
 - Exercise module construction and wiring through those behavior scenarios.
   Do not add standalone tests whose only outcome is successful construction,
   concrete type identity, dependency assignment, forwarding to a mock, or
