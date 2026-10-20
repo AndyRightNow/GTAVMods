@@ -1,4 +1,4 @@
-﻿using ADModUtils;
+using ADModUtils;
 using GTA;
 using GTA.Math;
 using System.Windows.Forms;
@@ -14,19 +14,21 @@ namespace Thor
         protected Prop weaponUsedForHoveringWhirlingOriginal;
         protected Prop weaponUsedForHoveringWhirlingShown;
         protected bool isHoverWhirling;
+        public override string DiagnosticState => base.DiagnosticState + ";rope=" + isHoldingWeaponRope + ";hoverWhirl=" + isHoverWhirling;
 
         public MjolnirWorthyAbility() : base()
         {
             isHoldingWeaponRope = false;
             isHoverWhirling = false;
             Weapon = Mjolnir.Instance;
-            soundFileCatchWeapon = "./scripts/catch-hammer.wav";
-            soundFileWeaponCloseToPed = "./scripts/hammer-close-to-player.wav";
         }
 
         public override void RemoveAbility()
         {
             base.RemoveAbility();
+            Weapon.StopEffects();
+            isHoldingWeaponRope = false;
+            isHoverWhirling = false;
 
             if (weaponUsedForHoveringWhirlingOriginal != null)
             {
@@ -86,7 +88,7 @@ namespace Thor
                         attachedPed,
                         NativeHelper.Instance.GetAnimationDictNameByAction((uint)AnimationActions.WhirlingHammer),
                         NativeHelper.Instance.GetAnimationNameByAction((uint)AnimationActions.WhirlingHammer),
-                        AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation
+                        AnimationFlags.UpperBodyOnly | AnimationFlags.Secondary
                     );
                     Weapon.Whirl(weaponWhirlingPlane);
                 }

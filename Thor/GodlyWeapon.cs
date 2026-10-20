@@ -1,4 +1,4 @@
-﻿using ADModUtils;
+using ADModUtils;
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -173,11 +173,14 @@ namespace Thor
             }
             set
             {
+                if (weaponObject == value) return;
                 if (weaponObject != null)
                 {
                     weaponObject.Detach();
                     weaponObject.Delete();
                 }
+                weaponObject = null;
+                weaponFxTimer = null;
                 if (value != null)
                 {
                     weaponObject = InitializeWeaponObject(value);
@@ -317,11 +320,14 @@ namespace Thor
                     1,
                     (Vector3)spawnPos
                 );
+                if (WeaponObject == null)
+                    throw new InvalidOperationException("The hammer weapon asset could not be created.");
             }
             catch (Exception e)
             {
-                Notification.Show("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.");
+                Notification.PostTicker("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.", false);
                 ADModUtils.Logger.Log("ERROR", e.ToString());
+                throw;
             }
         }
 
@@ -347,6 +353,7 @@ namespace Thor
                 (ADModUtils.NativeHelper.IsVehicle(nextTarget) && distanceBetweenWeaponAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET)))
             {
                 targets.Remove(nextTarget);
+                Logger.Event("INFO", "hammer.targetReached", "target", nextTarget.Handle, "type", nextTarget.EntityType.ToString(), "remaining", targets.Count);
             }
             else
             {
@@ -406,6 +413,8 @@ namespace Thor
         {
 
             bool curHasObstaclesInBetween = HasObstaclesInBetween(newPosition);
+            if (curHasObstaclesInBetween != prevHasObstaclesInBetween)
+                Logger.Throttled("INFO", "hammer.pathObstruction", 500, "blocked", curHasObstaclesInBetween, "target", newPosition.ToString());
 
             if (curHasObstaclesInBetween && !IsInOpenAir())
             {

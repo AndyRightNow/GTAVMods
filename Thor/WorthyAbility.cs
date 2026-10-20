@@ -1,4 +1,4 @@
-﻿using GTA;
+using GTA;
 using GTA.Math;
 using GTA.UI;
 using GTA.Native;
@@ -62,10 +62,9 @@ namespace Thor
         protected float lastLostWeaponTime;
         protected float powerLevel;
         protected bool isPreviouslyHoldingWeapon;
-        protected NAudio.Wave.WaveOut catchWeaponSoundPlayer;
-        protected NAudio.Wave.WaveOut weaponCloseToPlayerSoundPlayer;
-        protected string soundFileCatchWeapon;
-        protected string soundFileWeaponCloseToPed;
+        protected readonly AudioClip catchWeaponSoundPlayer;
+        protected readonly AudioClip weaponCloseToPlayerSoundPlayer;
+        private int originalMaxHealth;
         protected bool isGrabbing = false;
         protected Entity currentlyGrabbedEntity = null;
 
@@ -84,8 +83,8 @@ namespace Thor
             isInAirDashAttack = false;
             pedFxTimer = null;
             hasSummonedThunder = false;
-            catchWeaponSoundPlayer = new NAudio.Wave.WaveOut();
-            weaponCloseToPlayerSoundPlayer = new NAudio.Wave.WaveOut();
+            catchWeaponSoundPlayer = new AudioClip(AudioClip.ResourcePath("catch-hammer.wav"), 0.3f);
+            weaponCloseToPlayerSoundPlayer = new AudioClip(AudioClip.ResourcePath("hammer-close-to-player.wav"), 0.3f);
             weaponJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
             powerLevel = 0.0f;
             lastLostWeaponTime = NULL_FLOAT;
@@ -93,6 +92,11 @@ namespace Thor
         }
 
         public W Weapon { get; set; }
+
+        public virtual string DiagnosticState => "attached=" + IsAttachedToPed + ";holding=" + (IsAttachedToPed && attachedPed.Exists() && IsHoldingWeapon) +
+            ";return=" + shouldWeaponReturnToPed + ";flying=" + isFlying + ";throwFlight=" + isFlyingWithThrownWeapon +
+            ";airDash=" + isInAirDashAttack + ";attacking=" + isWeaponAttackingTargets + ";collecting=" + isCollectingTargets +
+            ";targets=" + targets.Count + ";grabbing=" + isGrabbing;
 
         public static T Instance
         {
@@ -117,15 +121,31 @@ namespace Thor
 
         public virtual void RemoveAbility()
         {
-            if (HasWeapon)
+            Logger.Event("INFO", "ability.remove", "ped", attachedPed?.Handle, "state", DiagnosticState);
+            if (attachedPed != null && attachedPed.Exists() && HasWeapon)
             {
                 ThrowWeaponOut(false);
             }
-            if (attachedPed != null)
+            if (attachedPed != null && attachedPed.Exists())
             {
                 SetInvincible(false);
-                attachedPed = null;
+                attachedPed.MaxHealth = originalMaxHealth;
+                attachedPed.Health = System.Math.Min(attachedPed.Health, originalMaxHealth);
             }
+            attachedPed = null;
+            catchWeaponSoundPlayer.Stop();
+            weaponCloseToPlayerSoundPlayer.Stop();
+            Weapon.DestroyWeaponTrackCam();
+            targets.Clear();
+            isFlying = false;
+            isFlyingWithThrownWeapon = false;
+            isCollectingTargets = false;
+            isWeaponAttackingTargets = false;
+            pedHealthRecoverTimer = null;
+            if (currentlyGrabbedEntity != null && currentlyGrabbedEntity.Exists())
+                currentlyGrabbedEntity.Detach();
+            currentlyGrabbedEntity = null;
+            isGrabbing = false;
 
             if (pedFxTimer != null)
             {
@@ -133,6 +153,12 @@ namespace Thor
             }
 
             hasSummonedThunder = false;
+        }
+
+        public void DisposeSounds()
+        {
+            catchWeaponSoundPlayer.Dispose();
+            weaponCloseToPlayerSoundPlayer.Dispose();
         }
 
         public void ApplyOn(Ped ped)
@@ -143,6 +169,8 @@ namespace Thor
             }
 
             attachedPed = ped;
+            Logger.Event("INFO", "ability.attach", "ped", ped.Handle, "model", ped.Model.Hash, "position", ped.Position.ToString());
+            originalMaxHealth = ped.MaxHealth;
             attachedPed.CanRagdoll = true;
 
             if (Weapon != null &&
@@ -186,7 +214,6 @@ namespace Thor
                 HandleFlying();
                 Weapon.DestroyWeaponTrackCam();
                 Weapon.SetSummonStatus(false);
-                World.RenderingCamera = null;
                 Function.Call<bool>(Hash.SET_PLAYER_LOCKON_RANGE_OVERRIDE, Game.Player.Handle, 0.0f);
                 HandleAirDashAttack();
                 CollectTargets();
@@ -502,8 +529,8 @@ namespace Thor
 
         protected virtual void HandleFlying()
         {
-            GameplayCamera.ClampYaw(-180.0f, 180.0f);
-            GameplayCamera.ClampPitch(-180.0f, 180.0f);
+            GameplayCamera.SetThirdPersonCameraRelativeHeadingLimitsThisUpdate(-180.0f, 180.0f);
+            GameplayCamera.SetThirdPersonCameraRelativePitchLimitsThisUpdate(-180.0f, 180.0f);
             var velocity = Vector3.Zero;
 
             if (!IsHoldingWeapon)
@@ -730,7 +757,7 @@ namespace Thor
             foreach (var target in targets)
             {
                 World.DrawMarker(
-                    MarkerType.UpsideDownCone,
+                    MarkerType.Cone,
                     target.Position + new Vector3(0.0f, 0.0f, 2.0f),
                     GameplayCamera.Direction,
                     Vector3.Zero,
@@ -768,6 +795,7 @@ namespace Thor
 
         public virtual void SummonWeapon()
         {
+            Logger.Throttled("INFO", "hammer.summon", 2000, "state", DiagnosticState);
             isWeaponAttackingTargets = false;
             targets.Clear();
             Vector3 rightHandBonePos = attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position;
@@ -811,6 +839,7 @@ namespace Thor
                 GameplayCamera.Shake(CameraShake.LargeExplosion, 0.01f);
                 Script.Wait(1);
                 shouldWeaponReturnToPed = false;
+                Logger.Event("INFO", "hammer.caught", "ped", attachedPed.Handle, "gameTime", Game.GameTime);
                 weaponJustFinishedAttackingTargetsTimestamp = NULL_FLOAT;
                 SummonThunder();
                 return;
@@ -852,24 +881,17 @@ namespace Thor
 
         protected void PlayCatchWeaponSound()
         {
-            catchWeaponSoundPlayer.Init(new NAudio.Wave.AudioFileReader(soundFileCatchWeapon));
-            catchWeaponSoundPlayer.Volume = 0.3f;
             catchWeaponSoundPlayer.Play();
         }
 
         protected void PlayWeaponCloseSound()
         {
-            if (weaponCloseToPlayerSoundPlayer.PlaybackState == NAudio.Wave.PlaybackState.Playing)
-            {
-                return;
-            }
-            weaponCloseToPlayerSoundPlayer.Init(new NAudio.Wave.AudioFileReader(soundFileWeaponCloseToPed));
-            weaponCloseToPlayerSoundPlayer.Volume = 0.3f;
-            weaponCloseToPlayerSoundPlayer.Play();
+            weaponCloseToPlayerSoundPlayer.Play(restart: false);
         }
 
         public void ThrowAndFlyWithWeapon()
         {
+            Logger.Event("INFO", "hammer.throwFlight", "state", DiagnosticState);
             if (!IsHoldingWeapon)
             {
                 return;
@@ -883,6 +905,7 @@ namespace Thor
 
         public void ThrowWeapon(ref HashSet<Entity> targets)
         {
+            Logger.Event("INFO", "hammer.throwTargets", "targets", targets.Count, "state", DiagnosticState);
             if (!IsHoldingWeapon)
             {
                 return;
@@ -906,6 +929,7 @@ namespace Thor
 
         public void ThrowWeapon()
         {
+            Logger.Event("INFO", "hammer.throw", "state", DiagnosticState);
             if (!IsHoldingWeapon)
             {
                 return;
@@ -916,6 +940,7 @@ namespace Thor
 
         protected virtual void ThrowWeaponOut(bool hasInitialVelocity = true)
         {
+            Logger.Event("INFO", "hammer.release", "initialVelocity", hasInitialVelocity, "state", DiagnosticState);
             if (IsHoldingWeapon)
             {
                 Weapon.WeaponObject = Function.Call<Prop>(Hash.GET_WEAPON_OBJECT_FROM_PED, attachedPed);
@@ -972,7 +997,7 @@ namespace Thor
                 dictName,
                 animName,
                 attachedPed.IsWalking || attachedPed.IsSprinting || attachedPed.IsRunning || attachedPed.IsInAir ?
-                    AnimationFlags.UpperBodyOnly | AnimationFlags.AllowRotation :
+                    AnimationFlags.UpperBodyOnly | AnimationFlags.Secondary :
                     AnimationFlags.None,
                 -1,
                 false

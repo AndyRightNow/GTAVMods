@@ -16,13 +16,13 @@ namespace ADModUtils
                     return default(T);
                 }
 
-                int randomIndex = new System.Random().Next(0, arr.Length);
-
-                return arr[randomIndex];
+                lock (SystemRandomInstance)
+                    return arr[SystemRandomInstance.Next(arr.Length)];
             }
 
             public static T PickOneIf<T>(T[] arr, Func<T, bool> predicate)
             {
+                if (predicate == null) throw new ArgumentNullException(nameof(predicate));
                 if (arr == null || arr.Length == 0)
                 {
                     return default(T);
@@ -37,9 +37,7 @@ namespace ADModUtils
                     }
                 }
 
-                int randomIndex = new System.Random().Next(0, arrThatMeetPredicate.Count);
-
-                return arrThatMeetPredicate[randomIndex];
+                return PickOne(arrThatMeetPredicate.ToArray());
             }
 
             public static System.Random SystemRandomInstance = new System.Random();

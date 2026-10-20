@@ -215,7 +215,7 @@ namespace DeveloperConsole {
                         try {
                             return CSharpEval(String);
                         }
-                        catch (Exception e) {
+                        catch (Exception) {
                             return null;
                         }
                     case CommandTokenKind.Number:

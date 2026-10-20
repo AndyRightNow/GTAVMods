@@ -1,78 +1,52 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Reflection;
 
 namespace ADModUtils
 {
-    public class Logger
+    public static class Logger
     {
         private static DeveloperConsole.DeveloperConsole developerConsole;
+        private static readonly SessionLog session = new SessionLog(
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GTAVMods", "Logs"));
+        private static readonly Dictionary<string, long> lastEvents = new Dictionary<string, long>();
+        public static string LogFilePath => session.FilePath;
+        public static long DroppedRecords => session.DroppedRecords;
 
-        public static void Init(DeveloperConsole.DeveloperConsole developerConsole)
+        public static void Init(DeveloperConsole.DeveloperConsole console)
         {
-            Logger.developerConsole = developerConsole;
+            developerConsole = console;
+            developerConsole?.PrintLine("Thor diagnostics: " + LogFilePath);
         }
 
-        private static string FormatMessage(string logLevel, params string[] message)
+        public static void Event(string level, string name, params object[] fields)
         {
-            var datetime = DateTime.Now;
-
-            var output = string.Concat("[", datetime.ToString("HH:mm:ss"), "] ", logLevel, " ");
-
-
-            foreach (string str in message)
-            {
-                output = string.Concat(output, " ", str);
-            }
-
-            return output;
+            var data = new Dictionary<string, object>();
+            for (int i = 0; i + 1 < fields.Length; i += 2)
+                data[Convert.ToString(fields[i])] = fields[i + 1];
+            session.Write(level, name, data);
         }
 
-        public static void Log(string logLevel, params string[] message)
+        public static void Throttled(string level, string name, int intervalMs, params object[] fields)
         {
-            var datetime = DateTime.Now;
-            string logPath = Path.ChangeExtension(Assembly.GetExecutingAssembly().Location, ".log");
-            if (!File.Exists(logPath))
+            lock (lastEvents)
             {
-                File.WriteAllText(logPath, String.Empty);
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (lastEvents.TryGetValue(name, out var previous) &&
+                    (now - previous) * 1000.0 / System.Diagnostics.Stopwatch.Frequency < intervalMs) return;
+                lastEvents[name] = now;
             }
-
-            try
-            {
-                var fs = new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.Read);
-                var sw = new StreamWriter(fs);
-
-                try
-                {
-                    sw.Write(FormatMessage(logLevel, message));
-
-                    foreach (string str in message)
-                    {
-                        sw.Write(str);
-                    }
-
-                    sw.WriteLine();
-                }
-                finally
-                {
-                    sw.Close();
-                    fs.Close();
-                }
-            }
-            catch (Exception)
-            {
-            }
+            Event(level, name, fields);
         }
 
-        public static void LogConsole(string logLevel, params string[] message)
-        {
-            if (developerConsole == null)
-            {
-                return;
-            }
+        public static void Log(string level, params string[] message) =>
+            Event(level, "message", "message", string.Join(" ", message));
 
-            developerConsole.PrintLine(FormatMessage(logLevel, message));
+        public static void LogConsole(string level, params string[] message)
+        {
+            Log(level, message);
+            developerConsole?.PrintLine(level + " " + string.Join(" ", message));
         }
     }
 }

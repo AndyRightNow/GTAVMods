@@ -1,0 +1,19 @@
+﻿{
+    "Tool":  "CodeWalker Gen9Converter",
+    "Source":  "https://github.com/dexyfex/CodeWalker",
+    "Revision":  "485d56bec00262ed7fa472261cce7bbc6202b96e",
+    "Assets":  [
+                   {
+                       "File":  "w_me_hammer.ydr",
+                       "LegacySha256":  "12FBEC56D390C268F1F18D08B8E7F4D54F5F68D8D8A638523A581FA63E54FBE9",
+                       "EnhancedSha256":  "6B6BC744F433B0B62B8271555169487C8342E9577685D97609FBA9C19D540CDC",
+                       "ResourceVersion":  159
+                   },
+                   {
+                       "File":  "w_me_hammer.ytd",
+                       "LegacySha256":  "E504D780011AF8484B99E390D29DFDF9CF8A662B28EEF454ED046EE0348D6A91",
+                       "EnhancedSha256":  "57CDD90AEB65263CA70598E4FA9D7052C89F8DE52419140484DD66ADF0D5FA38",
+                       "ResourceVersion":  5
+                   }
+               ]
+}

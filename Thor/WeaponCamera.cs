@@ -55,7 +55,10 @@ namespace Thor
         {
             if (hammerTrackCam == null)
             {
-                hammerTrackCam = World.CreateCamera(weaponObject.Position, Vector3.Zero, CAMERA_FOV);
+                hammerTrackCam = Camera.Create(ScriptedCameraNameHash.DefaultScriptedCamera,
+                    weaponObject.Position, Vector3.Zero, CAMERA_FOV);
+                if (hammerTrackCam == null) return;
+                ADModUtils.Logger.Event("INFO", "camera.created", "weapon", weaponObject.Handle);
             }
             Vector3 weaponDirection = weaponObject.Velocity.Normalized;
             int randomNegationFactor = ADModUtils.Utilities.Random.RandomNegation();
@@ -104,13 +107,16 @@ namespace Thor
             }
 
 
-            World.RenderingCamera = hammerTrackCam;
+            hammerTrackCam.IsActive = true;
+            ScriptCameraDirector.StartRendering();
         }
 
         public void DestroyCamera()
         {
             if (hammerTrackCam != null)
             {
+                ADModUtils.Logger.Event("INFO", "camera.deleted");
+                CancelRenderedCamera();
                 hammerTrackCam.Delete();
                 hammerTrackCam = null;
             }
@@ -118,7 +124,12 @@ namespace Thor
 
         public void CancelRenderedCamera()
         {
-            World.RenderingCamera = null;
+            if (hammerTrackCam != null && ScriptCameraDirector.RenderingCam == hammerTrackCam)
+            {
+                ADModUtils.Logger.Event("INFO", "camera.stopped");
+                ScriptCameraDirector.StopRendering();
+                hammerTrackCam.IsActive = false;
+            }
         }
     }
 }

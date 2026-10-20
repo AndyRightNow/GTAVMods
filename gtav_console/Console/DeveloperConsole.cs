@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.EnterpriseServices.Internal;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
@@ -46,7 +45,6 @@ namespace DeveloperConsole {
         private bool _isHidden;
         private int _lastBlinkTime;
         private int _lineOffset;
-        private bool _hasWarned;
 
         /// <summary>
         ///     Whether or not console debug is enabled
@@ -62,20 +60,22 @@ namespace DeveloperConsole {
         ///     Creates the console
         /// </summary>
         public DeveloperConsole() {
-            InjectToGAC();
-
             Instance = this;
 
             Tick += OnTick;
             KeyDown += OnKeyDown;
             KeyUp += OnKeyUp;
+            Aborted += (sender, args) => {
+                if (Instance == this) Instance = null;
+                RegisteredScripts.Clear();
+            };
 
             CommandDispatcher = new CommandDispatcher();
 
             ShowConsole(false);
 
             PrintLine(
-                "This is the developer console. To close, press the ' or F4 key on your keyboard. Run 'help' for a list of commands.");
+                "Developer console: F8 opens/closes. Run 'help' for commands. F4 opens the SHVDN console.");
 
             foreach (var s in RegisteredScripts) s.Value(this);
         }
@@ -89,6 +89,7 @@ namespace DeveloperConsole {
         ///     The current console instance
         /// </summary>
         public static DeveloperConsole Instance { get; private set; }
+        public bool IsOpen => !_isHidden;
 
         // ReSharper disable once ConvertToAutoProperty
         /// <summary>
@@ -101,21 +102,13 @@ namespace DeveloperConsole {
         }
 
         /// <summary>
-        ///     Inject our assembly to the Global Assembly Cache so all scripts have access to it
-        /// </summary>
-        private void InjectToGAC() {
-            //Allows other scripts to access us
-            var pub = new Publish();
-            pub.GacInstall(typeof (DeveloperConsole).Assembly.Location);
-        }
-
-        /// <summary>
         ///     Register a script with the console
         /// </summary>
         /// <param name="s">The script to register</param>
         /// <param name="c">The console attached callback delegate</param>
         internal static void RegisterConsoleScript(Script s, OnConsoleAttached c) {
             RegisteredScripts.Add(new KeyValuePair<Script, OnConsoleAttached>(s, c));
+            s.Aborted += (sender, args) => RegisteredScripts.RemoveAll(entry => entry.Key == s);
             if (Instance != null) c(Instance);
         }
 
