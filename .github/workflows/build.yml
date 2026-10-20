@@ -1,5 +1,11 @@
 name: Build Enhanced mod
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches:
+      - master
+      - codex/gta-v-enhanced
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

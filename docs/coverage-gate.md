@@ -8,6 +8,8 @@ Each run writes `artifacts/coverage/<timestamp>-<id>/`. `latest-run.txt` identif
 the newest run. The directory contains the compiler input records, portable-PDB
 inventory, JSON and Cobertura coverage, TRX test results, and `gate-summary.json`.
 CI uploads the coverage directory even when validation fails.
+Pull requests run one validation build per update. Push builds are limited to
+`master` and `codex/gta-v-enhanced`; manual workflow runs remain available.
 
 `Coverage.Inventory.targets` records the actual compiler inputs for every solution
 project. `New-CoverageInventory.ps1` checks source checksums against portable PDBs,
