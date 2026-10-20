@@ -85,6 +85,9 @@ namespace DeveloperConsole {
 
         public CommandDispatcher CommandDispatcher { get; }
         public static DeveloperConsole Instance { get; private set; }
+        // Console-created geometry shares the current console's rendering context.
+        internal static GTAFuncs GeometryFunctions =>
+            Instance?._game ?? new GTAFuncs(GtaRuntime.Create(), new LiveConsolePlatform());
         public bool IsOpen { get { return !_isHidden; } }
         public static List<KeyValuePair<object, OnConsoleAttached>> RegisteredScripts { get; } =
             new List<KeyValuePair<object, OnConsoleAttached>>();
@@ -239,6 +242,9 @@ namespace DeveloperConsole {
                 var line = command.Name + " ";
                 foreach (var argument in argumentSet) line += "<" + argument.Type.ToString() + " " + argument.Name + "> ";
                 PrintLine(line);
+                foreach (var argument in argumentSet)
+                    if (!string.IsNullOrWhiteSpace(argument.Description))
+                        PrintLine(argument.Name + ": " + argument.Description);
             }
         }
         public void PrintCommandInfo(string command) {

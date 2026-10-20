@@ -186,22 +186,66 @@ namespace ModUtilsTest {
         }
 
         [TestMethod]
-        public void DispatcherRegistrationHonorsOverwriteAndArgumentMetadata() {
-            var dispatcher = new CommandDispatcher();
-            var first = new CommandDispatcher.Command("sample", "first", args => { });
-            var second = new CommandDispatcher.Command("sample", "second", args => { });
-            Assert.IsTrue(dispatcher.RegisterCommand(first));
-            Assert.IsFalse(dispatcher.RegisterCommand(second));
-            Assert.AreSame(first, dispatcher.Commands["sample"]);
-            Assert.IsTrue(dispatcher.RegisterCommand(second, true));
-            Assert.AreSame(second, dispatcher.Commands["sample"]);
-            var argument = new CommandDispatcher.CommandArgument("name", "display name", typeof(string));
-            Assert.AreEqual(0, second.AddArgumentSet(argument));
-            Assert.AreEqual("name", argument.Name);
-            Assert.AreEqual("display name", argument.Description);
-            Assert.AreEqual(typeof(string), argument.Type);
-            Assert.AreEqual("second", second.Description);
-            Assert.AreEqual(1, second.ExpectedArgs.Count);
+        public void DuplicateRegistrationKeepsOriginalCommandUntilOverwriteChangesExecutionAndUsage() {
+            using (var fixture = new ConsoleFixture()) {
+                fixture.Model.ShowConsole(true);
+                fixture.Model.ClearLines();
+                var dispatcher = fixture.Model.CommandDispatcher;
+                var executions = new List<string>();
+                var first = new CommandDispatcher.Command("sample", "read status", args => executions.Add("status"));
+                var argument = new CommandDispatcher.CommandArgument("name", "display name", typeof(string));
+                var second = new CommandDispatcher.Command("sample", "set display name", args =>
+                    executions.Add("renamed: " + args.Tokens.Single().Eval));
+                Assert.AreEqual(0, second.AddArgumentSet(argument));
+                Assert.IsTrue(dispatcher.RegisterCommand(first));
+                Assert.IsFalse(dispatcher.RegisterCommand(second));
+                fixture.Model.Input = "sample";
+                fixture.Model.RunCommand();
+                CollectionAssert.AreEqual(new[] { "status" }, executions,
+                    "A rejected duplicate must leave the original command executable.");
+
+                Assert.IsTrue(dispatcher.RegisterCommand(second, true));
+                fixture.Model.Input = "sample";
+                fixture.Model.RunCommand();
+                fixture.Draw();
+                CollectionAssert.AreEqual(new[] { "status" }, executions,
+                    "The replacement's required argument must be validated before its callback.");
+                Assert.IsTrue(fixture.Platform.Text.Any(line => line.Text.Contains("Provided arguments are not valid")));
+                Assert.IsTrue(fixture.Platform.Text.Any(line => line.Text.Contains("Description: set display name")));
+                Assert.IsTrue(fixture.Platform.Text.Any(line => line.Text.Contains("sample <System.String name>")));
+                Assert.IsTrue(fixture.Platform.Text.Any(line => line.Text.EndsWith("name: display name")),
+                    "Rejected input must explain the replacement's argument, not just show its type.");
+
+                fixture.Model.Input = "sample \"Mjolnir\"";
+                fixture.Model.RunCommand();
+                CollectionAssert.AreEqual(new[] { "status", "renamed: Mjolnir" }, executions,
+                    "Overwrite must dispatch the replacement with the parsed argument.");
+            }
+        }
+
+        [TestMethod]
+        public void CommandHelpOmitsBlankDescriptionsWhileKeepingEveryArgumentInTheSignature() {
+            using (var fixture = new ConsoleFixture()) {
+                fixture.Model.ShowConsole(true);
+                fixture.Model.ClearLines();
+                var command = new CommandDispatcher.Command("rename", "set display name", args => { });
+                command.AddArgumentSet(
+                    new CommandDispatcher.CommandArgument("name", "display name", typeof(string)),
+                    new CommandDispatcher.CommandArgument("style", " \t", typeof(int)));
+                fixture.Model.CommandDispatcher.RegisterCommand(command);
+
+                fixture.Model.PrintCommandInfo("rename");
+                fixture.Draw();
+
+                CollectionAssert.AreEqual(new[] {
+                    "12:34:56: Command: rename",
+                    "12:34:56: Description: set display name",
+                    "12:34:56: rename <System.String name> <System.Int32 style> ",
+                    "12:34:56: name: display name"
+                }, fixture.Platform.Text.Take(4).Select(line => line.Text).ToArray());
+                Assert.HasCount(6, fixture.Platform.Text,
+                    "A blank description must not consume an output row; only version and input follow the help.");
+            }
         }
 
         [TestMethod]

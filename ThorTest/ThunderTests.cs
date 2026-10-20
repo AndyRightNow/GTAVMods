@@ -91,7 +91,7 @@ namespace ModUtilsTest {
             game.World.Rays.Enqueue(new RayHit(hit, entity, Vector3.Zero));
             var thunder = new Thunder(game.Services, new Thor.NativeHelper(game.Services), new ThunderRandom());
             thunder.Shoot(new Vector3(1, 2, 3), new Vector3(1, 2, 13), 0);
-            CollectionAssert.AreEqual(new object[] { new Vector3(1, 2, 3), new Vector3(1, 2, 13), ADModUtils.NativeHelper.IntersectAllObjects, 0 },
+            CollectionAssert.AreEqual(new object[] { new Vector3(1, 2, 3), new Vector3(1, 2, 13), IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.Vehicles | IntersectFlags.Map, 0 },
                 game.Calls.Single(c => c.Name == "world.raycast").Arguments);
             Assert.AreEqual(damaged ? 1 : 0, game.Calls.Count(c => c.Name == "ped.damage"));
             Assert.AreEqual(damaged ? 1 : 0, game.Calls.Count(c => c.Name == "entity.force"));
@@ -133,23 +133,30 @@ namespace ModUtilsTest {
         }
 
         [TestMethod]
-        public void SentinelDefaultsProduceFifteenStopsAndSameGeometryAsOptionalDefaults() {
-            var normalGame = CreateWorld();
-            var sentinelGame = CreateWorld();
-            normalGame.World.Rays.Enqueue(new RayHit(false, 0, Vector3.Zero));
-            var normal = new Thunder(normalGame.Services, new Thor.NativeHelper(normalGame.Services), new ThunderRandom());
-            var sentinel = new Thunder(sentinelGame.Services, new Thor.NativeHelper(sentinelGame.Services), new ThunderRandom());
-            normal.Shoot(Vector3.Zero, new Vector3(0, 0, 10));
-            sentinel.Shoot(Vector3.Zero, new Vector3(0, 0, 10), -1, -1, false);
-            var normalParticles = Particles(normalGame);
-            var sentinelParticles = Particles(sentinelGame);
-            Assert.AreEqual(64, normalParticles.Length);
-            Assert.AreEqual(normalParticles.Length, sentinelParticles.Length);
-            for (var index = 0; index < normalParticles.Length; index++)
-                CollectionAssert.AreEqual(normalParticles[index], sentinelParticles[index]);
-            var joint = Position(normalParticles[1]);
-            Assert.AreEqual(.15, new Vector2(joint.X, joint.Y).Length(), .00001);
-            Assert.AreEqual(5f, joint.Z);
+        [DataRow(false)]
+        [DataRow(true)]
+        public void DefaultBoltDrawsFifteenContinuousJointsWithinThreePercentSway(bool sentinelDefaults) {
+            var game = CreateWorld();
+            game.World.Rays.Enqueue(new RayHit(false, 0, Vector3.Zero));
+            var random = new ThunderRandom(1, Enumerable.Range(1, 15).Select(index => index / 16d).ToArray());
+            var thunder = new Thunder(game.Services, new Thor.NativeHelper(game.Services), random);
+            if (sentinelDefaults) thunder.Shoot(Vector3.Zero, new Vector3(0, 0, 10), -1, -1, false);
+            else thunder.Shoot(Vector3.Zero, new Vector3(0, 0, 10));
+
+            var particles = Particles(game);
+            Assert.HasCount(64, particles);
+            float lateral = .15f / (float)Math.Sqrt(2);
+            var expectedPoints = new[] { Vector3.Zero }.Concat(Enumerable.Range(1, 15)
+                .Select(index => new Vector3(lateral, lateral, index * 10f / 16))).Concat(new[] { new Vector3(0, 0, 10) }).ToArray();
+            for (int segment = 0; segment < 16; segment++) {
+                AssertVector(expectedPoints[segment], Position(particles[segment * 4]));
+                AssertVector(expectedPoints[segment + 1], Position(particles[segment * 4 + 1]));
+                var midpoint = (expectedPoints[segment] + expectedPoints[segment + 1]) / 2;
+                AssertVector(midpoint, Position(particles[segment * 4 + 2]));
+                AssertVector(midpoint, Position(particles[segment * 4 + 3]));
+            }
+            Assert.HasCount(sentinelDefaults ? 0 : 1, game.Calls.Where(call => call.Name == "world.raycast").ToArray(),
+                "The optional default checks damage; explicitly visual-only sentinel calls do not.");
         }
 
         [TestMethod]
@@ -172,50 +179,5 @@ namespace ModUtilsTest {
                 game.Native.Calls.Where(c => c.Hash == Hash.REQUEST_NAMED_PTFX_ASSET).Select(c => (string)c.Arguments[0]).ToArray());
         }
 
-        [TestMethod]
-        [DataRow(AnimationActions.ThrowHammer1, 90f, "small_melee_wpn_short_range_0")]
-        [DataRow(AnimationActions.ThrowHammer3, 0f, "small_melee_wpn_short_range_0")]
-        [DataRow(AnimationActions.ThrowHammer3, 44.99f, "small_melee_wpn_short_range_0")]
-        [DataRow(AnimationActions.ThrowHammer3, -45f, "small_melee_wpn_short_range_+90")]
-        [DataRow(AnimationActions.ThrowHammer3, 45f, "small_melee_wpn_short_range_-90")]
-        [DataRow(AnimationActions.ThrowHammer4, -134.99f, "small_melee_wpn_long_range_+90")]
-        [DataRow(AnimationActions.ThrowHammer4, 134.99f, "small_melee_wpn_long_range_-90")]
-        [DataRow(AnimationActions.ThrowHammer4, -135f, "small_melee_wpn_long_range_+180")]
-        [DataRow(AnimationActions.ThrowHammer4, 135f, "small_melee_wpn_long_range_-180")]
-        [DataRow(AnimationActions.ThrowTwoHandHammer1, -90f, "short_90_attack")]
-        [DataRow(AnimationActions.ThrowTwoHandHammer1, 90f, "short_-90_attack")]
-        [DataRow(AnimationActions.ThrowTwoHandHammer1, -180f, "short_-180_attack")]
-        [DataRow(AnimationActions.ThrowTwoHandHammer2, 0f, "long_0_attack")]
-        [DataRow(AnimationActions.ThrowTwoHandHammer2, -90f, "long_90_attack")]
-        [DataRow(AnimationActions.ThrowTwoHandHammer2, 90f, "long_-90_attack")]
-        [DataRow(AnimationActions.ThrowTwoHandHammer2, 180f, "long_-180_attack")]
-        public void AnimationMetadataFormatsSupportedAngleVariantsAndBoundarySectors(AnimationActions action, float angle, string expected) {
-            var effects = new Thor.NativeHelper(CreateWorld().Services);
-            Assert.AreEqual(expected, effects.GetAnimationNameForAngle(action, angle));
-            if (angle == 0) Assert.AreEqual(expected, effects.Operations.GetAnimationNameByAction((uint)action));
-        }
-
-        [TestMethod]
-        public void AnimationVariantsResolveConfiguredWaitTimesForActualMetadata() {
-            var effects = new Thor.NativeHelper(CreateWorld().Services);
-            foreach (var scenario in new[] {
-                (AnimationActions.ThrowHammer3, -90f, 600), (AnimationActions.ThrowHammer3, 90f, 400),
-                (AnimationActions.ThrowHammer3, -180f, 500), (AnimationActions.ThrowHammer3, 180f, 800),
-                (AnimationActions.ThrowHammer4, 0f, 1000), (AnimationActions.ThrowHammer4, -90f, 700),
-                (AnimationActions.ThrowHammer4, 90f, 700), (AnimationActions.ThrowHammer4, -180f, 1000),
-                (AnimationActions.ThrowHammer4, 180f, 800),
-                (AnimationActions.ThrowHammer5, 0f, 1000), (AnimationActions.ThrowHammer5, -90f, 600),
-                (AnimationActions.ThrowHammer5, 90f, 700),
-                (AnimationActions.ThrowHammer5, -180f, 1100), (AnimationActions.ThrowHammer5, 180f, 800),
-                (AnimationActions.ThrowTwoHandHammer1, 0f, 800), (AnimationActions.ThrowTwoHandHammer1, 90f, 800),
-                (AnimationActions.ThrowTwoHandHammer1, -90f, 800), (AnimationActions.ThrowTwoHandHammer1, -180f, 700),
-                (AnimationActions.ThrowTwoHandHammer2, 0f, 1150), (AnimationActions.ThrowTwoHandHammer2, 180f, 1000),
-                (AnimationActions.ThrowTwoHandHammer2, -90f, 1300), (AnimationActions.ThrowTwoHandHammer2, 90f, 1000)
-            }) {
-                Assert.AreEqual(scenario.Item3, effects.Operations.GetAnimationWaitTimeByDictNameAndAnimName(
-                    effects.Operations.GetAnimationDictNameByAction((uint)scenario.Item1),
-                    effects.GetAnimationNameForAngle(scenario.Item1, scenario.Item2)));
-            }
-        }
     }
 }

@@ -14,34 +14,22 @@ namespace ModUtilsTest
     [TestClass]
     public class NativeHelperTests
     {
-        private static NativeHelper Helper(FakeGame game, IEventLog log = null) => new NativeHelper(game.Services,
-            new[] { "dict" }, new[] { "anim" },
-            new Dictionary<string, Dictionary<string, int>> { { "dict", new Dictionary<string, int> { { "anim", 250 } } } },
-            new[] { true }, new[] { false }, new[] { "assets" }, new[] { "spark" }, 200, 300, log ?? Logger.Default);
+        private static NativeHelper Helper(FakeGame game, IEventLog log = null)
+        {
+            var waits = new Dictionary<string, Dictionary<string, int>> {
+                { "dict", new Dictionary<string, int> { { "anim", 250 } } }
+            };
+            if (log == null)
+                return new NativeHelper(game.Services, new[] { "dict" }, new[] { "anim" }, waits,
+                    new[] { true }, new[] { false }, new[] { "assets" }, new[] { "spark" }, 200, 300);
+            return new NativeHelper(game.Services, new[] { "dict" }, new[] { "anim" }, waits,
+                new[] { true }, new[] { false }, new[] { "assets" }, new[] { "spark" }, 200, 300, log);
+        }
 
         private static void AssertCall(FakeGame game, Hash hash, params object[] arguments)
         {
             var call = game.Native.Calls.Single(item => item.Hash == hash);
             CollectionAssert.AreEqual(arguments, call.Arguments);
-        }
-
-        [TestMethod]
-        public void ConfigurationResolvesRequestedAnimationAndMissingWaits()
-        {
-            var helper = new NativeHelper(new FakeGame().Services,
-                new[] { "dict" }, new[] { "anim" },
-                new Dictionary<string, Dictionary<string, int>> { { "dict", new Dictionary<string, int> { { "anim", 250 } } } },
-                new[] { true }, new[] { false }, new[] { "assets" }, new[] { "spark" }, 200, 300);
-            Assert.AreEqual("dict", helper.GetAnimationDictNameByAction(0));
-            Assert.AreEqual("anim", helper.GetAnimationNameByAction(0));
-            Assert.AreEqual(250, helper.GetAnimationWaitTimeByDictNameAndAnimName("dict", "anim"));
-            Assert.AreEqual(0, helper.GetAnimationWaitTimeByDictNameAndAnimName("dict", "missing"));
-            Assert.AreEqual(0, helper.GetAnimationWaitTimeByDictNameAndAnimName("missing", "anim"));
-            Assert.IsTrue(helper.DoesAnimationActionHaveAngles(0));
-            Assert.IsFalse(helper.DoesAnimationActionHaveAnglesAndIncompletePlusOrMinusSign(0));
-            Assert.AreEqual("assets", helper.GetParticleSetName(0));
-            Assert.AreEqual("spark", helper.GetParticleName(0));
-            Assert.AreEqual(IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.Vehicles | IntersectFlags.Map, NativeHelper.IntersectAllObjects);
         }
 
         [TestMethod]
@@ -175,8 +163,8 @@ namespace ModUtilsTest
             AssertCall(game, Hash.DRAW_BOX, 1f, 2f, 3f, 4f, 5f, 6f, (byte)10, (byte)20, (byte)30, (byte)40);
             game.Native.Calls.Clear();
             var line = new Line(start, end, color);
-            Assert.AreEqual(start, line.Start); Assert.AreEqual(end, line.End);
-            StringAssert.Contains(line.ToString(), "Color " + color);
+            Assert.AreEqual("Line: Start " + start + ", End " + end + ", Color " + color, line.ToString(),
+                "A diagnostic line must identify both endpoints in drawing order.");
             var lines = new List<Line> { line, new Line(end, start, color) };
             helper.DrawLines(ref lines);
             Assert.HasCount(2, game.Native.Calls);

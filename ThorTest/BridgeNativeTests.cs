@@ -38,32 +38,6 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void RuntimeCompositionSelectsTheConcreteGameAdaptersWithoutCallingTheHost()
-        {
-            var game = GtaRuntime.Create();
-            Assert.IsInstanceOfType<GtaHost>(game.Host);
-            Assert.IsInstanceOfType<GtaInput>(game.Input);
-            Assert.IsInstanceOfType<GtaEntities>(game.Entities);
-            Assert.IsInstanceOfType<GtaPeds>(game.Peds);
-            Assert.IsInstanceOfType<GtaWeapons>(game.Weapons);
-            Assert.IsInstanceOfType<GtaWorld>(game.World);
-            Assert.IsInstanceOfType<GtaCameras>(game.Cameras);
-            Assert.IsInstanceOfType<GtaRopes>(game.Ropes);
-            Assert.IsInstanceOfType<NativeGameplayAccess>(game.Gameplay);
-            Assert.IsInstanceOfType<NativeAnimationAccess>(game.Animations);
-            Assert.IsInstanceOfType<NativeParticleAccess>(game.Particles);
-            Assert.IsInstanceOfType<NativeDrawingAccess>(game.Drawing);
-            Assert.IsInstanceOfType<NativeConsoleInput>(game.ConsoleInput);
-            Assert.IsInstanceOfType<NativeConsoleDrawing>(game.ConsoleDrawing);
-            Assert.IsInstanceOfType<NativeConsoleEntities>(game.ConsoleEntities);
-            Assert.IsInstanceOfType<NativeConsoleWorld>(game.ConsoleWorld);
-            Assert.IsInstanceOfType<NativeConsoleNetwork>(game.ConsoleNetwork);
-            Assert.IsInstanceOfType<NativeConsolePlayers>(game.ConsolePlayers);
-            Assert.IsInstanceOfType<NativeConsoleStats>(game.ConsoleStats);
-            Assert.IsInstanceOfType<NativeOutputs>(game.Outputs);
-        }
-
-        [TestMethod]
         public void HandleConversionPreservesPoolIdentityNullAndInputOrder()
         {
             var camera = new Camera(27);

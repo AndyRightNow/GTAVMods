@@ -80,17 +80,20 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        [DataRow("play")]
-        [DataRow("rewind")]
-        [DataRow("stop")]
-        public void PlaybackFailureDisablesAndReleasesTheAcquiredResource(string operation)
+        [DataRow("play", "stop,rewind,play,dispose")]
+        [DataRow("rewind", "stop,rewind,dispose")]
+        [DataRow("stop", "stop,dispose")]
+        public void PlaybackFailureDisablesAndReleasesTheAcquiredResource(string operation, string expectedCalls)
         {
             var factory = new Factory();
             factory.Playback.FailOn = operation;
             var storage = new MemoryLogStorage();
             var clip = new AudioClip("hammer.wav", 1, factory, Log(storage));
             clip.Play(); clip.Play(); clip.Dispose();
-            Assert.AreEqual(1, factory.Playback.Calls.Count(call => call == "dispose"));
+            CollectionAssert.AreEqual(expectedCalls.Split(','), factory.Playback.Calls,
+                "Failure must stop the playback sequence and later frames must not retry the disabled resource.");
+            Assert.HasCount(1, factory.Opens);
+            Assert.HasCount(2, storage.Records, "The clip records its load and one disabling failure.");
             Assert.AreEqual("audio.disabled", LogJson.Text(storage.Records.Last(), "event"));
             StringAssert.Contains(LogJson.Text(storage.Records.Last(), "data/exception"), operation + " failed");
         }
@@ -134,20 +137,27 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void PathsAndDefaultMissingAudioRetainThePublicContract()
+        public void MissingPackagedClipLogsOnceAndOneShotReportsTheMissingFile()
         {
-            string actual = AudioClip.ResourcePath("catch-hammer.wav");
-            Assert.AreEqual(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Thor", "catch-hammer.wav"), actual);
-            Assert.IsTrue(Path.IsPathRooted(actual));
-            string missing = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+            string name = "missing-" + Guid.NewGuid() + ".wav";
+            string missing = AudioClip.ResourcePath(name);
+            Assert.AreEqual(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Thor", name), missing);
             using (var clip = new AudioClip(missing)) { clip.Play(); clip.Play(); clip.Stop(); }
             var failures = File.ReadAllLines(Logger.LogFilePath).Select(LogJson.Parse)
                 .Where(record => LogJson.Text(record, "event") == "audio.disabled" && LogJson.Text(record, "data/file") == missing).ToArray();
             Assert.HasCount(1, failures);
             Assert.ThrowsExactly<FileNotFoundException>(() => Utilities.Audio.Play(missing));
-            Assert.ThrowsExactly<ArgumentNullException>(() => new AudioClip("x", 1, null, Log(new MemoryLogStorage())));
-            Assert.ThrowsExactly<ArgumentNullException>(() => new AudioClip("x", 1, new Factory(), null));
-            Assert.ThrowsExactly<ArgumentNullException>(() => new NAudioPlaybackFactory(null));
+        }
+
+        [TestMethod]
+        public void InvalidAudioDependenciesAreRejectedBeforeOpeningAClip()
+        {
+            var factory = new Factory();
+            Assert.AreEqual("factory", Assert.ThrowsExactly<ArgumentNullException>(
+                () => new AudioClip("x", 1, null, Log(new MemoryLogStorage()))).ParamName);
+            Assert.AreEqual("log", Assert.ThrowsExactly<ArgumentNullException>(() => new AudioClip("x", 1, factory, null)).ParamName);
+            Assert.HasCount(0, factory.Opens, "An invalid clip must not acquire an output it cannot safely diagnose or release.");
+            Assert.AreEqual("createOutput", Assert.ThrowsExactly<ArgumentNullException>(() => new NAudioPlaybackFactory(null)).ParamName);
         }
 
         private sealed class WavePlayer : IWavePlayer

@@ -148,12 +148,35 @@ No game files or physics simulator are involved.
 - [x] Resolve independent xhigh reviews of contracts, fakes and test quality.
 - [x] Restore 100% line and branch coverage and pass the local build/package.
 
-The enhancement passes 374 tests with no skips, warnings or errors. Coverage is
+That enhancement passed 374 tests with no skips, warnings or errors. Coverage was
 100% of inventoried behavior lines and branches in all four production assemblies.
 The [review record](mutation-review.md) contains counts, regression findings and
 accepted mutation outcomes. The goal also requires the final commit's
 [PR #7 CI check](https://github.com/AndyRightNow/GTAVMods/pull/7/checks) to pass;
 the PR tracks that result without duplicating feature push and pull-request runs.
+
+## Behavior-driven test review
+
+The follow-up in [PR #8](https://github.com/AndyRightNow/GTAVMods/pull/8) audits
+the whole suite against the test-design rules in `AGENTS.md`. Cases specify a
+trigger and observable outcome; construction and module wiring are exercised
+inside those behaviors. Standalone type checks, getter echoes and duplicate
+timing scenarios were removed or replaced while preserving distinct failure
+conditions. Animation release timings previously checked inside a metadata loop
+now run as individually reported throws with held-state and launch assertions.
+
+Three xhigh reviewers audited separate areas and cross-reviewed the changes.
+Their follow-up findings rejected artificial getter consumption and caught an
+incorrect test-helper overload. Both were corrected before validation. Console
+geometry now uses the active console's rendering context, and help displays
+nonblank argument descriptions, so tests exercise the corresponding real output.
+
+The revised suite has 234 test methods and 383 executed cases. A hash-verified
+temporary source copy passed the complete Windows PowerShell Release build,
+strict coverage gate and packaging with zero skips, warnings or errors. All four
+assemblies remain at 100% executable line and branch coverage, with the same 146
+audited primitive bindings. The older mutation runs in `mutation-review.md`
+remain historical evidence for their recorded source snapshots.
 
 Changes discovered by these tests require a failing regression before a fix
 where practicable. A mock's convenience is not evidence of an engine guarantee.

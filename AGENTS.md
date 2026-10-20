@@ -72,6 +72,33 @@ into the game or install assemblies into the GAC.
   both checksums in `scripts/Restore-Dependencies.ps1`, updating compatibility
   checks, rebuilding and repeating live testing.
 
+## Test design
+
+- Every test case must specify a real behavior: a meaningful starting condition
+  and trigger, an observable expected outcome, and the regression it prevents.
+  This applies to gameplay, engine contracts, utilities, diagnostics and CI
+  guardrails. Name and organize cases by the behavior being protected.
+- Exercise module construction and wiring through those behavior scenarios.
+  Do not add standalone tests whose only outcome is successful construction,
+  concrete type identity, dependency assignment, forwarding to a mock, or
+  executing lines for coverage. Do not disguise such tests by renaming them.
+- Use real cooperating mod components where their interaction is part of the
+  behavior. Replace the game and other external boundaries with explicit,
+  maintainable observations and failures. Keep command submission separate from
+  observed completion; fakes must not implement the mod's decisions or simulate
+  physics to manufacture success.
+- Assert independent outcomes: gameplay state, externally visible commands and
+  their contract values, retained or released resources, diagnostics, or rejected
+  invalid input. Exact native arguments are appropriate when they specify an
+  engine contract; merely repeating implementation calls is not sufficient.
+- Each case and parameter variant must protect a distinct condition or failure.
+  Consolidate redundant coverage while preserving useful assertions. Avoid
+  unrelated omnibus scenarios, tautologies, private implementation assertions,
+  and tests of a fake's own setup with no meaningful contract guarantee.
+- Maintain the strict 100% line and branch gate without weakening assertions or
+  adding coverage exclusions to accommodate test changes. Review test quality
+  separately from coverage; a covered line does not establish correct behavior.
+
 ## Install or update the mod
 
 1. **Close GTA V before changing DLLs, runtime files or model archives.** Confirm

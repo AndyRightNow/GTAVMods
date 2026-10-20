@@ -13,24 +13,38 @@ namespace ModUtilsTest {
     [TestClass]
     public class ConsoleBehaviorTests {
         [TestMethod]
-        public void RegistrationAttachesBeforeAndAfterConstructionAndUnregistersOnlyOwner() {
+        public void RegisteredCommandsRunBeforeAndAfterConsoleReplacementAndUnregisteredOwnersStayDetached() {
             var first = new object();
             var second = new object();
-            var firstCalls = 0;
-            var secondCalls = 0;
-            ConsoleModel.RegisterConsoleScript(first, console => firstCalls++);
+            ConsoleModel.RegisterConsoleScript(first, console => console.CommandDispatcher.RegisterCommand(
+                new CommandDispatcher.Command("first", "first owner", args => console.PrintLine("first command ran"))));
             using (var fixture = new ConsoleFixture()) {
+                fixture.Model.ShowConsole(true);
                 Assert.AreSame(fixture.Model, ConsoleModel.Instance);
-                Assert.AreEqual(1, firstCalls);
-                ConsoleModel.RegisterConsoleScript(second, console => secondCalls++);
-                Assert.AreEqual(1, secondCalls);
+                fixture.Model.Input = "first";
+                fixture.Press(Keys.Enter);
+                ConsoleModel.RegisterConsoleScript(second, console => console.CommandDispatcher.RegisterCommand(
+                    new CommandDispatcher.Command("second", "second owner", args => console.PrintLine("second command ran"))));
+                fixture.Model.Input = "second";
+                fixture.Press(Keys.Enter);
+                fixture.Draw();
+                Assert.HasCount(1, fixture.Platform.Text.Where(line => line.Text.EndsWith("first command ran")).ToArray());
+                Assert.HasCount(1, fixture.Platform.Text.Where(line => line.Text.EndsWith("second command ran")).ToArray());
                 ConsoleModel.UnregisterConsoleScript(first);
                 Assert.AreSame(second, ConsoleModel.RegisteredScripts.Single().Key);
                 using (var replacement = new ConsoleFixture()) {
-                    Assert.AreEqual(2, secondCalls);
                     fixture.Model.Dispose();
                     Assert.AreSame(replacement.Model, ConsoleModel.Instance);
-                    Assert.AreEqual(1, ConsoleModel.RegisteredScripts.Count);
+                    replacement.Model.ShowConsole(true);
+                    replacement.Model.Input = "first";
+                    replacement.Press(Keys.Enter);
+                    replacement.Model.Input = "second";
+                    replacement.Press(Keys.Enter);
+                    replacement.Draw();
+                    Assert.IsTrue(replacement.Platform.Text.Any(line => line.Text.Contains("Command 'first' not found!")));
+                    Assert.IsFalse(replacement.Platform.Text.Any(line => line.Text.EndsWith("first command ran")));
+                    Assert.HasCount(1, replacement.Platform.Text.Where(line => line.Text.EndsWith("second command ran")).ToArray(),
+                        "Disposing the superseded console must preserve commands attached to its replacement.");
                 }
                 Assert.IsNull(ConsoleModel.Instance);
                 Assert.AreEqual(0, ConsoleModel.RegisteredScripts.Count);

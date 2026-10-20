@@ -23,20 +23,32 @@ namespace ModUtilsTest
     [TestClass]
     public class Utilities_Test
     {
+        private System.Random originalRandom;
+
+        [TestInitialize]
+        public void UseDeterministicRandom()
+        {
+            originalRandom = Utilities.Random.SystemRandomInstance;
+            Utilities.Random.SystemRandomInstance = new FixedRandom();
+        }
+
+        [TestCleanup]
+        public void RestoreRandom() => Utilities.Random.SystemRandomInstance = originalRandom;
+
         [TestMethod]
         public void SelectionUsesWholeInputAndFiltersBeforeChoosing()
         {
             var random = new FixedRandom(2);
-            Assert.AreEqual("last", Utilities.Random.PickOne(new[] { "first", "middle", "last" }, random));
+            Utilities.Random.SystemRandomInstance = random;
+            Assert.AreEqual("last", Utilities.Random.PickOne(new[] { "first", "middle", "last" }));
             Assert.AreEqual("first", Utilities.Random.PickOne(new[] { "first", "last" }, new FixedRandom(0)));
             CollectionAssert.AreEqual(new[] { 3 }, random.Bounds);
             var filtered = new FixedRandom(1);
+            Utilities.Random.SystemRandomInstance = filtered;
             var visited = new List<int>();
-            Assert.AreEqual(8, Utilities.Random.PickOneIf(new[] { 1, 4, 3, 8 }, value => { visited.Add(value); return value % 2 == 0; }, filtered));
+            Assert.AreEqual(8, Utilities.Random.PickOneIf(new[] { 1, 4, 3, 8 }, value => { visited.Add(value); return value % 2 == 0; }));
             CollectionAssert.AreEqual(new[] { 1, 4, 3, 8 }, visited);
             CollectionAssert.AreEqual(new[] { 2 }, filtered.Bounds);
-            Assert.AreEqual(7, Utilities.Random.PickOne(new[] { 7 }));
-            Assert.AreEqual(4, Utilities.Random.PickOneIf(new[] { 1, 4 }, value => value == 4));
         }
 
         [TestMethod]
@@ -59,15 +71,13 @@ namespace ModUtilsTest
         [TestMethod]
         public void RandomSignsAndUnsignedMagnitudeFollowRequestedBounds()
         {
-            Assert.AreEqual(-1, Utilities.Random.RandomNegation(new FixedRandom(0)));
+            Utilities.Random.SystemRandomInstance = new FixedRandom(0, 0.75);
+            Assert.AreEqual(-1, Utilities.Random.RandomNegation());
             Assert.AreEqual(1, Utilities.Random.RandomNegation(new FixedRandom(1)));
-            Assert.AreEqual(-0.75f, Utilities.Random.NextFloat(new FixedRandom(0, 0.75)));
+            Assert.AreEqual(-0.75f, Utilities.Random.NextFloat());
             var unsigned = new FixedRandom(0, 0.75);
             Assert.AreEqual(0.75f, Utilities.Random.NextFloat(unsigned, false));
             Assert.HasCount(0, unsigned.Bounds);
-            CollectionAssert.Contains(new[] { -1, 1 }, Utilities.Random.RandomNegation());
-            float value = Utilities.Random.NextFloat(false);
-            Assert.IsTrue(value >= 0 && value <= 1);
         }
 
         [TestMethod]
@@ -75,16 +85,12 @@ namespace ModUtilsTest
         [DataRow(0f, 1f, 0f)]
         [DataRow(1f, 2f, 0f)]
         [DataRow(1f, 2f, 3f)]
-        public void PerpendicularVectorIsOrthogonalAndHasRequestedScale(float x, float y, float z)
+        public void PerpendicularVectorIsOrthogonalAndUnitLength(float x, float y, float z)
         {
             var normal = new Vector3(x, y, z);
-            var result = Utilities.Math.RandomVectorPerpendicularTo(normal, new FixedRandom());
+            var result = Utilities.Math.RandomVectorPerpendicularTo(normal);
             Assert.AreEqual(0f, Vector3.Dot(normal, result), 0.00001f);
             Assert.AreEqual(1f, result.Length(), 0.00001f);
-            var unscaled = Utilities.Math.RandomVectorPerpendicularTo(normal, new FixedRandom(), false);
-            Assert.AreEqual(0f, Vector3.Dot(normal, unscaled), 0.00001f);
-            Assert.IsTrue(unscaled.Length() > 0);
-            Assert.AreEqual(0f, Vector3.Dot(normal, Utilities.Math.RandomVectorPerpendicularTo(normal)), 0.0001f);
         }
 
         [TestMethod]
@@ -116,9 +122,7 @@ namespace ModUtilsTest
         public void PlaneProjectsSignedCoordinatesAndIgnoresNormalDisplacement()
         {
             var center = new Vector3(10, 20, 30);
-            var plane = new Plane(Vector3.UnitZ * 2, center, new FixedRandom(1, 0.5));
-            Assert.AreEqual(center, plane.Center);
-            Assert.AreEqual(Vector3.UnitZ * 2, plane.Normal);
+            var plane = new Plane(Vector3.UnitZ * 2, center);
             Assert.AreEqual(1f, plane.XAxis.Length(), 0.00001f);
             Assert.AreEqual(1f, plane.YAxis.Length(), 0.00001f);
             Assert.AreEqual(0f, Vector3.Dot(plane.XAxis, plane.YAxis), 0.00001f);
@@ -134,7 +138,8 @@ namespace ModUtilsTest
             Assert.AreEqual(20f - (float)(2 * System.Math.Sqrt(2)), world.Y, 0.00001f);
             Assert.AreEqual(30f, world.Z, 0.00001f);
             Assert.AreEqual(Vector2.Zero, plane.GetPlaneCoord(center));
-            Assert.AreEqual(Vector3.Zero, new Plane(Vector3.UnitX, Vector3.Zero).GetWorldCoord(Vector2.Zero));
+            Assert.AreEqual(0f, Vector3.Dot(world - center, plane.Normal), 0.00001f,
+                "A reconstructed point must stay in the plane even when its normal is not unit length.");
             Assert.ThrowsExactly<ArgumentException>(() => new Plane(Vector3.Zero, center));
         }
 
@@ -217,6 +222,11 @@ namespace ModUtilsTest
             var second = new Vector3(13, -16, 30);
             Assert.IsTrue(Utilities.Math.CloseTo(first, second, 5), "Translation must not change the five-unit separation.");
             Assert.IsFalse(Utilities.Math.CloseTo(second, first, 4.99f));
+        }
+
+        [TestMethod]
+        public void SwapExchangesBothCallerValues()
+        {
             string left = "left", right = "right";
             Utilities.Swap(ref left, ref right);
             Assert.AreEqual("right", left);

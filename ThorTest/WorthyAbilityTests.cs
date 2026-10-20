@@ -103,40 +103,6 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void DroppingHammerDecaysPowerOverTenSecondsAndHealthRecoveryUsesCurrentPower()
-        {
-            var f = Holding();
-            f.Game.Host.GameTime = 1; f.Ability.OnTick(false);
-            f.Game.Host.GameTime = 201; f.Player.Health = 10;
-            f.Ability.OnTick(false);
-            Assert.AreEqual(3010, f.Player.Health);
-            f.Game.Input.Keys.Add(Keys.Y); f.Game.Entities.CreatedBlips.Enqueue(50); f.ClearTerrainRay();
-            f.Ability.OnTick(false);
-            Assert.IsFalse(f.Ability.IsHoldingWeapon);
-            Assert.AreEqual(Vector3.Zero, f.Hammer.Velocity);
-            f.Game.Input.Keys.Clear(); f.ClearTerrainRay();
-            f.Ability.OnTick(false);
-            f.Game.Host.GameTime = 5201; f.ClearTerrainRay();
-            f.Ability.OnTick(false);
-            Assert.AreEqual(15100, f.Player.MaxHealth);
-            Assert.AreEqual(1.25f, f.LastNative(Hash.SET_PED_MOVE_RATE_OVERRIDE)[1]);
-            f.Game.Host.GameTime = 10201; f.ClearTerrainRay();
-            f.Ability.OnTick(false);
-            Assert.AreEqual(100, f.Player.MaxHealth);
-            f.Game.Host.GameTime = 10202; f.ClearTerrainRay();
-            f.Ability.OnTick(false);
-            var health = f.Player.Health;
-            f.Game.Host.GameTime = 10402; f.ClearTerrainRay();
-            f.Ability.OnTick(false);
-            Assert.AreEqual(health, f.Player.Health);
-            Assert.AreEqual(1f, f.LastNative(Hash.SET_PED_MOVE_RATE_OVERRIDE)[1]);
-            var jumps = f.Game.Native.Calls.Count(call => call.Hash == Hash.SET_SUPER_JUMP_THIS_FRAME);
-            f.Game.Host.GameTime = 11000; f.ClearTerrainRay(); f.Ability.OnTick(false);
-            Assert.AreEqual(jumps, f.Game.Native.Calls.Count(call => call.Hash == Hash.SET_SUPER_JUMP_THIS_FRAME),
-                "Expired power must not grant a super jump.");
-        }
-
-        [TestMethod]
         public void NewUnarmedPlayerSpawnsLooseHammerAndExistingHammerReturnsAfterAttachment()
         {
             var fresh = new HammerFixture();
@@ -311,8 +277,7 @@ namespace ModUtilsTest
         public void FlightUsesUpForwardAndSprintInputsAndRestoresHeldWeaponWhenStopped()
         {
             var f = Holding();
-            f.Ability.OnTick(false);
-            f.Player.InAir = true; f.Game.Input.Keys.Add(Keys.X);
+            f.Game.Input.Keys.Add(Keys.X);
             f.Player.CanRagdoll = false;
             f.Ability.OnTick(false);
             Assert.AreEqual(0, f.Game.Entity(20).Opacity);
@@ -325,6 +290,7 @@ namespace ModUtilsTest
             CollectionAssert.AreEqual(new object[] { CameraShake.MediumExplosion, 0.01f },
                 f.Game.Calls.Last(call => call.Name == "camera.shake").Arguments);
             var orbit = f.Game.Entity(21).Position;
+            f.Player.InAir = true;
             f.Game.Input.Keys.Clear(); f.Game.Input.Keys.Add(Keys.W); f.Game.Input.Pressed.Add(Control.Sprint);
             f.Game.Entity(20).Velocity = Vector3.Zero;
             f.Ability.OnTick(false);
@@ -408,27 +374,6 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void ThrowFlightLastsTwoSecondsAndThenStopsAddingVelocity()
-        {
-            var f = Holding(); f.Ability.OnTick(false);
-            f.Ability.ThrowAndFlyWithWeapon();
-            Assert.IsTrue(f.Game.Native.Calls.Any(call => call.Hash == Hash.SET_PED_TO_RAGDOLL),
-                "The throw-flight request enters ragdoll before its first flight frame.");
-            var start = f.Game.Host.GameTime;
-            f.Game.Host.GameTime = start + 1999; f.Game.Entity(20).Velocity = Vector3.Zero;
-            f.Ability.OnTick(false);
-            Assert.AreEqual(Vector3.UnitY * 140, f.Game.Entity(20).Velocity);
-            Assert.AreEqual("INFO", f.Log.Last("hammer.throwFlight").Level);
-            StringAssert.Contains((string)f.Log.Last("hammer.throwFlight").Data["state"], "holding=True");
-            Assert.IsTrue(f.Game.Native.Calls.Any(call => call.Hash == Hash.TASK_PLAY_ANIM));
-            Assert.IsTrue(f.Game.Native.Calls.Any(call => call.Hash == Hash.SET_PED_TO_RAGDOLL));
-            f.Game.Host.GameTime = start + 2000; f.Game.Entity(20).Velocity = Vector3.Zero;
-            f.Ability.OnTick(false);
-            Assert.AreEqual(Vector3.Zero, f.Game.Entity(20).Velocity);
-            StringAssert.Contains(f.Ability.DiagnosticState, "throwFlight=False");
-        }
-
-        [TestMethod]
         public void AirDashSlamsDownThenDamagesNearbyEntitiesOnLanding()
         {
             var f = Holding(); f.Ability.OnTick(false);
@@ -509,17 +454,6 @@ namespace ModUtilsTest
             f.Ability.OnTick(false);
             Assert.AreEqual(0, f.Game.Entity(61).AttachedTo);
             StringAssert.Contains(f.Ability.DiagnosticState, "grabbing=False");
-        }
-
-        [TestMethod]
-        public void FirstTickUpwardFlightDoesNotRequireAnEarlierIdleFrame()
-        {
-            var f = Holding();
-            f.Game.Input.Keys.Add(Keys.X);
-            f.Ability.OnTick(false);
-            Assert.AreEqual(Vector3.UnitZ * 50, f.Game.Entity(20).Velocity);
-            Assert.AreEqual(0, f.Game.Entity(20).Opacity);
-            Assert.AreEqual(255, f.Game.Entity(22).Opacity);
         }
 
         [TestMethod]
@@ -628,7 +562,7 @@ namespace ModUtilsTest
             }
             Assert.IsFalse(f.Game.Calls.Any(call => call.Name == "world.marker"));
             CollectionAssert.AreEqual(new object[] { new Vector3(27, -23, 11), new Vector3(100017, -23, 11),
-                ADModUtils.NativeHelper.IntersectAllObjects, 0 },
+                IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.Vehicles | IntersectFlags.Map, 0 },
                 f.Game.Calls.First(call => call.Name == "world.raycast").Arguments);
             Assert.IsTrue(f.Game.Native.Calls.Any(call => call.Hash == Hash.SHOW_HUD_COMPONENT_THIS_FRAME));
             for (int id = 61; id <= 76; id++)
@@ -693,47 +627,6 @@ namespace ModUtilsTest
             f.Game.Host.GameTime = 2000; f.Ability.OnTick(false);
             Assert.IsTrue(f.Hammer.Velocity.Length() > 0,
                 "A later dropped hammer may perform lost-terrain recovery instead of remaining marked as summoned.");
-        }
-
-        [TestMethod]
-        public void TargetedThrowReachesTargetWaitsSevenHundredMillisecondsThenReturnsAndCatches()
-        {
-            var f = Holding();
-            f.Ability.OnTick(false);
-            f.Game.AddEntity(60).Position = new Vector3(0, 0.4f, 0); f.Peds.Add(60);
-            f.Game.Input.Pressed.Add(Control.Aim); f.Game.Input.Keys.Add(Keys.T);
-            f.Game.World.Rays.Enqueue(new RayHit(true, 60, Vector3.Zero)); f.ClearTerrainRay();
-            f.Game.Entities.CreatedBlips.Enqueue(50);
-            f.Ability.OnTick(false);
-            StringAssert.Contains(f.Ability.DiagnosticState, "attacking=True");
-            StringAssert.Contains(f.Ability.DiagnosticState, "collecting=False");
-            f.Game.Input.Pressed.Clear(); f.Game.Input.Keys.Clear();
-            f.ClearTerrainRay(); f.Ability.OnTick(false);
-            StringAssert.Contains(f.Ability.DiagnosticState, "targets=0");
-            f.ClearTerrainRay(); f.Ability.OnTick(false);
-            var finished = f.Game.Host.GameTime;
-            StringAssert.Contains(f.Ability.DiagnosticState, "attacking=False");
-            f.Game.Host.GameTime = finished + 699; f.ClearTerrainRay(); f.Ability.OnTick(false);
-            Assert.IsFalse(f.Game.Native.Calls.Any(call => call.Hash == Hash.GIVE_WEAPON_OBJECT_TO_PED));
-            f.Game.Host.GameTime = finished + 700;
-            f.Game.World.Capsules.Enqueue(new RayHit(true, 10, Vector3.Zero));
-            f.Game.Host.OnWait = milliseconds => f.HoldHammer();
-            f.ClearTerrainRay(); f.Ability.OnTick(false);
-            Assert.IsTrue(f.Ability.IsHoldingWeapon);
-            CollectionAssert.AreEqual(new object[] { 20, 10 }, f.LastNative(Hash.GIVE_WEAPON_OBJECT_TO_PED));
-        }
-
-        [TestMethod]
-        public void AimAndThrowFlightInputStartsFlightWithoutReleasingHammer()
-        {
-            var f = Holding();
-            f.Game.Input.Pressed.Add(Control.Aim); f.Game.Input.Keys.Add(Keys.U);
-            f.Game.World.Rays.Enqueue(new RayHit(false, 0, Vector3.Zero));
-            f.Ability.OnTick(false);
-            StringAssert.Contains(f.Ability.DiagnosticState, "throwFlight=True");
-            StringAssert.Contains(f.Ability.DiagnosticState, "collecting=False");
-            Assert.IsTrue(f.Ability.IsHoldingWeapon);
-            Assert.IsFalse(f.Game.Native.Calls.Any(call => call.Hash == Hash.GET_WEAPON_OBJECT_FROM_PED));
         }
 
         [TestMethod]
@@ -813,20 +706,21 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void RemoveAbilityReleasesALiveGrabAndIgnoresAnAlreadyDeletedGrab()
+        [DataRow(false)]
+        [DataRow(true)]
+        public void RemoveAbilityReleasesALiveGrabAndIgnoresAnAlreadyDeletedGrab(bool deleted)
         {
-            foreach (bool deleted in new[] { false, true })
-            {
-                var f = Holding();
-                f.Game.AddEntity(60); f.Peds.Add(60);
-                f.Game.World.Nearby = (position, radius) => new[] { 60 };
-                f.Game.Input.Pressed.Add(Control.ThrowGrenade); f.Ability.OnTick(false);
-                f.Game.Observations[60].Exists = !deleted;
-                f.Player.Weapons.Clear();
-                f.Ability.RemoveAbility();
-                Assert.AreEqual(!deleted, f.Game.Calls.Any(call => call.Name == "entity.detach" && (int)call.Arguments[0] == 60));
-                StringAssert.Contains(f.Ability.DiagnosticState, "grabbing=False");
-            }
+            var f = Holding();
+            f.Game.AddEntity(60); f.Peds.Add(60);
+            f.Game.World.Nearby = (position, radius) => new[] { 60 };
+            f.Game.Input.Pressed.Add(Control.ThrowGrenade); f.Ability.OnTick(false);
+            f.Game.Observations[60].Exists = !deleted;
+            f.Player.Weapons.Clear();
+
+            f.Ability.RemoveAbility();
+
+            Assert.AreEqual(!deleted, f.Game.Calls.Any(call => call.Name == "entity.detach" && (int)call.Arguments[0] == 60));
+            StringAssert.Contains(f.Ability.DiagnosticState, "grabbing=False");
         }
 
         [TestMethod]

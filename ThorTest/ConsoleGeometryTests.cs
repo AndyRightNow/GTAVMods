@@ -69,33 +69,42 @@ namespace ModUtilsTest {
 
         [TestMethod]
         public void QuaternionRotationKeepsCenterAndRebuildsEdgesAndFaces() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var center = new Vector3(10, 20, 30);
-                var rectangle = new Rectangle3D(center, new Vector3(-1, -2, -3), new Vector3(1, 2, 3), fixture.Functions);
-                var original = rectangle.Corners.ToDictionary(c => c.Key, c => c.Value);
-                Assert.AreSame(rectangle, rectangle.Rotate(new Quaternion(0, 0, (float)Math.Sqrt(.5), (float)Math.Sqrt(.5))));
-                foreach (var corner in rectangle.Corners) {
-                    var prior = original[corner.Key] - center;
-                    var expected = center + new Vector3(-prior.Y, prior.X, prior.Z);
-                    Assert.AreEqual(expected.X, corner.Value.X, .00001);
-                    Assert.AreEqual(expected.Y, corner.Value.Y, .00001);
-                    Assert.AreEqual(expected.Z, corner.Value.Z, .00001);
-                }
-                Assert.AreEqual(rectangle.Corners["000"], rectangle.Edges[0].Point1);
-                Assert.AreEqual(rectangle.Corners["001"], rectangle.Edges[0].Point2);
-                Assert.AreEqual(rectangle.Corners["000"], rectangle.Faces[0].BottomLeft);
+            var center = new Vector3(10, 20, 30);
+            var rectangle = new Rectangle3D(center, new Vector3(-1, -2, -3), new Vector3(1, 2, 3));
+            var original = rectangle.Corners.ToDictionary(c => c.Key, c => c.Value);
+            Assert.AreSame(rectangle, rectangle.Rotate(new Quaternion(0, 0, (float)Math.Sqrt(.5), (float)Math.Sqrt(.5))));
+            foreach (var corner in rectangle.Corners) {
+                var prior = original[corner.Key] - center;
+                var expected = center + new Vector3(-prior.Y, prior.X, prior.Z);
+                Assert.AreEqual(expected.X, corner.Value.X, .00001);
+                Assert.AreEqual(expected.Y, corner.Value.Y, .00001);
+                Assert.AreEqual(expected.Z, corner.Value.Z, .00001);
             }
+            Assert.AreEqual(rectangle.Corners["000"], rectangle.Edges[0].Point1);
+            Assert.AreEqual(rectangle.Corners["001"], rectangle.Edges[0].Point2);
+            Assert.AreEqual(rectangle.Corners["000"], rectangle.Faces[0].BottomLeft);
         }
 
         [TestMethod]
-        public void ConvenienceConstructorsPreserveGeometryWithoutCallingTheEngine() {
-            var line = new Line3D(Vector3.Zero, Vector3.WorldUp);
-            Assert.AreEqual(Vector3.Zero, line.Point1);
-            Assert.AreEqual(Vector3.WorldUp, line.Point2);
-            var face = new Face3D(Vector3.Zero, new Vector3(1, 1, 0), Vector3.WorldNorth, Vector3.WorldEast);
-            Assert.AreEqual(Vector3.WorldNorth, face.TopLeft);
-            var rectangle = new Rectangle3D(Vector3.Zero, -Vector3.One, Vector3.One);
-            Assert.AreEqual(12, rectangle.Edges.Count);
+        public void DefaultGeometryDrawsThroughTheCurrentConsoleWithItsCoordinatesAndColor() {
+            using (var fixture = new ConsoleFixture()) {
+                var color = Color.FromArgb(67, 13, 29, 41);
+                var line = new Line3D(new Vector3(8, 17, 26), new Vector3(8, 17, 35));
+                var face = new Face3D(new Vector3(4, 5, 6), new Vector3(10, 11, 6),
+                    new Vector3(4, 11, 6), new Vector3(10, 5, 6));
+
+                line.Draw(color);
+                face.Draw(color);
+
+                CollectionAssert.AreEqual(new[] { Hash.DRAW_LINE, Hash.DRAW_BOX },
+                    fixture.Native.Calls.Select(call => call.Hash).ToArray());
+                CollectionAssert.AreEqual(new object[] {
+                    8f, 17f, 26f, 8f, 17f, 35f, (byte)13, (byte)29, (byte)41, (byte)67
+                }, fixture.Native.Calls[0].Arguments);
+                CollectionAssert.AreEqual(new object[] {
+                    4f, 5f, 6f, 10f, 11f, 6f, (byte)13, (byte)29, (byte)41, (byte)67
+                }, fixture.Native.Calls[1].Arguments);
+            }
         }
     }
 }

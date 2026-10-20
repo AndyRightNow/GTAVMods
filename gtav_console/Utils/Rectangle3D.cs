@@ -20,7 +20,7 @@ namespace DeveloperConsole {
         /// <param name="p1">The first point in the line</param>
         /// <param name="p2">The second point in the line</param>
         public Line3D(Vector3 p1, Vector3 p2)
-            : this(p1, p2, new GTAFuncs(GtaRuntime.Create(), new LiveConsolePlatform())) { }
+            : this(p1, p2, DeveloperConsole.GeometryFunctions) { }
         public Line3D(Vector3 p1, Vector3 p2, GTAFuncs game) {
             _game = game;
             Point1 = p1;
@@ -58,7 +58,7 @@ namespace DeveloperConsole {
         /// <param name="topLeft">The top left corner of the face</param>
         /// <param name="bottomRight">The bottom right corner of the face</param>
         public Face3D(Vector3 bottomLeft, Vector3 topRight, Vector3 topLeft, Vector3 bottomRight)
-            : this(bottomLeft, topRight, topLeft, bottomRight, new GTAFuncs(GtaRuntime.Create(), new LiveConsolePlatform())) { }
+            : this(bottomLeft, topRight, topLeft, bottomRight, DeveloperConsole.GeometryFunctions) { }
         public Face3D(Vector3 bottomLeft, Vector3 topRight, Vector3 topLeft, Vector3 bottomRight, GTAFuncs game) {
             _game = game;
             BottomLeft = bottomLeft;
@@ -108,7 +108,7 @@ namespace DeveloperConsole {
 		/// <param name="minimum">The minimum dimensions.</param>
 		/// <param name="maximum">The maximum dimensions.</param>
         public Rectangle3D(Vector3 center, Vector3 min, Vector3 max)
-            : this(center, min, max, new GTAFuncs(GtaRuntime.Create(), new LiveConsolePlatform())) { }
+            : this(center, min, max, DeveloperConsole.GeometryFunctions) { }
         public Rectangle3D(Vector3 center, Vector3 min, Vector3 max, GTAFuncs game) {
             _game = game;
             Center = center;

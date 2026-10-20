@@ -116,6 +116,9 @@ original exceptions preserved when both fail. Disposal attempts independent
 control and model cleanup even if one fails.
 
 The console's automatic evaluation aliases use its injected environment.
+Convenience geometry constructors use the current console's drawing environment,
+with the existing live-runtime fallback when no console exists. Command help
+shows nonblank argument descriptions alongside the argument signature.
 User-entered C# remains intentionally unrestricted developer code; its arbitrary
 native calls are not shipped mod logic and are not covered by these guarantees.
 
@@ -131,10 +134,13 @@ native calls are not shipped mod logic and are not covered by these guarantees.
 - Fake contract tests separate command submission from queued frame observations.
   Unknown queries fail instead of silently returning a convenient default.
   World-query scripts describe observations, not ability state transitions.
-- Composed tests exercise the real production controller, abilities and resources,
-  with varied frame durations, reproducible lifecycle sequences, external
-  disappearance and partial failures. Independent invariants cover restoration,
-  ownership, timeout boundaries and preservation of unrelated objects.
+- Behavior scenarios exercise the real production controller, abilities and
+  resources through player actions and explicit engine observations. Frame
+  duration, clock wrap, delayed completion, external disappearance and partial
+  failures are variations of the relevant gameplay behavior. Independent
+  assertions cover restoration, ownership, timeout boundaries and preservation
+  of unrelated objects. Construction and wiring are exercised by these outcomes;
+  a standalone type-identity or construction check is not a behavior scenario.
 - Coverage remains exactly 100% of inventoried behavior lines and branches in
   every shipped assembly, with only the exact reviewed primitive bindings
   excluded. Mutation testing evaluates whether assertions detect changed

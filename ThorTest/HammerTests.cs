@@ -116,19 +116,29 @@ namespace ModUtilsTest
 
         [TestMethod]
         [DataRow(false, false, false)]
+        [DataRow(true, false, false)]
         [DataRow(false, true, false)]
         [DataRow(false, false, true)]
         public void NearbyObstacleUsesDirectFlightOnlyWhenAllThreeAirChecksAreClear(bool x, bool y, bool z)
         {
             var f = new HammerFixture();
-            f.LooseHammer(Vector3.Zero);
-            f.Game.World.Capsules.Enqueue(new RayHit(true, 0, Vector3.UnitY * 20));
+            var center = new Vector3(12, -8, 30);
+            f.LooseHammer(center);
+            f.Game.World.Capsules.Enqueue(new RayHit(true, 0, center + Vector3.UnitY * 20));
             foreach (bool blocked in new[] { x, y, z }) f.Game.World.Capsules.Enqueue(new RayHit(blocked, 0, Vector3.Zero));
-            f.Hammer.FindWaysToMoveToCoord(Vector3.UnitY * 30, true);
-            Assert.AreEqual(y || z ? Vector3.Zero : Vector3.UnitY * 100, f.Hammer.Velocity);
-            f.Game.World.Capsules.Enqueue(new RayHit(true, 0, Vector3.UnitY * 21));
-            f.Hammer.FindWaysToMoveToCoord(Vector3.UnitY * 30, true);
+            f.Hammer.FindWaysToMoveToCoord(center + Vector3.UnitY * 30, true);
+            var probes = f.Game.Calls.Where(call => call.Name == "world.capsule").Skip(1).ToArray();
+            Assert.HasCount(3, probes);
+            var axes = new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ };
+            for (int i = 0; i < probes.Length; i++)
+                CollectionAssert.AreEqual(new object[] { center - axes[i] * 10, center + axes[i] * 10, 10f, IntersectFlags.Map },
+                    probes[i].Arguments);
+            Assert.AreEqual(x || y || z ? Vector3.Zero : Vector3.UnitY * 100, f.Hammer.Velocity);
+            f.Game.World.Capsules.Enqueue(new RayHit(true, 0, center + Vector3.UnitY * 21));
+            f.Hammer.FindWaysToMoveToCoord(center + Vector3.UnitY * 30, true);
             Assert.AreEqual(Vector3.UnitY * 100, f.Hammer.Velocity);
+            Assert.HasCount(5, f.Game.Calls.Where(call => call.Name == "world.capsule").ToArray(),
+                "An obstacle beyond twenty metres needs no enclosing air probes.");
         }
 
         [TestMethod]
@@ -342,26 +352,6 @@ namespace ModUtilsTest
                 .Where(call => call.Hash == Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY)
                 .Select(call => (int)call.Arguments[1]).ToArray(),
                 "Retiring the hammer cancels its scheduled effect without retargeting it to handle zero.");
-        }
-
-        [TestMethod]
-        public void ObstacleAirProbesEncloseTheHammerAlongAllThreeWorldAxes()
-        {
-            var f = new HammerFixture();
-            var center = new Vector3(12, -8, 30);
-            f.LooseHammer(center);
-            f.Game.World.Capsules.Enqueue(new RayHit(true, 0, center + Vector3.UnitY));
-            for (int i = 0; i < 3; i++) f.ClearPath();
-            f.Hammer.FindWaysToMoveToCoord(center + Vector3.UnitY * 15, true);
-            var probes = f.Game.Calls.Where(call => call.Name == "world.capsule").Skip(1).ToArray();
-            Assert.HasCount(3, probes);
-            var axes = new[] { Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ };
-            for (int i = 0; i < probes.Length; i++)
-            {
-                CollectionAssert.AreEqual(new object[] { center - axes[i] * 10, center + axes[i] * 10, 10f, IntersectFlags.Map },
-                    probes[i].Arguments);
-            }
-            Assert.AreEqual(Vector3.UnitY * 100, f.Hammer.Velocity);
         }
 
         [TestMethod]

@@ -82,19 +82,23 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void AssessedBuildRunsWithoutWarningAndNullVersionIsRecordedSafely()
+        [DataRow(true)]
+        [DataRow(false)]
+        public void StartupWarnsOnceForAnUnknownBuildAndStillStartsGameplay(bool assessedBuild)
         {
             var f = new Fixture();
-            f.Game.Host.FileVersion = new Version(2, 0, 1158, 13);
-            f.Controller.Start(); f.Controller.Tick();
-            Assert.IsFalse(f.Log.Records.Any(record => record.Name == "compatibility.baseline"));
-            var unknown = new Fixture();
-            unknown.Game.Host.IsEnhanced = false;
-            unknown.Game.Host.FileVersion = null;
-            unknown.Controller.Start(); unknown.Controller.Tick();
-            Assert.IsNull(unknown.Log.Last("session.start").Data["shvdneVersion"]);
-            Assert.AreEqual("3.9.0.0", unknown.Log.Last("session.start").Data["apiVersion"]);
-            Assert.HasCount(1, unknown.Log.Records.Where(record => record.Name == "compatibility.baseline").ToArray());
+            f.Game.Host.IsEnhanced = assessedBuild;
+            f.Game.Host.FileVersion = assessedBuild ? new Version(2, 0, 1158, 13) : null;
+
+            f.Controller.Start();
+            f.Controller.Tick();
+            f.Controller.Tick();
+
+            Assert.AreEqual(assessedBuild ? "2.0.1158.13" : null, f.Log.Last("session.start").Data["shvdneVersion"]);
+            Assert.AreEqual("3.9.0.0", f.Log.Last("session.start").Data["apiVersion"]);
+            Assert.HasCount(assessedBuild ? 0 : 1, f.Log.Records.Where(record => record.Name == "compatibility.baseline").ToArray());
+            Assert.HasCount(assessedBuild ? 0 : 1, f.Game.Calls.Where(call => call.Name == "host.notify").ToArray());
+            CollectionAssert.AreEqual(new[] { "apply:10", "tick:False", "tick:False" }, f.Ability.Calls);
         }
 
         [TestMethod]
@@ -326,47 +330,5 @@ namespace ModUtilsTest
             Assert.AreEqual(25.0, f.Log.Last("performance").Data["maxTickMs"]);
         }
 
-        [TestMethod]
-        public void ProductionCompositionReportsMetadataAndRunsIdleLifecycleWithoutEngineOperations()
-        {
-            var game = new FakeGame();
-            game.Host.PlayerPed = 0;
-            var audio = new SilentAudio();
-            var log = new RecordingLog();
-            var session = ThorSessionInfo.Capture("scripts/Logs/composition.jsonl");
-            var controller = ThorComposition.Create(game.Services, audio, log, new Random(17),
-                Thor.Thor.ReadConsoleOpen, Thor.Thor.ReadDroppedRecords, session);
-            controller.Start();
-            controller.Tick();
-            var startup = log.Last("session.start");
-            Assert.AreEqual("scripts/Logs/composition.jsonl", startup.Data["logPath"]);
-            Assert.AreEqual(File.GetLastWriteTimeUtc(typeof(ThorController).Assembly.Location).ToString("O"), startup.Data["buildUtc"]);
-            Assert.AreEqual(typeof(Script).Assembly.GetName().Version.ToString(), startup.Data["apiVersion"]);
-            StringAssert.Contains((string)log.Last("gameplay.snapshot").Data["state"], "attached=False");
-            Assert.AreEqual(Logger.DroppedRecords, log.Last("performance").Data["droppedLogRecords"]);
-            controller.Abort();
-            Assert.AreEqual(Logger.DroppedRecords, log.Last("session.end").Data["droppedLogRecords"]);
-            Assert.IsFalse(log.Records.Any(record => record.Name == "cleanup.exception" || record.Name == "tick.exception"));
-            Assert.HasCount(0, audio.Clips);
-            Assert.HasCount(0, game.Calls);
-            Assert.HasCount(0, game.Native.Calls);
-        }
-
-        [TestMethod]
-        public void ConsoleVisibilityBridgeTracksOnlyTheCurrentConsoleAndDisposal()
-        {
-            Assert.IsFalse(Thor.Thor.ReadConsoleOpen());
-            using (var console = new ConsoleFixture())
-            {
-                Assert.IsFalse(Thor.Thor.ReadConsoleOpen());
-                console.Model.ShowConsole(true);
-                Assert.IsTrue(Thor.Thor.ReadConsoleOpen());
-                console.Model.ShowConsole(false);
-                Assert.IsFalse(Thor.Thor.ReadConsoleOpen());
-            }
-            Assert.IsFalse(Thor.Thor.ReadConsoleOpen());
-            Assert.IsNull(DeveloperConsole.DeveloperConsole.Instance);
-            Assert.HasCount(0, DeveloperConsole.DeveloperConsole.RegisteredScripts);
-        }
     }
 }

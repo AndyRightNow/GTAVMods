@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using GTA;
@@ -9,6 +10,7 @@ using GTAVMods.Game;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Thor;
 using Control = GTA.Control;
+using ADModUtils;
 
 namespace ModUtilsTest
 {
@@ -63,7 +65,7 @@ namespace ModUtilsTest
                 Game.Host.OnWait = milliseconds => Game.Host.GameTime = unchecked(Game.Host.GameTime + milliseconds);
                 if (holding) Game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20);
                 Controller = ThorComposition.Create(Game.Services, Audio, Log, new Random(seed),
-                    () => false, () => 0, new ThorSessionInfo("scenario.jsonl", "scenario-build", "scenario-api"));
+                    Thor.Thor.ReadConsoleOpen, Thor.Thor.ReadDroppedRecords, ThorSessionInfo.Capture("scenario.jsonl"));
                 Controller.Start();
             }
 
@@ -125,7 +127,7 @@ namespace ModUtilsTest
         [DataRow(16)]
         [DataRow(33)]
         [DataRow(97)]
-        public void ComposedThrowCameraCatchWhirlAndDisablePreserveOwnershipAcrossFrameSchedules(int frameMs)
+        public void ThrowCameraCatchWhirlAndDisablePreserveOwnershipAcrossFrameSchedules(int frameMs)
         {
             var s = new Scene();
             s.Frame(frameMs);
@@ -181,10 +183,15 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void ComposedAssetAndAnimationDiagnosticsReachSessionLogWithoutPreventingThrow()
+        public void AssetAndAnimationDiagnosticsReachSessionLogWithoutPreventingThrow()
         {
             var s = new Scene();
             s.Frame();
+            var startup = s.Log.Last("session.start");
+            Assert.AreEqual("scenario.jsonl", startup.Data["logPath"]);
+            Assert.AreEqual(File.GetLastWriteTimeUtc(typeof(ThorController).Assembly.Location).ToString("O"), startup.Data["buildUtc"]);
+            Assert.AreEqual(typeof(Script).Assembly.GetName().Version.ToString(), startup.Data["apiVersion"]);
+            Assert.AreEqual(Logger.DroppedRecords, s.Log.Last("performance").Data["droppedLogRecords"]);
             var created = s.Log.Records.Where(record => record.Name == "asset.weapon.created").ToArray();
             CollectionAssert.AreEqual(s.CreatedWeapons.ToArray(),
                 created.Select(record => (int)record.Data["handle"]).ToArray());
@@ -205,6 +212,43 @@ namespace ModUtilsTest
             Assert.IsFalse(s.Game.Native.Calls.Any(call => call.Hash == Hash.TASK_PLAY_ANIM));
             Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
             Assert.AreEqual(new Vector3(0, 100, 5), s.Game.Entity(20).Velocity);
+            s.Controller.Abort();
+            Assert.AreEqual(Logger.DroppedRecords, s.Log.Last("session.end").Data["droppedLogRecords"]);
+            s.AssertNoErrors();
+            s.AssertReleased();
+        }
+
+        [TestMethod]
+        public void OpenConsoleProtectsGameplayFromDisableUntilItClosesOrIsDisposed()
+        {
+            var s = new Scene();
+            s.Frame();
+            using (var console = new ConsoleFixture())
+            {
+                console.Model.ShowConsole(true);
+                s.Chord(Keys.F);
+                Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
+                Assert.AreEqual(WeaponHash.Hammer, s.Game.Entity(10).CurrentWeapon);
+                Assert.IsFalse(s.Log.Records.Any(record => record.Name == "ability.disabled"));
+
+                console.Model.ShowConsole(false);
+                s.Chord(Keys.F);
+                Assert.AreEqual(200, s.Game.Entity(10).MaxHealth);
+                Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
+                Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.disabled").ToArray());
+
+                s.Chord(Keys.O);
+                s.Game.ObserveNextFrame(game => game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20));
+                s.Frame();
+                Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
+                console.Model.ShowConsole(true);
+            }
+
+            s.Chord(Keys.F);
+            Assert.AreEqual(200, s.Game.Entity(10).MaxHealth);
+            Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
+            Assert.HasCount(2, s.Log.Records.Where(record => record.Name == "ability.disabled").ToArray(),
+                "Disposing an open console must restore shortcuts instead of leaving a stale input lock.");
             s.Controller.Abort();
             s.AssertNoErrors();
             s.AssertReleased();
@@ -334,7 +378,7 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void ComposedCleanupRetriesKeepFailedResourcesOwnedWithoutRecreatingThemOrLosingOtherCleanup()
+        public void CleanupRetriesKeepFailedResourcesOwnedWithoutRecreatingThemOrLosingOtherCleanup()
         {
             var s = new Scene();
             s.Game.Ropes.Creations.Enqueue(70);
@@ -456,11 +500,19 @@ namespace ModUtilsTest
         [TestMethod]
         [DataRow(1000)]
         [DataRow(int.MaxValue - 1024)]
-        public void ComposedThrowFlightExpiresAtTwoSecondsIncludingSignedClockWrap(int startTime)
+        public void ThrowFlightExpiresAtTwoSecondsIncludingSignedClockWrap(int startTime)
         {
             var s = new Scene();
             s.Game.Host.GameTime = startTime;
             s.Frame(0, Keys.U, aim: true);
+            StringAssert.Contains(s.State(), "holding=True");
+            StringAssert.Contains(s.State(), "collecting=False");
+            Assert.IsFalse(s.Game.Native.Calls.Any(call => call.Hash == Hash.GET_WEAPON_OBJECT_FROM_PED));
+            Assert.IsTrue(s.Game.Native.Calls.Any(call => call.Hash == Hash.TASK_PLAY_ANIM));
+            Assert.IsTrue(s.Game.Native.Calls.Any(call => call.Hash == Hash.SET_PED_TO_RAGDOLL),
+                "Aim+U enters ragdoll before the first flight frame without releasing the held hammer.");
+            Assert.AreEqual("INFO", s.Log.Last("hammer.throwFlight").Level);
+            StringAssert.Contains((string)s.Log.Last("hammer.throwFlight").Data["state"], "holding=True");
             int started = s.Game.Host.GameTime;
             foreach (int elapsed in new[] { 0, 1, 1999, 2000, 2001 })
             {
@@ -479,19 +531,31 @@ namespace ModUtilsTest
         [DataRow(1000)]
         [DataRow(int.MaxValue - 500)]
         [DataRow(-1)]
-        public void ComposedPowerDecayUsesElapsedMillisecondsWithoutFloatRoundingOrSentinelCollision(int lossTime)
+        public void DroppedHammerPowerAndHealingExpireAfterTenSecondsAcrossClockBoundaries(int lossTime)
         {
             var s = new Scene();
-            s.Game.Host.GameTime = unchecked(lossTime - 1);
+            s.Game.Host.GameTime = unchecked(lossTime - 201);
             s.Frame(0);
+            s.Game.Entity(10).Health = 10;
+            s.Frame(200);
+            Assert.AreEqual(3010, s.Game.Entity(10).Health, "Full power heals ten percent of the enhanced maximum every 200 ms.");
             s.Frame(1, Keys.Y);
+            Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
+            Assert.AreEqual(Vector3.Zero, s.Game.Entity(20).Velocity);
             s.Frame(0);
-            foreach (var sample in new[] { (elapsed: 5000, maxHealth: 15100), (elapsed: 10000, maxHealth: 100), (elapsed: 10001, maxHealth: 100) })
+            foreach (var sample in new[] { (elapsed: 5000, maxHealth: 15100, movement: 1.25f), (elapsed: 10000, maxHealth: 100, movement: 1f), (elapsed: 10001, maxHealth: 100, movement: 1f) })
             {
                 s.Game.Host.GameTime = unchecked(lossTime + sample.elapsed);
                 s.Frame(0);
                 Assert.AreEqual(sample.maxHealth, s.Game.Entity(10).MaxHealth, "elapsed " + sample.elapsed);
+                Assert.AreEqual(sample.movement, s.Game.Native.Calls.Last(call => call.Hash == Hash.SET_PED_MOVE_RATE_OVERRIDE).Arguments[1]);
             }
+            int health = s.Game.Entity(10).Health;
+            int jumps = s.Game.Native.Calls.Count(call => call.Hash == Hash.SET_SUPER_JUMP_THIS_FRAME);
+            s.Frame(200);
+            Assert.AreEqual(health, s.Game.Entity(10).Health, "Expired power must stop healing.");
+            Assert.HasCount(jumps, s.Game.Native.Calls.Where(call => call.Hash == Hash.SET_SUPER_JUMP_THIS_FRAME).ToArray(),
+                "Expired power must not grant a super jump.");
             s.Controller.Abort();
             s.AssertNoErrors();
             s.AssertReleased();
@@ -529,7 +593,7 @@ namespace ModUtilsTest
         [TestMethod]
         [DataRow(1000)]
         [DataRow(int.MaxValue - 1024)]
-        public void ComposedTargetReturnWaitsTheFullSevenHundredMilliseconds(int startTime)
+        public void TargetReturnWaitsTheFullSevenHundredMilliseconds(int startTime)
         {
             var s = new Scene();
             s.Game.AddEntity(60).Position = new Vector3(0, .4f, 0);
@@ -537,8 +601,12 @@ namespace ModUtilsTest
             s.Frame(0);
             s.Game.World.Rays.Enqueue(new RayHit(true, 60, Vector3.Zero));
             s.Frame(16, Keys.T, aim: true);
+            StringAssert.Contains(s.State(), "attacking=True");
+            StringAssert.Contains(s.State(), "collecting=False");
             s.Frame(16);
+            StringAssert.Contains(s.State(), "targets=0");
             s.Frame(16);
+            StringAssert.Contains(s.State(), "attacking=False");
             int completed = s.Game.Host.GameTime;
             s.Game.World.CapsuleObservation = (from, to, radius, flags) => new RayHit(true, 10, Vector3.UnitZ);
             s.Game.Host.GameTime = unchecked(completed + 699);
