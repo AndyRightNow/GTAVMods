@@ -57,13 +57,17 @@ into the game or install assemblies into the GAC.
 
 - Run the build/test/package workflow after code or dependency changes. For a
   documentation-only edit, check the documented commands and `git diff --check`.
-- The last verified Release build had 20 passing tests, no warnings and no errors.
-  Unit tests do not exercise GTA natives, rendering, physics or keyboard input.
+- The shared build requires 100% executable line and branch coverage for Thor,
+  ModUtils, DeveloperConsole and GameBridge. See `docs/coverage-gate.md` before
+  changing coverage collection or the reviewed primitive boundary. Tests execute
+  the production behavior against deterministic game observations; GTA natives,
+  rendering, physics, actual keyboard delivery and audible playback still need
+  live verification.
 - Change sources and build scripts, not generated `bin`, `obj`, `.deps` or
   `artifacts` contents. Keep dependency caches, game archives, keys, saves,
   account files and gameplay logs out of commits.
 - Intentional NuGet updates require `dotnet restore GTAVMods.sln --force-evaluate`
-  and review of all four `packages.lock.json` files.
+  and review of all five `packages.lock.json` files.
 - A SHVDNE update also requires reviewing the release, updating the version and
   both checksums in `scripts/Restore-Dependencies.ps1`, updating compatibility
   checks, rebuilding and repeating live testing.

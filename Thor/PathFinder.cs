@@ -1,192 +1,127 @@
-﻿using ADModUtils;
+using System;
+using ADModUtils;
 using GTA;
 using GTA.Math;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using GTAVMods.Game;
 
-namespace Thor
+namespace Thor.PathFinder
 {
-    namespace PathFinder
+    public sealed class PathFinder
     {
-        public class PathFinder
+        private readonly GameServices game;
+        private int driver, chasingVehicle, currentTargetPed;
+        private Vector3? currentTargetPosition;
+        private bool initialized;
+        private static readonly Vector3 DefaultSpawnPosition = new Vector3(500, 500, 500);
+
+        public PathFinder(GameServices game) { this.game = game; }
+
+        private void Init()
         {
-            private static PathFinder instance = null;
-            private Ped driver = null;
-            private Vehicle chasingVehicle = null;
-            private Ped currentTargetPed = null;
-            private Vector3 currentTargetPosition = Vector3.Zero;
-            private bool initialized = false;
-            private static Vector3 DEFAULT_SPAWN_POS = new Vector3(500.0f, 500.0f, 500.0f);
+            // Successful initialization owns both nonzero handles until Dispose.
+            if (initialized && game.Entities.Exists(chasingVehicle) && game.Entities.Exists(driver))
+                return;
+            if (driver != 0 || chasingVehicle != 0) Dispose();
 
-            private PathFinder() { }
-
-            public static PathFinder Instance
+            int model = (int)VehicleHash.Thruster;
+            if (!game.World.RequestModel(model, 3000))
+                throw new InvalidOperationException("Could not load the pathfinder vehicle model.");
+            try
             {
-                get
-                {
-                    if (instance is null)
-                    {
-                        instance = new PathFinder();
-                    }
-
-                    return instance;
-                }
+                chasingVehicle = game.World.CreateVehicle(model, DefaultSpawnPosition);
+                if (chasingVehicle == 0)
+                    throw new InvalidOperationException("Could not create the pathfinder vehicle.");
+                driver = game.World.CreateDriver(chasingVehicle);
+                if (driver == 0)
+                    throw new InvalidOperationException("Could not create the pathfinder driver.");
             }
-
-            private void Init()
+            catch (Exception creationFailure)
             {
-                if (initialized && chasingVehicle != null && chasingVehicle.Exists() &&
-                    driver != null && driver.Exists())
-                {
-                    return;
-                }
-                if (initialized) Dispose();
-
-                var planeModel = new Model(VehicleHash.Thruster);
-                if (!planeModel.Request(3000))
-                    throw new InvalidOperationException("Could not load the pathfinder vehicle model.");
-                try
-                {
-                    chasingVehicle = World.CreateVehicle(planeModel, DEFAULT_SPAWN_POS);
-                    if (chasingVehicle == null)
-                        throw new InvalidOperationException("Could not create the pathfinder vehicle.");
-                    driver = chasingVehicle.CreateRandomPedOnSeat(VehicleSeat.Driver);
-                    if (driver == null)
-                        throw new InvalidOperationException("Could not create the pathfinder driver.");
-                }
-                catch
-                {
-                    Dispose();
-                    throw;
-                }
-                finally { planeModel.MarkAsNoLongerNeeded(); }
-
-                initialized = true;
-                Logger.Event("INFO", "pathfinder.created", "driver", driver.Handle, "vehicle", chasingVehicle.Handle);
+                try { Dispose(); }
+                catch (Exception cleanupFailure) { throw new AggregateException(creationFailure, cleanupFailure); }
+                throw;
             }
+            finally { game.World.ReleaseModel(model); }
 
-            public void Dispose()
-            {
-                if (driver != null || chasingVehicle != null) Logger.Event("INFO", "pathfinder.dispose", "driver", driver?.Handle, "vehicle", chasingVehicle?.Handle);
-                driver?.Delete();
-                chasingVehicle?.Delete();
-                driver = null;
-                chasingVehicle = null;
-                currentTargetPed = null;
-                currentTargetPosition = Vector3.Zero;
-                initialized = false;
-            }
+            initialized = true;
+            Logger.Event("INFO", "pathfinder.created", "driver", driver, "vehicle", chasingVehicle);
+        }
 
-            public bool IsRelatedEntity(Entity entity)
-            {
-                return entity == chasingVehicle || entity == driver;
-            }
+        public void Dispose()
+        {
+            if (driver != 0 || chasingVehicle != 0)
+                Logger.Event("INFO", "pathfinder.dispose", "driver", driver, "vehicle", chasingVehicle);
+            currentTargetPed = 0;
+            currentTargetPosition = null;
+            initialized = false;
+            Cleanup.Run(() => ReleaseEntity(ref driver), () => ReleaseEntity(ref chasingVehicle));
+        }
 
-            public Vector3 GetTargetVelocity(Vector3 userPosition, float scaler = 0.5f)
-            {
-                if (chasingVehicle is null)
-                {
-                    return Vector3.Zero;
-                }
+        private void ReleaseEntity(ref int handle)
+        {
+            if (handle == 0) return;
+            if (game.Entities.Exists(handle)) game.Entities.Delete(handle);
+            handle = 0;
+        }
 
-                return (chasingVehicle.Position - userPosition) * scaler + chasingVehicle.Velocity;
-            }
+        public bool IsRelatedEntity(int entity) => entity != 0 && (entity == chasingVehicle || entity == driver);
 
-            public Vector3? Position
-            {
-                get
-                {
-                    if (chasingVehicle is null)
-                    {
-                        return null;
-                    }
+        public Vector3 GetTargetVelocity(Vector3 userPosition, float scaler = 0.5f)
+            => chasingVehicle == 0 ? Vector3.Zero :
+                (game.Entities.Position(chasingVehicle) - userPosition) * scaler + game.Entities.Velocity(chasingVehicle);
 
-                    return chasingVehicle.Position;
-                }
-            }
+        public Vector3? Position => chasingVehicle == 0 ? (Vector3?)null : game.Entities.Position(chasingVehicle);
 
-            public void OnTick(Entity entityToDisableCollision)
-            {
-                Init();
+        public void OnTick(int entityToDisableCollision)
+        {
+            Init();
+            if (game.World.VehicleDriver(chasingVehicle) != driver)
+                game.Peds.SetIntoVehicle(driver, chasingVehicle, VehicleSeat.Driver);
+            game.Entities.SetInvincible(chasingVehicle, true);
+            game.Entities.SetHealth(chasingVehicle, 100);
+            game.Entities.SetVisible(chasingVehicle, false);
+            game.Entities.SetInvincible(driver, true);
+            game.Entities.SetHealth(driver, 100);
+            game.Entities.SetVisible(driver, false);
+            game.Entities.SetVelocity(chasingVehicle, game.Entities.Velocity(chasingVehicle) * 1.05f);
+            SetNoCollision(entityToDisableCollision);
+        }
 
-                if (chasingVehicle.Driver != driver)
-                {
-                    driver.SetIntoVehicle(chasingVehicle, VehicleSeat.Driver);
-                }
+        public void SetNoCollision(int entity)
+        {
+            if (chasingVehicle == 0 || entity == 0 || !game.Entities.Exists(entity)) return;
+            game.Entities.SetNoCollision(chasingVehicle, entity, true);
+            game.Entities.SetNoCollision(chasingVehicle, game.Host.PlayerPed, true);
+            game.Entities.SetNoCollision(driver, entity, true);
+            game.Entities.SetNoCollision(driver, game.Host.PlayerPed, true);
+        }
 
-                chasingVehicle.IsInvincible = true;
-                chasingVehicle.Health = 100;
-                chasingVehicle.IsVisible = false;
+        public void UpdateStartPosition(Vector3 position) => game.Entities.SetPosition(chasingVehicle, position);
 
-                driver.IsInvincible = true;
-                driver.Health = 100;
+        public void UpdateCurrentTarget(Vector3 target)
+        {
+            if (currentTargetPosition.HasValue && target.DistanceTo(currentTargetPosition.Value) <= 15) return;
+            ClearAll();
+            currentTargetPosition = target;
+            game.Peds.StartHeliMissionToPosition(driver, chasingVehicle, target,
+                VehicleMissionType.GoTo, 100000, 1, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
+        }
 
-                driver.IsVisible = false;
+        public void UpdateCurrentTarget(int targetPed)
+        {
+            if (targetPed == 0) return;
+            if (targetPed == currentTargetPed) return;
+            ClearAll();
+            currentTargetPed = targetPed;
+            game.Peds.StartHeliMissionToPed(driver, chasingVehicle, targetPed,
+                VehicleMissionType.Follow, 100000, 1, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
+        }
 
-                chasingVehicle.Velocity *= 1.05f;
-
-                SetNoCollision(entityToDisableCollision);
-            }
-
-            public void SetNoCollision(Entity entityToDisableCollision)
-            {
-                if (chasingVehicle == null || driver == null || entityToDisableCollision == null)
-                {
-                    return;
-                }
-
-                chasingVehicle.SetNoCollision(entityToDisableCollision, true);
-                chasingVehicle.SetNoCollision(Game.Player.Character, true);
-                driver.SetNoCollision(entityToDisableCollision, true);
-                driver.SetNoCollision(Game.Player.Character, true);
-            }
-
-            public void UpdateStartPosition(Vector3 position)
-            {
-                chasingVehicle.Position = position;
-            }
-
-            public void UpdateCurrentTarget(Vector3 target)
-            {
-                if (currentTargetPosition.Equals(target) || World.GetDistance(target, currentTargetPosition) <= 15.0f)
-                {
-                    return;
-                }
-
-                ClearAll();
-
-                currentTargetPosition = target;
-
-                driver.Task.StartHeliMission(chasingVehicle, currentTargetPosition, VehicleMissionType.GoTo, 100000.0f, 1.0f, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
-            }
-
-            public void UpdateCurrentTarget(Ped targetPed)
-            {
-                if (targetPed is null)
-                {
-                    return;
-                }
-
-                if (currentTargetPed != null && targetPed.Handle == currentTargetPed.Handle)
-                {
-                    return;
-                }
-
-                ClearAll();
-
-                currentTargetPed = targetPed;
-                driver.Task.StartHeliMission(chasingVehicle, currentTargetPed, VehicleMissionType.Follow, 100000.0f, 1.0f, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
-            }
-
-            private void ClearAll()
-            {
-                driver.Task.ClearAll();
-                currentTargetPed = null;
-                currentTargetPosition = Vector3.Zero;
-            }
+        private void ClearAll()
+        {
+            game.Peds.ClearTasks(driver);
+            currentTargetPed = 0;
+            currentTargetPosition = null;
         }
     }
 }

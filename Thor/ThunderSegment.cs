@@ -1,16 +1,18 @@
-﻿using GTA.Math;
+using GTA.Math;
 
 namespace Thor
 {
     public class ThunderSegment
     {
+        private readonly ADModUtils.NativeHelper effects;
         private Vector3 start;
         private Vector3 end;
         private static string THUNDER_FX_SET_NAME = "core";
         private static string THUNDER_FX_NAME = "muz_railgun";
 
-        public ThunderSegment(Vector3 start, Vector3 end)
+        public ThunderSegment(Vector3 start, Vector3 end, ADModUtils.NativeHelper effects)
         {
+            this.effects = effects;
             this.start = start;
             this.end = end;
         }
@@ -24,11 +26,11 @@ namespace Thor
             var startToEnd = ADModUtils.Utilities.Math.DirectionToRotation(end - start);
             var endToStart = ADModUtils.Utilities.Math.DirectionToRotation(start - end);
 
-            ADModUtils.NativeHelper.PlayParticleFx(THUNDER_FX_SET_NAME, THUNDER_FX_NAME, start, ConvertToFxRotation(startToEnd), scale);
-            ADModUtils.NativeHelper.PlayParticleFx(THUNDER_FX_SET_NAME, THUNDER_FX_NAME, end, ConvertToFxRotation(endToStart), scale);
+            effects.PlayParticleFx(THUNDER_FX_SET_NAME, THUNDER_FX_NAME, start, ConvertToFxRotation(startToEnd), scale);
+            effects.PlayParticleFx(THUNDER_FX_SET_NAME, THUNDER_FX_NAME, end, ConvertToFxRotation(endToStart), scale);
 
-            ADModUtils.NativeHelper.PlayParticleFx(THUNDER_FX_SET_NAME, THUNDER_FX_NAME, middle, ConvertToFxRotation(startToEnd), scale);
-            ADModUtils.NativeHelper.PlayParticleFx(THUNDER_FX_SET_NAME, THUNDER_FX_NAME, middle, ConvertToFxRotation(endToStart), scale);
+            effects.PlayParticleFx(THUNDER_FX_SET_NAME, THUNDER_FX_NAME, middle, ConvertToFxRotation(startToEnd), scale);
+            effects.PlayParticleFx(THUNDER_FX_SET_NAME, THUNDER_FX_NAME, middle, ConvertToFxRotation(endToStart), scale);
         }
 
         private Vector3 ConvertToFxRotation(Vector3 rot)

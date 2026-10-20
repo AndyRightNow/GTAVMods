@@ -6,18 +6,23 @@ using GTA;
 using GTA.Math;
 using GTA.UI;
 using Quaternion = GTA.Math.Quaternion;
+using GTAVMods.Game;
 
 namespace DeveloperConsole {
     /// <summary>
     ///     Represents a 3D line
     /// </summary>
     public class Line3D {
+        private readonly GTAFuncs _game;
         /// <summary>
         ///     Create a Line3D
         /// </summary>
         /// <param name="p1">The first point in the line</param>
         /// <param name="p2">The second point in the line</param>
-        public Line3D(Vector3 p1, Vector3 p2) {
+        public Line3D(Vector3 p1, Vector3 p2)
+            : this(p1, p2, new GTAFuncs(GtaRuntime.Create(), new LiveConsolePlatform())) { }
+        public Line3D(Vector3 p1, Vector3 p2, GTAFuncs game) {
+            _game = game;
             Point1 = p1;
             Point2 = p2;
         }
@@ -36,7 +41,7 @@ namespace DeveloperConsole {
         /// 	Draw the line
         /// </summary>
         public void Draw(Color c) {
-            GTAFuncs.DrawLine(Point1, Point2, c);
+            _game.DrawLine(Point1, Point2, c);
         }
     }
 
@@ -44,6 +49,7 @@ namespace DeveloperConsole {
     ///     Represents a 3D face
     /// </summary>
     public class Face3D {
+        private readonly GTAFuncs _game;
         /// <summary>
         ///     Create a Face3D
         /// </summary>
@@ -51,7 +57,10 @@ namespace DeveloperConsole {
         /// <param name="topRight">The top right corner of the face</param>
         /// <param name="topLeft">The top left corner of the face</param>
         /// <param name="bottomRight">The bottom right corner of the face</param>
-        public Face3D(Vector3 bottomLeft, Vector3 topRight, Vector3 topLeft, Vector3 bottomRight) {
+        public Face3D(Vector3 bottomLeft, Vector3 topRight, Vector3 topLeft, Vector3 bottomRight)
+            : this(bottomLeft, topRight, topLeft, bottomRight, new GTAFuncs(GtaRuntime.Create(), new LiveConsolePlatform())) { }
+        public Face3D(Vector3 bottomLeft, Vector3 topRight, Vector3 topLeft, Vector3 bottomRight, GTAFuncs game) {
+            _game = game;
             BottomLeft = bottomLeft;
             TopRight = topRight;
             TopLeft = topLeft;
@@ -83,7 +92,7 @@ namespace DeveloperConsole {
         /// </summary>
         /// <param name="c">The color of the face</param>
         public void Draw(Color c) {
-            GTAFuncs.DrawBox(BottomLeft, TopRight, c);
+            _game.DrawBox(BottomLeft, TopRight, c);
         }
     }
 
@@ -91,13 +100,17 @@ namespace DeveloperConsole {
     ///     Represents a 3D Rectangle
     /// </summary>
     public class Rectangle3D {
+        private readonly GTAFuncs _game;
         /// <summary>
         ///     Create a Rectangle3D
         /// </summary>
         /// <param name="center">The center of the rectangle.</param>
 		/// <param name="minimum">The minimum dimensions.</param>
 		/// <param name="maximum">The maximum dimensions.</param>
-        public Rectangle3D(Vector3 center, Vector3 min, Vector3 max) {
+        public Rectangle3D(Vector3 center, Vector3 min, Vector3 max)
+            : this(center, min, max, new GTAFuncs(GtaRuntime.Create(), new LiveConsolePlatform())) { }
+        public Rectangle3D(Vector3 center, Vector3 min, Vector3 max, GTAFuncs game) {
+            _game = game;
             Center = center;
             Min = min;
             Max = max;
@@ -106,8 +119,8 @@ namespace DeveloperConsole {
                 {"000", center + new Vector3(Min.X,Min.Y,Min.Z)},
                 {"100", center + new Vector3(Max.X,Min.Y,Min.Z)},
                 {"010", center + new Vector3(Min.X,Max.Y,Min.Z)},
-                {"001", center + new Vector3(Max.X,Max.Y,Min.Z)},
-                {"110", center + new Vector3(Min.X,Min.Y,Max.Z)},
+                {"001", center + new Vector3(Min.X,Min.Y,Max.Z)},
+                {"110", center + new Vector3(Max.X,Max.Y,Min.Z)},
                 {"101", center + new Vector3(Max.X,Min.Y,Max.Z)},
                 {"011", center + new Vector3(Min.X,Max.Y,Max.Z)},
                 {"111", center + new Vector3(Max.X,Max.Y,Max.Z)}
@@ -152,18 +165,18 @@ namespace DeveloperConsole {
         /// </summary>
         private void GenerateEdges() {
             Edges = new List<Line3D> {
-                new Line3D(Corners["000"], Corners["001"]),
-                new Line3D(Corners["000"], Corners["100"]),
-                new Line3D(Corners["100"], Corners["101"]),
-                new Line3D(Corners["001"], Corners["101"]),
-                new Line3D(Corners["001"], Corners["011"]),
-                new Line3D(Corners["000"], Corners["010"]),
-                new Line3D(Corners["100"], Corners["110"]),
-                new Line3D(Corners["101"], Corners["111"]),
-                new Line3D(Corners["110"], Corners["111"]),
-                new Line3D(Corners["011"], Corners["111"]),
-                new Line3D(Corners["010"], Corners["110"]),
-                new Line3D(Corners["010"], Corners["011"])
+                new Line3D(Corners["000"], Corners["001"], _game),
+                new Line3D(Corners["000"], Corners["100"], _game),
+                new Line3D(Corners["100"], Corners["101"], _game),
+                new Line3D(Corners["001"], Corners["101"], _game),
+                new Line3D(Corners["001"], Corners["011"], _game),
+                new Line3D(Corners["000"], Corners["010"], _game),
+                new Line3D(Corners["100"], Corners["110"], _game),
+                new Line3D(Corners["101"], Corners["111"], _game),
+                new Line3D(Corners["110"], Corners["111"], _game),
+                new Line3D(Corners["011"], Corners["111"], _game),
+                new Line3D(Corners["010"], Corners["110"], _game),
+                new Line3D(Corners["010"], Corners["011"], _game)
             };
         }
 
@@ -172,12 +185,12 @@ namespace DeveloperConsole {
         /// </summary>
         private void GenerateFaces() {
             Faces = new List<Face3D> {
-                new Face3D(Corners["000"], Corners["101"], Corners["001"], Corners["100"]),
-                new Face3D(Corners["100"], Corners["111"], Corners["101"], Corners["110"]),
-                new Face3D(Corners["110"], Corners["011"], Corners["111"], Corners["010"]),
-                new Face3D(Corners["010"], Corners["001"], Corners["011"], Corners["000"]),
-                new Face3D(Corners["101"], Corners["011"], Corners["001"], Corners["111"]),
-                new Face3D(Corners["100"], Corners["010"], Corners["000"], Corners["110"])
+                new Face3D(Corners["000"], Corners["101"], Corners["001"], Corners["100"], _game),
+                new Face3D(Corners["100"], Corners["111"], Corners["101"], Corners["110"], _game),
+                new Face3D(Corners["110"], Corners["011"], Corners["111"], Corners["010"], _game),
+                new Face3D(Corners["010"], Corners["001"], Corners["011"], Corners["000"], _game),
+                new Face3D(Corners["101"], Corners["011"], Corners["001"], Corners["111"], _game),
+                new Face3D(Corners["100"], Corners["010"], Corners["000"], Corners["110"], _game)
             };
         }
 
@@ -215,8 +228,8 @@ namespace DeveloperConsole {
             foreach (var e in Edges) e.Draw(c);
             if (diagonals) {
                 foreach (var f in Faces) {
-                    new Line3D(f.BottomLeft, f.TopRight).Draw(c);
-                    new Line3D(f.BottomRight, f.TopLeft).Draw(c);
+                    new Line3D(f.BottomLeft, f.TopRight, _game).Draw(c);
+                    new Line3D(f.BottomRight, f.TopLeft, _game).Draw(c);
                 }
             }
             return this;
@@ -239,8 +252,8 @@ namespace DeveloperConsole {
         /// <returns>The current rectangle instance</returns>
         public Rectangle3D DrawDebug(Color c) {
             foreach (var v in Corners) {
-                var w = GTAFuncs.WorldToScreen(v.Value);
-                new TextElement(v.Key, new Point((int) w.X, (int) w.Y), .15f, c).Draw();
+                var w = _game.WorldToScreen(v.Value);
+                _game.DrawText(v.Key, new Point((int) w.X, (int) w.Y), .15f, c, 0);
             }
             return this;
         }

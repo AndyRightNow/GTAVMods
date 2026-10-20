@@ -1,132 +1,207 @@
-using GTA;
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Windows.Forms;
-using DeveloperConsole;
 using ADModUtils;
-using GTA.UI;
+using GTA;
+using GTAVMods.Game;
 
 namespace Thor
 {
-    public class Thor : Script
+    public sealed class ThorSessionInfo
     {
-        private readonly MjolnirWorthyAbility mjolnirAbility;
-        private int previousPedHandle;
-        private bool abilityHasBeenTurnedOff;
-        private bool showCompatibilityNotice;
-        private readonly GameplayDiagnostics diagnostics = new GameplayDiagnostics();
-
-        public Thor()
+        public ThorSessionInfo(string logPath, string buildUtc, string apiVersion)
         {
-            mjolnirAbility = MjolnirWorthyAbility.Instance;
-            previousPedHandle = -1;
-            Tick += OnTick;
-            KeyDown += OnKeyDown;
-            Aborted += OnAborted;
-            Interval = 0;
-            this.RegisterConsoleScript(dc => Logger.Init(dc));
+            LogPath = logPath;
+            BuildUtc = buildUtc;
+            ApiVersion = apiVersion;
+        }
+        public string LogPath { get; }
+        public string BuildUtc { get; }
+        public string ApiVersion { get; }
+        public static ThorSessionInfo Capture(string logPath) => new ThorSessionInfo(logPath,
+            File.GetLastWriteTimeUtc(typeof(ThorController).Assembly.Location).ToString("O"),
+            typeof(Script).Assembly.GetName().Version.ToString());
+    }
 
-            Logger.Event("INFO", "session.start", "modVersion", typeof(Thor).Assembly.GetName().Version.ToString(),
-                "runtime", Environment.Version.ToString(), "is64Bit", Environment.Is64BitProcess,
-                "logPath", Logger.LogFilePath, "buildUtc", System.IO.File.GetLastWriteTimeUtc(typeof(Thor).Assembly.Location).ToString("O"));
+    public sealed class ThorController
+    {
+        private readonly GameServices game;
+        private readonly IThorAbility ability;
+        private readonly GameplayDiagnostics diagnostics;
+        private readonly IEventLog log;
+        private readonly Action disposePathfinder;
+        private readonly Func<bool> consoleOpen;
+        private readonly Func<long> timestamp;
+        private readonly long frequency;
+        private readonly ThorSessionInfo session;
+        private readonly Func<long> droppedRecords;
+        private int previousPedHandle = -1;
+        private bool disabled, showCompatibilityNotice, needsRecovery;
 
-            var executableVersion = EnhancedCompatibility.ExecutableVersion(Game.FileVersion, Game.isEnhanced);
-            Logger.Log("INFO", "Game executable: " + executableVersion, "SHVDNE version: " + Game.FileVersion,
-                "Enhanced: " + Game.isEnhanced,
-                "SHVDN API: " + typeof(Script).Assembly.GetName().Version);
-            showCompatibilityNotice = !Game.isEnhanced ||
-                !EnhancedCompatibility.IsAssessedBuild(executableVersion);
+        public ThorController(GameServices game, IThorAbility ability, GameplayDiagnostics diagnostics,
+            IEventLog log, Action disposePathfinder, Func<bool> consoleOpen, Func<long> timestamp, long frequency,
+            ThorSessionInfo session, Func<long> droppedRecords)
+        {
+            this.game = game;
+            this.ability = ability;
+            this.diagnostics = diagnostics;
+            this.log = log;
+            this.disposePathfinder = disposePathfinder;
+            this.consoleOpen = consoleOpen;
+            this.timestamp = timestamp;
+            this.frequency = frequency;
+            this.session = session;
+            this.droppedRecords = droppedRecords;
         }
 
-        private void OnTick(object sender, EventArgs e)
+        public void Start()
         {
-            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            var executableVersion = EnhancedCompatibility.ExecutableVersion(game.Host.FileVersion, game.Host.IsEnhanced);
+            log.Event("INFO", "session.start", "modVersion", typeof(ThorController).Assembly.GetName().Version.ToString(),
+                "runtime", Environment.Version.ToString(), "is64Bit", Environment.Is64BitProcess,
+                "logPath", session.LogPath, "buildUtc", session.BuildUtc,
+                "executableVersion", executableVersion?.ToString(), "apiVersion", session.ApiVersion,
+                "shvdneVersion", game.Host.FileVersion?.ToString(), "enhanced", game.Host.IsEnhanced);
+            showCompatibilityNotice = !game.Host.IsEnhanced || !EnhancedCompatibility.IsAssessedBuild(executableVersion);
+        }
+
+        public void Tick()
+        {
+            long started = timestamp();
             try
             {
-                var ped = Game.Player.Character;
-                if (ped == null || !ped.Exists() || ped.IsDead)
+                if (disabled) return;
+                int ped = game.Host.PlayerPed;
+                if (ped == 0 || !game.Entities.Exists(ped) || game.Entities.IsDead(ped))
                 {
-                    if (mjolnirAbility.IsAttachedToPed) mjolnirAbility.RemoveAbility();
+                    if (ability.IsAttachedToPed) ability.RemoveAbility();
                     return;
                 }
                 if (showCompatibilityNotice)
                 {
                     showCompatibilityNotice = false;
-                    Notification.PostTicker("Thor: compatibility baseline differs. See README and scripts/Logs.", false);
-                    Logger.Log("WARN", "Upstream compatibility baseline: Enhanced " +
-                        EnhancedCompatibility.AssessedBuild + ". In-game validation is still required.");
+                    game.Host.Notify("Thor: compatibility baseline differs. See README and scripts/Logs.");
+                    log.Event("WARN", "compatibility.baseline", "assessed", EnhancedCompatibility.AssessedBuild.ToString());
                 }
-                if (abilityHasBeenTurnedOff) return;
-
-                if (ped.Handle != previousPedHandle && mjolnirAbility.IsAttachedToPed)
-                    mjolnirAbility.RemoveAbility();
-                previousPedHandle = ped.Handle;
-
-                if (!mjolnirAbility.IsAttachedToPed) mjolnirAbility.ApplyOn(ped);
-                mjolnirAbility.OnTick(false);
+                if (ped != previousPedHandle && ability.IsAttachedToPed) ability.RemoveAbility();
+                previousPedHandle = ped;
+                if (!ability.IsAttachedToPed) ability.ApplyOn(ped);
+                ability.OnTick(false);
             }
-            catch (Exception ex)
+            catch (Exception error)
             {
-                abilityHasBeenTurnedOff = true;
-                Logger.Event("ERROR", "tick.exception", "exception", ex.ToString(), "state", mjolnirAbility.DiagnosticState);
-                try { GameplayDiagnostics.Snapshot(mjolnirAbility, "exception"); }
-                catch (Exception diagnosticError) { Logger.Log("WARN", diagnosticError.ToString()); }
-                TryCleanup(() => mjolnirAbility.RemoveAbility());
-                Notification.PostTicker("Thor paused after an error. See scripts/Logs. Ctrl+A+O retries.", false);
+                disabled = true;
+                needsRecovery = true;
+                log.Event("ERROR", "tick.exception", "exception", error.ToString(), "state", ability.DiagnosticState);
+                try { diagnostics.Snapshot(ability, "exception"); }
+                catch (Exception diagnosticError) { log.Event("WARN", "diagnostics.exception", "exception", diagnosticError.ToString()); }
+                TryCleanup(ability.RemoveAbility);
+                game.Host.Notify("Thor paused after an error. See scripts/Logs. Ctrl+A+O retries.");
             }
             finally
             {
-                try { diagnostics.RecordTick(mjolnirAbility, abilityHasBeenTurnedOff,
-                    (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 / System.Diagnostics.Stopwatch.Frequency); }
-                catch (Exception ex) { Logger.Throttled("WARN", "diagnostics.exception", 10000, "exception", ex.ToString()); }
+                try { diagnostics.RecordTick(ability, disabled, (timestamp() - started) * 1000.0 / frequency); }
+                catch (Exception error) { log.Throttled("WARN", "diagnostics.exception", 10000, "exception", error.ToString()); }
             }
         }
 
-        private void OnKeyDown(object sender, KeyEventArgs e)
+        public void KeyDown(KeyEventArgs args)
         {
-            if (DeveloperConsole.DeveloperConsole.Instance?.IsOpen == true) return;
-            // Record only these mod bindings, rather than arbitrary keystrokes.
-            if (e.KeyCode == Keys.H || e.KeyCode == Keys.T || e.KeyCode == Keys.U || e.KeyCode == Keys.Y ||
-                e.KeyCode == Keys.Z || e.KeyCode == Keys.R || e.KeyCode == Keys.F9)
-                Logger.Throttled("INFO", "input." + e.KeyCode, 250, "control", e.Control, "shift", e.Shift, "gameTime", Game.GameTime);
-            if (e.KeyCode == Keys.F9)
+            if (consoleOpen()) return;
+            Keys key = args.KeyCode;
+            if (key == Keys.H || key == Keys.T || key == Keys.U || key == Keys.Y || key == Keys.Z || key == Keys.R || key == Keys.F9)
+                log.Throttled("INFO", "input." + key, 250, "control", args.Control, "shift", args.Shift, "gameTime", game.Host.GameTime);
+            if (key == Keys.F9)
             {
-                try { GameplayDiagnostics.Snapshot(mjolnirAbility, "manual-F9"); }
-                catch (Exception ex) { Logger.Log("WARN", ex.ToString()); }
+                try { diagnostics.Snapshot(ability, "manual-F9"); }
+                catch (Exception error) { log.Event("WARN", "diagnostics.exception", "exception", error.ToString()); }
             }
-            if (!e.Control || !Game.IsKeyPressed(Keys.A)) return;
-            if (e.KeyCode == Keys.O && abilityHasBeenTurnedOff)
+            if (!args.Control || !game.Input.IsKeyPressed(Keys.A)) return;
+            if (key == Keys.O && disabled)
             {
-                abilityHasBeenTurnedOff = false;
-                Logger.Event("INFO", "ability.enabled", "reason", "Ctrl+A+O");
-                Notification.PostTicker("The Thor ability has been turned on.", false);
+                if (!TryCleanup(ability.RemoveAbility) || (needsRecovery && !TryCleanup(ability.ResetWeapon)))
+                {
+                    needsRecovery = true;
+                    game.Host.Notify("Thor remains paused because cleanup failed. See scripts/Logs. Ctrl+A+O retries.");
+                    return;
+                }
+                needsRecovery = false;
+                disabled = false;
+                log.Event("INFO", "ability.enabled", "reason", "Ctrl+A+O");
+                game.Host.Notify("The Thor ability has been turned on.");
             }
-            else if (e.KeyCode == Keys.F && !abilityHasBeenTurnedOff)
+            else if (key == Keys.F && !disabled)
             {
-                abilityHasBeenTurnedOff = true;
-                Logger.Event("INFO", "ability.disabled", "reason", "Ctrl+A+F");
-                TryCleanup(() => mjolnirAbility.RemoveAbility());
-                var ped = Game.Player.Character;
-                if (ped != null && ped.Exists() && !ped.IsDead)
-                    ped.Weapons.Give(WeaponHash.Parachute, 1, false, false);
-                Notification.PostTicker("The Thor ability has been turned off.", false);
+                disabled = true;
+                log.Event("INFO", "ability.disabled", "reason", "Ctrl+A+F");
+                needsRecovery = !TryCleanup(ability.RemoveAbility);
+                int ped = game.Host.PlayerPed;
+                if (ped != 0 && game.Entities.Exists(ped) && !game.Entities.IsDead(ped))
+                    game.Weapons.Give(ped, WeaponHash.Parachute, 1, false, false);
+                game.Host.Notify("The Thor ability has been turned off.");
             }
         }
 
-        private void OnAborted(object sender, EventArgs e)
+        public void Abort()
         {
-            Logger.Event("INFO", "session.stopping", "reason", "script-aborted-or-reloaded");
-            // Aborted handlers must not yield or request new streamed assets.
-            TryCleanup(() => mjolnirAbility.RemoveAbility());
-            TryCleanup(() => mjolnirAbility.DisposeSounds());
-            TryCleanup(() => mjolnirAbility.Weapon.Dispose());
-            TryCleanup(() => PathFinder.PathFinder.Instance.Dispose());
-            Logger.Event("INFO", "session.end", "droppedLogRecords", Logger.DroppedRecords);
+            log.Event("INFO", "session.stopping", "reason", "script-aborted-or-reloaded");
+            TryCleanup(ability.RemoveAbility);
+            TryCleanup(ability.DisposeSounds);
+            TryCleanup(ability.DisposeWeapon);
+            TryCleanup(disposePathfinder);
+            log.Event("INFO", "session.end", "droppedLogRecords", droppedRecords());
         }
 
-        private static void TryCleanup(Action cleanup)
+        private bool TryCleanup(Action cleanup)
         {
-            try { cleanup(); }
-            catch (Exception ex) { Logger.Log("ERROR", "Cleanup:", ex.ToString()); }
+            try { cleanup(); return true; }
+            catch (Exception error)
+            {
+                log.Event("ERROR", "cleanup.exception", "exception", error.ToString());
+                return false;
+            }
         }
+    }
+
+    public static class ThorComposition
+    {
+        public static ThorController Create(GameServices game, IAudioPlaybackFactory audio, IEventLog log, Random random,
+            Func<bool> consoleOpen, Func<long> droppedRecords, ThorSessionInfo session)
+        {
+            var effects = new NativeHelper(game);
+            var pathfinder = new PathFinder.PathFinder(game);
+            var camera = new WeaponCamera(game, random);
+            var thunder = new Thunder(game, effects, random);
+            var weapon = new Mjolnir(game, effects, random, pathfinder, camera, thunder, audio, log);
+            var ability = new MjolnirWorthyAbility(game, effects, random, weapon, thunder, audio, log);
+            var clock = Stopwatch.StartNew();
+            var diagnostics = new GameplayDiagnostics(game, log, () => clock.ElapsedMilliseconds, droppedRecords);
+            return new ThorController(game, ability, diagnostics, log, pathfinder.Dispose,
+                consoleOpen, Stopwatch.GetTimestamp, Stopwatch.Frequency, session, droppedRecords);
+        }
+    }
+
+    public sealed class Thor : Script
+    {
+        private readonly ThorController controller;
+        [GamePrimitive]
+        public Thor()
+        {
+            controller = ThorComposition.Create(GtaRuntime.Create(), new NAudioPlaybackFactory(), Logger.Default,
+                new Random(), new Func<bool>(ReadConsoleOpen), new Func<long>(ReadDroppedRecords),
+                ThorSessionInfo.Capture(Logger.LogFilePath));
+            Tick += OnTick;
+            KeyDown += OnKeyDown;
+            Aborted += OnAborted;
+            Interval = 0;
+            this.RegisterConsoleScript(new DeveloperConsole.DeveloperConsole.OnConsoleAttached(Logger.Init));
+            controller.Start();
+        }
+        public static bool ReadConsoleOpen() => DeveloperConsole.DeveloperConsole.Instance?.IsOpen == true;
+        public static long ReadDroppedRecords() => Logger.DroppedRecords;
+        [GamePrimitive] private void OnTick(object sender, EventArgs args) => controller.Tick();
+        [GamePrimitive] private void OnKeyDown(object sender, KeyEventArgs args) => controller.KeyDown(args);
+        [GamePrimitive] private void OnAborted(object sender, EventArgs args) => controller.Abort();
     }
 }

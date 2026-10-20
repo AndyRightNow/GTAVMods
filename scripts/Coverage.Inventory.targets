@@ -1,0 +1,18 @@
+<Project>
+  <!-- Imported only by Build.ps1. Capture the actual compiler inputs, including
+       generated sources, without compiling a second copy for coverage. -->
+  <Target Name="RecordCoverageCompilerInputs" AfterTargets="CoreCompile"
+          Condition="'$(CoverageRunDirectory)' != ''">
+    <ItemGroup>
+      <_CoverageRecord Include="Project|$(MSBuildProjectFullPath)" />
+      <_CoverageRecord Include="AssemblyName|$(AssemblyName)" />
+      <_CoverageRecord Include="TargetPath|$(TargetPath)" />
+      <_CoverageRecord Include="IsTestProject|$(IsTestProject)" />
+      <_CoverageRecord Include="NuGetPackageRoot|$(NuGetPackageRoot)" />
+      <_CoverageRecord Include="Compile|%(Compile.FullPath)" />
+    </ItemGroup>
+    <MakeDir Directories="$(CoverageRunDirectory)/inputs" />
+    <WriteLinesToFile File="$(CoverageRunDirectory)/inputs/$(AssemblyName).txt"
+                      Lines="@(_CoverageRecord)" Overwrite="true" Encoding="UTF-8" />
+  </Target>
+</Project>

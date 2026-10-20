@@ -1,88 +1,60 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using GTAVMods.Game;
 
 namespace DeveloperConsole {
-    internal static class NativeMethods {
-        public delegate int HookProc(int nCode, IntPtr wParam, IntPtr lParam);
+    internal interface IKeyboardNative {
+        int ToUnicode(uint key, byte[] state, StringBuilder result);
+        IntPtr ForegroundWindow();
+        int WindowProcess(IntPtr window);
+        int CurrentProcess { get; }
+        short KeyState(int key);
+    }
 
-        /// <summary>
-        ///     Gets a string from the data from a key press
-        /// </summary>
-        /// <param name="keys">The pressed Keys</param>
-        /// <param name="shift">Whether or not shift was held</param>
-        /// <param name="altGr">Whether or not alt was held</param>
-        /// <returns>The string produced from the keys</returns>
-        internal static string GetCharsFromKeys(Keys keys, bool shift, bool altGr) {
-            var buf = new StringBuilder(256);
-            var keyboardState = new byte[256];
-
-            if (shift) keyboardState[(int) Keys.ShiftKey] = 0xff;
+    internal sealed class NativeMethods {
+        private readonly IKeyboardNative _native;
+        internal NativeMethods(IKeyboardNative native) { _native = native; }
+        internal string GetCharsFromKeys(Keys keys, bool shift, bool altGr) {
+            var buffer = new StringBuilder(256);
+            var state = new byte[256];
+            if (shift) state[(int)Keys.ShiftKey] = 0xff;
             if (altGr) {
-                keyboardState[(int) Keys.ControlKey] = 0xff;
-                keyboardState[(int) Keys.Menu] = 0xff;
+                state[(int)Keys.ControlKey] = 0xff;
+                state[(int)Keys.Menu] = 0xff;
             }
-
-            if (ToUnicode((uint) keys, 0, keyboardState, buf, 256, 0) == 1) return buf.ToString();
-
-            return null;
+            return _native.ToUnicode((uint)keys, state, buffer) == 1 ? buffer.ToString() : null;
         }
-
-        /// <summary>
-        ///     Check if GTA is running and in the foreground
-        /// </summary>
-        /// <returns>Whether or not GTA is in the foreground</returns>
-        internal static bool ApplicationIsActivated() {
-            var activatedHandle = GetForegroundWindow();
-            if (activatedHandle == IntPtr.Zero) {
-                return false;
-            }
-
-            var procId = Process.GetCurrentProcess().Id;
-            int activeProcId;
-            GetWindowThreadProcessId(activatedHandle, out activeProcId);
-
-            return activeProcId == procId;
+        internal bool ApplicationIsActivated() {
+            var foreground = _native.ForegroundWindow();
+            if (foreground == IntPtr.Zero) return false;
+            return _native.WindowProcess(foreground) == _native.CurrentProcess;
         }
+        internal short GetKeyState(int key) { return _native.KeyState(key); }
+    }
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto,
-            CallingConvention = CallingConvention.StdCall)]
-        public static extern IntPtr CallNextHookEx(IntPtr idHook, int nCode,
-            IntPtr wParam, IntPtr lParam);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto,
-            CallingConvention = CallingConvention.StdCall)]
-        public static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn,
-            IntPtr hInstance, int threadId);
-
+    internal sealed class WindowsKeyboardNative : IKeyboardNative {
+        [GamePrimitive] public int ToUnicode(uint key, byte[] state, StringBuilder result) {
+            return ToUnicodeNative(key, 0, state, result, 256, 0);
+        }
+        [GamePrimitive] public IntPtr ForegroundWindow() { return GetForegroundWindow(); }
+        [GamePrimitive] public int WindowProcess(IntPtr window) {
+            int process;
+            GetWindowThreadProcessId(window, out process);
+            return process;
+        }
+        public int CurrentProcess { [GamePrimitive] get { return Process.GetCurrentProcess().Id; } }
+        [GamePrimitive] public short KeyState(int key) { return GetKeyState(key); }
         [DllImport("user32.dll", CharSet = CharSet.Auto, ExactSpelling = true)]
-        internal static extern IntPtr GetForegroundWindow();
-
+        private static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        internal static extern int GetWindowThreadProcessId(IntPtr handle, out int processId);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, CallingConvention = CallingConvention.StdCall)]
-        internal static extern short GetKeyState(int nVirtKey);
-
-        [DllImport("user32.dll")]
-        internal static extern int ToUnicode(uint virtualKeyCode, uint scanCode, byte[] keyboardState,
-            [Out, MarshalAs(UnmanagedType.LPWStr, SizeConst = 64)] StringBuilder receivingBuffer, int bufferSize,
-            uint flags);
-
-        [StructLayout(LayoutKind.Sequential)]
-        public class Point {
-            public int x;
-            public int y;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public class MouseHookStruct {
-            public Point pt;
-            public int hwnd;
-            public int wHitTestCode;
-            public int dwExtraInfo;
-        }
+        private static extern int GetWindowThreadProcessId(IntPtr window, out int process);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern short GetKeyState(int key);
+        [DllImport("user32.dll", EntryPoint = "ToUnicode")]
+        private static extern int ToUnicodeNative(uint key, uint scan, byte[] state,
+            [Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder result, int length, uint flags);
     }
 }

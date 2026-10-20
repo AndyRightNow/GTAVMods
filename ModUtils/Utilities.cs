@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using GTA;
 using GTA.Math;
+using GTAVMods.Game;
 
 namespace ADModUtils
 {
@@ -10,17 +11,24 @@ namespace ADModUtils
         public static class Random
         {
             public static T PickOne<T>(T[] arr)
+                => PickOne(arr, SystemRandomInstance);
+
+            public static T PickOne<T>(T[] arr, System.Random random)
             {
+                if (random == null) throw new ArgumentNullException(nameof(random));
                 if (arr == null || arr.Length == 0)
                 {
                     return default(T);
                 }
 
-                lock (SystemRandomInstance)
-                    return arr[SystemRandomInstance.Next(arr.Length)];
+                lock (random)
+                    return arr[random.Next(arr.Length)];
             }
 
             public static T PickOneIf<T>(T[] arr, Func<T, bool> predicate)
+                => PickOneIf(arr, predicate, SystemRandomInstance);
+
+            public static T PickOneIf<T>(T[] arr, Func<T, bool> predicate, System.Random random)
             {
                 if (predicate == null) throw new ArgumentNullException(nameof(predicate));
                 if (arr == null || arr.Length == 0)
@@ -37,19 +45,29 @@ namespace ADModUtils
                     }
                 }
 
-                return PickOne(arrThatMeetPredicate.ToArray());
+                return PickOne(arrThatMeetPredicate.ToArray(), random);
             }
 
             public static System.Random SystemRandomInstance = new System.Random();
 
             public static int RandomNegation()
+                => RandomNegation(SystemRandomInstance);
+
+            public static int RandomNegation(System.Random random)
             {
-                return SystemRandomInstance.Next(0, 2) > 0 ? 1 : -1;
+                if (random == null) throw new ArgumentNullException(nameof(random));
+                lock (random)
+                    return random.Next(0, 2) > 0 ? 1 : -1;
             }
 
             public static float NextFloat(bool allowNegative = true)
+                => NextFloat(SystemRandomInstance, allowNegative);
+
+            public static float NextFloat(System.Random random, bool allowNegative = true)
             {
-                return Convert.ToSingle(SystemRandomInstance.NextDouble()) * (allowNegative ? RandomNegation() : 1.0f);
+                if (random == null) throw new ArgumentNullException(nameof(random));
+                lock (random)
+                    return Convert.ToSingle(random.NextDouble()) * (allowNegative ? RandomNegation(random) : 1.0f);
             }
         }
 
@@ -64,7 +82,7 @@ namespace ADModUtils
                 rot.Z = -RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(dir.X, dir.Y)));
                 Vector3 vec = new Vector3(dir.Z, new Vector3(dir.X, dir.Y, 0.0f).Length(), 0.0f).Normalized;
                 var x = RadiansToDegrees(Convert.ToSingle(System.Math.Atan2(vec.X, vec.Y)));
-                rot.X = System.Math.Abs(x);
+                rot.X = x;
 
                 rot.Y = roll;
                 return rot;
@@ -73,13 +91,17 @@ namespace ADModUtils
             {
                 var normalizedDir = dir.Normalized;
                 var normalizedForward = forward.Normalized;
-
-                return Quaternion.Normalize(
-                    new Quaternion(
-                        Vector3.Cross(normalizedForward, normalizedDir).Normalized,
-                        DegreesToRadians(Vector3.Angle(normalizedForward, normalizedDir))
-                    )
-                );
+                if (normalizedForward == Vector3.Zero || normalizedDir == Vector3.Zero)
+                    return Quaternion.Identity;
+                float dot = Vector3.Dot(normalizedForward, normalizedDir);
+                if (dot <= -0.999999f)
+                {
+                    // Opposite directions have no cross-product axis. Choose a stable orthogonal axis.
+                    var reference = System.Math.Abs(normalizedForward.X) < 0.9f ? Vector3.UnitX : Vector3.UnitY;
+                    return new Quaternion(Vector3.Cross(normalizedForward, reference).Normalized, (float)System.Math.PI);
+                }
+                var cross = Vector3.Cross(normalizedForward, normalizedDir);
+                return Quaternion.Normalize(new Quaternion(cross.X, cross.Y, cross.Z, 1 + dot));
             }
 
             public static Vector3 QuaternionToEulerAngles(Quaternion q)
@@ -133,18 +155,23 @@ namespace ADModUtils
             }
 
             public static Vector3 RandomVectorPerpendicularTo(Vector3 target, bool normalized = true)
-            {
+                => RandomVectorPerpendicularTo(target, Random.SystemRandomInstance, normalized);
 
-                var rand = Random.SystemRandomInstance;
-                float x = Random.NextFloat(), y = Random.NextFloat(), z = 0.0f;
+            public static Vector3 RandomVectorPerpendicularTo(Vector3 target, System.Random random, bool normalized = true)
+            {
+                float x = Random.NextFloat(random), y = Random.NextFloat(random), z = 0.0f;
 
                 if (target.Z == 0.0f)
                 {
-                    z = Random.NextFloat();
+                    z = Random.NextFloat(random);
 
                     if (target.Y != 0.0f)
                     {
                         y = -(target.X * x / target.Y);
+                    }
+                    else if (target.X != 0.0f)
+                    {
+                        x = 0.0f;
                     }
                 }
                 else
@@ -153,6 +180,10 @@ namespace ADModUtils
                 }
 
                 var result = new Vector3(x, y, z);
+                // A valid random source may produce all zeroes. Keep the basis usable.
+                if (result == Vector3.Zero)
+                    result = target == Vector3.Zero ? Vector3.UnitX :
+                        Vector3.Cross(target, target.X == 0 ? Vector3.UnitX : Vector3.UnitY);
 
                 return normalized ? result.Normalized : result;
             }
@@ -160,27 +191,35 @@ namespace ADModUtils
 
         public class Timer
         {
-            private int startGameTime;
-            private int interval;
+            private readonly int interval;
             private int previouslyFiredGameTime;
-            private TimerHandler handler;
+            private readonly TimerHandler handler;
+            private readonly Func<int> clock;
 
             public delegate void TimerHandler();
 
+            [GamePrimitive]
             public Timer(int interval, TimerHandler handler)
+                : this(interval, handler, new Func<int>(UtilityPrimitives.GameTime))
             {
+            }
+
+            public Timer(int interval, TimerHandler handler, Func<int> clock)
+            {
+                if (interval < 0) throw new ArgumentOutOfRangeException(nameof(interval));
                 this.interval = interval;
-                this.handler = handler;
-                startGameTime = Game.GameTime;
-                previouslyFiredGameTime = startGameTime;
+                this.handler = handler ?? throw new ArgumentNullException(nameof(handler));
+                this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+                previouslyFiredGameTime = clock();
             }
 
             public void OnTick()
             {
-                if (Game.GameTime - previouslyFiredGameTime >= interval)
+                int now = clock();
+                if (unchecked(now - previouslyFiredGameTime) >= interval)
                 {
                     handler();
-                    previouslyFiredGameTime = Game.GameTime;
+                    previouslyFiredGameTime = now;
                 }
             }
         }
@@ -196,19 +235,7 @@ namespace ADModUtils
         public static class Audio
         {
             public static void Play(string filename)
-            {
-                var player = new NAudio.Wave.WaveOut();
-                var audio = new NAudio.Wave.AudioFileReader(filename);
-                player.Init(audio);
-                player.Play();
-                player.PlaybackStopped += (object sender, NAudio.Wave.StoppedEventArgs a) =>
-                {
-                    player.Dispose();
-                    player = null;
-                    audio.Dispose();
-                    audio = null;
-                };
-            }
+                => OneShotAudio.Play(filename, new NAudioPlaybackFactory());
         }
     }
 }

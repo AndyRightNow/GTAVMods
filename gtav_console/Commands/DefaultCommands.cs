@@ -1,27 +1,12 @@
-﻿using System;
-using System.ComponentModel;
-using System.Drawing;
-using System.Linq;
+using GTAVMods.Game;
 using GTA;
-using GTA.Math;
-using GTA.Native;
 
 namespace DeveloperConsole {
-    public class DefaultCommands : Script {
-        private DeveloperConsole _developerConsole;
-        private Player _player;
-
-        public DefaultCommands() {
-            this.RegisterConsoleScript(OnConsoleAttached);
-        }
-
-        private void OnConsoleAttached(DeveloperConsole dc) {
-
-            _player = Game.Player;
-
-            _developerConsole = dc;
-
-            dc.PrintDebug("DefaultCommands loaded successfully.");
+    public sealed class DefaultCommands : Script {
+        [GamePrimitive]
+        public DefaultCommands() { this.RegisterConsoleScript(new DeveloperConsole.OnConsoleAttached(OnConsoleAttached)); }
+        internal static void OnConsoleAttached(DeveloperConsole console) {
+            console.PrintDebug("DefaultCommands loaded successfully.");
         }
     }
 }
