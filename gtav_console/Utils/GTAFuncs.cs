@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
+using System.Runtime.ExceptionServices;
 using GTA;
 using GTA.Math;
 using GTA.UI;
-using GTA.Native;
 using Font = GTA.UI.Font;
 using GTAVMods.Game;
 
@@ -12,9 +13,20 @@ namespace DeveloperConsole {
     public sealed class GTAFuncs {
         private readonly GameServices _game;
         private readonly IConsoleDisplay _display;
-        public GTAFuncs(GameServices game, IConsoleDisplay display) {
+        private readonly IConsoleInput _input;
+        private readonly IConsoleWorld _world;
+        private readonly IConsoleNetwork _network;
+        private readonly Dictionary<Control, bool> _pendingControls = new Dictionary<Control, bool>();
+        private int? _pendingModel;
+        public GTAFuncs(GameServices game, IConsoleDisplay display)
+            : this(game, display, game.ConsoleInput, game.ConsoleWorld, game.ConsoleNetwork) { }
+        public GTAFuncs(GameServices game, IConsoleDisplay display, IConsoleInput input,
+            IConsoleWorld world, IConsoleNetwork network) {
             _game = game;
             _display = display;
+            _input = input;
+            _world = world;
+            _network = network;
         }
         public enum EntityType {
             Ped = 1,
@@ -23,11 +35,11 @@ namespace DeveloperConsole {
         }
 
         public EntityType GetEntityType(int e) {
-            return (EntityType) _game.Native.Call<int>(Hash.GET_ENTITY_TYPE, e);
+            return (EntityType) _game.ConsoleEntities.Type(e);
         }
 
         public int GetPlayerIndex(int p) {
-            return _game.Native.Call<int>(Hash.NETWORK_GET_PLAYER_INDEX, p);
+            return _game.ConsolePlayers.Index(p);
         }
 
         public Vector2 ValidateScreenPoint(Vector2 v) {
@@ -59,40 +71,38 @@ namespace DeveloperConsole {
         }
 
         public Point GetMousePos() {
-            var x = IsControlEnabled(Control.CursorX);
-            var y = IsControlEnabled(Control.CursorY);
-
-            SetControlAction(Control.CursorX, true);
-            SetControlAction(Control.CursorY, true);
-
-            try {
-                return new Point((int)(GetControlNormal(Control.CursorX) * _display.Width),
-                    (int)(GetControlNormal(Control.CursorY) * _display.Height));
-            } finally {
-                SetControlAction(Control.CursorX, x);
-                SetControlAction(Control.CursorY, y);
-            }
+            return WithEnabledControls(new[] { Control.CursorX, Control.CursorY },
+                () => new Point((int)(GetControlNormal(Control.CursorX) * _display.Width),
+                    (int)(GetControlNormal(Control.CursorY) * _display.Height)));
         }
 
         public bool IsControlPressed(Control c) {
-            var e = IsControlEnabled(c);
-            SetControlAction(c, true);
-            try { return GetControlNormal(c) > 0; }
-            finally { SetControlAction(c, e); }
+            return WithEnabledControls(new[] { c }, () => GetControlNormal(c) > 0);
         }
 
         public Vector2 GetControlPoint(Control c1, Control c2) {
-            var b1 = IsControlEnabled(c1);
-            var b2 = IsControlEnabled(c2);
+            return WithEnabledControls(new[] { c1, c2 }, () => new Vector2(GetControlNormal(c1), GetControlNormal(c2)));
+        }
 
-            SetControlAction(c1, true);
-            SetControlAction(c2, true);
+        private T WithEnabledControls<T>(Control[] controls, Func<T> read) {
+            RestorePendingControls();
+            // Capture every state before the first mutation, including controls originally disabled.
+            var original = controls.Select(c => new KeyValuePair<Control, bool>(c, IsControlEnabled(c))).ToArray();
+            var failures = new List<Exception>();
+            T result = default(T);
+            try {
+                foreach (var control in controls) SetControlAction(control, true);
+                result = read();
+            } catch (Exception error) { failures.Add(error); }
+            try { RestoreStates(original); }
+            catch (Exception error) { failures.Add(error); }
+            ThrowFailures(failures);
+            return result;
+        }
 
-            try { return new Vector2(GetControlNormal(c1), GetControlNormal(c2)); }
-            finally {
-                SetControlAction(c1, b1);
-                SetControlAction(c2, b2);
-            }
+        internal static void ThrowFailures(List<Exception> failures) {
+            if (failures.Count == 1) ExceptionDispatchInfo.Capture(failures[0]).Throw();
+            if (failures.Count > 1) throw new AggregateException("Console operations failed.", failures);
         }
 
         public Vector2 GetMoveInputVector() {
@@ -113,49 +123,49 @@ namespace DeveloperConsole {
         }
 
         public bool IsControlEnabled(Control c) {
-            return _game.Native.Call<bool>(Hash.IS_CONTROL_ENABLED, 0, (int) c);
+            return _input.IsEnabled(c);
         }
 
         public void SetEntityRecordsCollisions(int e, bool b) {
-            _game.Native.Call(Hash.SET_ENTITY_RECORDS_COLLISIONS, e, b);
+            _game.ConsoleEntities.RecordsCollisions(e, b);
         }
 
         public void SetEntityCollision(int e, bool b, bool b1) {
-            _game.Native.Call(Hash.SET_ENTITY_COLLISION, e, b, b1);
+            _game.ConsoleEntities.Collision(e, b, b1);
         }
 
         public void SetEntityProofs(int e, bool b1, bool b2, bool b3, bool b4, bool b5, bool b6, bool b7,
             bool b8) {
-            _game.Native.Call(Hash.SET_ENTITY_PROOFS, e, b1, b2, b3, b4, b5, b6, b7, b8);
+            _game.ConsoleEntities.Proofs(e, b1, b2, b3, b4, b5, b6, b7, b8);
         }
 
         public void SetEntityLoadColissionFlag(int e, bool b) {
-            _game.Native.Call(Hash.SET_ENTITY_LOAD_COLLISION_FLAG, e, b);
+            _game.ConsoleEntities.LoadCollision(e, b);
         }
 
         public void SetEntityGravity(int e, bool b) {
-            _game.Native.Call(Hash.SET_ENTITY_HAS_GRAVITY, e, b);
+            _game.ConsoleEntities.Gravity(e, b);
         }
 
         public float GetControlNormal(Control c) {
-            return _game.Native.Call<float>(Hash.GET_CONTROL_NORMAL, 0, (int) c);
+            return _input.Normal(c);
         }
 
         public int GetControlValue(Control c) {
-            return _game.Native.Call<int>(Hash.GET_CONTROL_VALUE, 0, (int) c);
+            return _input.Value(c);
         }
 
         public bool IsControlPressedIgnoreDisabled(Control c) {
-            return _game.Native.Call<bool>(Hash.IS_DISABLED_CONTROL_PRESSED, 0, (int) c) ||
-                   _game.Native.Call<bool>(Hash.IS_CONTROL_PRESSED, 0, (int) c);
+            return _input.IsDisabledPressed(c) ||
+                   _input.IsPressed(c);
         }
 
         public void SetTextEdge(int i, Color c) {
-            _game.Native.Call(Hash.SET_TEXT_EDGE, i, c.R, c.G, c.B, c.A);
+            _game.ConsoleDrawing.TextEdge(i, c);
         }
 
         public void SetTextDropShadow(int i, Color c) {
-            _game.Native.Call(Hash.SET_TEXT_DROP_SHADOW, i, c.R, c.G, c.B, c.A);
+            _game.ConsoleDrawing.TextShadow(i, c);
         }
 
         public Quaternion GetEntityQuaternion(int e) {
@@ -163,15 +173,15 @@ namespace DeveloperConsole {
         }
 
         public void DrawLine(Vector3 v1, Vector3 v2, Color c) {
-            _game.Native.Call(Hash.DRAW_LINE, v1.X, v1.Y, v1.Z, v2.X, v2.Y, v2.Z, c.R, c.G, c.B, c.A);
+            _game.Drawing.DrawLine(v1, v2, c);
         }
 
         public void DrawBox(Vector3 v1, Vector3 v2, Color c) {
-            _game.Native.Call(Hash.DRAW_BOX, v1.X, v1.Y, v1.Z, v2.X, v2.Y, v2.Z, c.R, c.G, c.B, c.A);
+            _game.Drawing.DrawBox(v1, v2, c);
         }
 
         public void DrawPoly(Vector3 v1, Vector3 v2, Vector3 v3, Color c) {
-            _game.Native.Call(Hash.DRAW_POLY, v1.X, v1.Y, v1.Z, v2.X, v2.Y, v2.Z, v3.X, v3.Y, v3.Z, c.R, c.G, c.B, c.A);
+            _game.Drawing.DrawPoly(v1, v2, v3, c);
         }
 
         public void DrawText(string text, Point position, float scale, Color color, Font font) {
@@ -184,31 +194,31 @@ namespace DeveloperConsole {
             return new Vector2(x * _display.Width, y * _display.Height);
         }
         public void DisplayRadar(bool b) {
-            _game.Native.Call(Hash.DISPLAY_RADAR, b);
+            _game.ConsoleDrawing.DisplayRadar(b);
         }
 
         public void DisplayHud(bool b) {
-            _game.Native.Call(Hash.DISPLAY_HUD, b);
+            _game.ConsoleDrawing.DisplayHud(b);
         }
 
         public void ShowMouseThisFrame() {
-            _game.Native.Call(Hash.SET_MOUSE_CURSOR_THIS_FRAME);
+            _game.ConsoleDrawing.ShowMouse();
         }
 
         public int GetNumNetworkPlayers() {
-            return _game.Native.Call<int>(Hash.NETWORK_GET_NUM_CONNECTED_PLAYERS);
+            return _network.PlayerCount();
         }
 
         public bool GetPlayerInvincible(int p) {
-            return _game.Native.Call<bool>(Hash.GET_PLAYER_INVINCIBLE, p);
+            return _game.ConsolePlayers.Invincible(p);
         }
 
         public int GetFirstBlipInfoID(int i) {
-            return _game.Native.Call<int>(Hash.GET_FIRST_BLIP_INFO_ID, i);
+            return _world.FirstBlip(i);
         }
 
         public bool IsWaypointActive() {
-            return _game.Native.Call<bool>(Hash.IS_WAYPOINT_ACTIVE);
+            return _world.WaypointActive();
         }
 
         public Vector3 GetGroundPos(Vector2 pos) {
@@ -234,20 +244,20 @@ namespace DeveloperConsole {
         }
 
         public int GetPlayerEntity(int player) {
-            var character = _game.Native.Call<int>(Hash.GET_PLAYER_PED, player);
-            if (_game.Native.Call<bool>(Hash.IS_PED_IN_ANY_VEHICLE, character, false) ||
-                _game.Native.Call<bool>(Hash.IS_PED_SITTING_IN_ANY_VEHICLE, character))
-                return _game.Native.Call<int>(Hash.GET_VEHICLE_PED_IS_IN, character, false);
+            var character = _game.ConsolePlayers.Ped(player);
+            if (_game.ConsolePlayers.InAnyVehicle(character) ||
+                _game.ConsolePlayers.SittingInAnyVehicle(character))
+                return _game.ConsolePlayers.Vehicle(character);
             return character;
         }
         public void KickPlayer(int p) {
-            _game.Native.Call(Hash.NETWORK_SESSION_KICK_PLAYER, p);
+            _network.Kick(p);
         }
 
         public void AntiBan() {
             var playerGroup = GetPedGroupIndex(_game.Host.PlayerPed);
-            _game.Native.Call(Hash.NETWORK_SET_SCRIPT_IS_SAFE_FOR_NETWORK_GAME);
-            _game.Native.Call(Hash.NETWORK_SET_THIS_SCRIPT_IS_NETWORK_SCRIPT, 1, true, 1);
+            _network.MarkScriptSafe();
+            _network.RegisterScript();
             StatSetInt("MP" + playerGroup + "_BAD_SPORT_BITSET", 0, true);
             StatSetInt("MP" + playerGroup + "_CHEAT_BITSET", 0, true);
             StatSetFloat("MPPLY_OVERALL_BADSPORT", 0, true);
@@ -266,51 +276,51 @@ namespace DeveloperConsole {
         }
 
         public void SetEntityInvinc(int e, bool b) {
-            _game.Native.Call(Hash.SET_ENTITY_INVINCIBLE, e, b);
+            _game.ConsoleEntities.Invincible(e, b);
         }
 
         public void SetSPInvinc(int p, bool b) {
-            _game.Native.Call(Hash.SET_PLAYER_INVINCIBLE, p, b);
+            _game.ConsolePlayers.SetInvincible(p, b);
         }
 
         public void SetInvincTime(int time) {
-            _game.Native.Call(Hash.NETWORK_SET_LOCAL_PLAYER_INVINCIBLE_TIME, time);
+            _network.LocalInvincibleTime(time);
         }
 
         public int GetPedGroupIndex(int p) {
-            return _game.Native.Call<int>(Hash.GET_PED_GROUP_INDEX, p);
+            return _game.ConsolePlayers.Group(p);
         }
 
         public void StatSetInt(string hashKey, int value, bool b) {
-            _game.Native.Call(Hash.STAT_SET_INT, GetHashKey(hashKey), value, b);
+            _game.ConsoleStats.SetInt(GetHashKey(hashKey), value, b);
         }
 
         public void StatSetFloat(string hashKey, float value, bool b) {
-            _game.Native.Call(Hash.STAT_SET_FLOAT, GetHashKey(hashKey), value, b);
+            _game.ConsoleStats.SetFloat(GetHashKey(hashKey), value, b);
         }
 
         public void StatSetBool(string hashKey, bool value, bool b) {
-            _game.Native.Call(Hash.STAT_SET_BOOL, GetHashKey(hashKey), value, b);
+            _game.ConsoleStats.SetBool(GetHashKey(hashKey), value, b);
         }
 
         public void CreateAmbientPickup(string hashKey, Vector3 pos, int value) {
-            _game.Native.Call(Hash.CREATE_AMBIENT_PICKUP, GetHashKey(hashKey), pos.X, pos.Y, pos.Z, 0, value, 1, false, true);
+            _world.AmbientPickup(GetHashKey(hashKey), pos, value);
         }
 
         public int GetHashKey(string s) {
-            return _game.Native.Call<int>(Hash.GET_HASH_KEY, s);
+            return _world.Hash(s);
         }
 
         public void SetTextRightJustifty(bool b) {
-            _game.Native.Call(Hash.SET_TEXT_RIGHT_JUSTIFY, b);
+            _game.ConsoleDrawing.TextRightJustify(b);
         }
 
         public float GetTextWidth(string s, Font f, float scale) {
-            _game.Native.Call(Hash.SET_TEXT_FONT, (int) f);
-            _game.Native.Call(Hash.SET_TEXT_SCALE, scale, scale);
-            _game.Native.Call(Hash.BEGIN_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, "STRING"); //SET_TEXT_ENTRY_FOR_WIDTH
-            _game.Native.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, s);
-            return _game.Native.Call<float>(Hash.END_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, 1); //_GET_TEXT_SCREEN_WIDTH
+            _game.ConsoleDrawing.TextFont(f);
+            _game.ConsoleDrawing.TextScale(scale, scale);
+            _game.ConsoleDrawing.BeginTextWidth(); //SET_TEXT_ENTRY_FOR_WIDTH
+            _game.ConsoleDrawing.AppendText(s);
+            return _game.ConsoleDrawing.EndTextWidth(); //_GET_TEXT_SCREEN_WIDTH
         }
 
 
@@ -319,71 +329,132 @@ namespace DeveloperConsole {
         }
 
         public List<Control> DisableAllControls() {
-            var enabled = new List<Control>();
-            foreach (Control c in Enum.GetValues(typeof (Control))) {
-                if (IsControlEnabled(c)) enabled.Add(c);
-                DisableControlAction(c, true);
+            var enabled = CaptureEnabledControls();
+            try {
+                foreach (Control c in Enum.GetValues(typeof(Control))) DisableControlAction(c, true);
+            } catch (Exception error) {
+                try { RestoreControls(enabled); }
+                catch (Exception restoreError) {
+                    throw new AggregateException("Console operations failed.", error, restoreError);
+                }
+                throw;
             }
             return enabled;
         }
 
+        public List<Control> CaptureEnabledControls() {
+            RestorePendingControls();
+            return Enum.GetValues(typeof(Control)).Cast<Control>().Where(IsControlEnabled).ToList();
+        }
+
+        public void RestoreControls(ICollection<Control> enabled) {
+            RestoreStates(Enum.GetValues(typeof(Control)).Cast<Control>()
+                .Select(control => new KeyValuePair<Control, bool>(control, enabled.Contains(control))));
+        }
+
+        public void RestorePendingControls() {
+            RestoreStates(_pendingControls.ToArray());
+        }
+
+        private void RestoreStates(IEnumerable<KeyValuePair<Control, bool>> states) {
+            var failures = new List<Exception>();
+            foreach (var state in states) {
+                try {
+                    SetControlAction(state.Key, state.Value);
+                    _pendingControls.Remove(state.Key);
+                } catch (Exception error) {
+                    _pendingControls[state.Key] = state.Value;
+                    failures.Add(error);
+                }
+            }
+            ThrowFailures(failures);
+        }
 
         public void DisableControlAction(Control c, bool b) {
-            _game.Native.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int) c, b);
+            _input.Disable(c, b);
         }
 
         public void EnableControlAction(Control c, bool b) {
-            _game.Native.Call(Hash.ENABLE_CONTROL_ACTION, 0, (int) c, b);
+            _input.Enable(c, b);
         }
 
         public void SetControlActions(bool b) {
-            if (b) _game.Native.Call(Hash.ENABLE_ALL_CONTROL_ACTIONS, 0);
-            else _game.Native.Call(Hash.DISABLE_ALL_CONTROL_ACTIONS, 0);
+            if (b) _input.EnableAll();
+            else _input.DisableAll();
         }
 
         public void ClearAreaOfObjects(Vector3 v, float radius, bool b = false) {
-            _game.Native.Call(Hash.CLEAR_AREA_OF_OBJECTS, v.X, v.Y, v.Z, radius, b);
+            _world.ClearObjects(v, radius, b);
         }
 
         public void ClearAreaOfProjectiles(Vector3 v, float radius, bool b = false) {
-            _game.Native.Call(Hash.CLEAR_AREA_OF_PROJECTILES, v.X, v.Y, v.Z, radius, b);
+            _world.ClearProjectiles(v, radius, b);
         }
 
         public void ActivateDamageTrackerOnNetworkId(int id, bool active) {
-            _game.Native.Call(Hash.ACTIVATE_DAMAGE_TRACKER_ON_NETWORK_ID, id, active);
+            _network.TrackDamage(id, active);
         }
 
         public void SetInSpectatorMode(int p, bool spectating) {
-            _game.Native.Call(Hash.NETWORK_SET_IN_SPECTATOR_MODE, spectating, _game.Native.Call<int>(Hash.GET_PLAYER_PED, p));
+            _network.Spectate(_game.ConsolePlayers.Ped(p), spectating);
         }
 
         public int GetNetworkID(int p) {
-            RequestPlayerEntityControl(p, 1);
-            int netId = _game.Native.Call<int>(Hash.NETWORK_GET_NETWORK_ID_FROM_ENTITY,
-                _game.Native.Call<int>(Hash.GET_PLAYER_PED, p));
-            _game.Native.Call(Hash.NETWORK_REQUEST_CONTROL_OF_NETWORK_ID, netId);
-            return netId;
+            int entity = RequestPlayerEntityControl(p, 1);
+            if (entity == 0) return 0;
+            int netId = _network.NetworkId(entity);
+            return _network.RequestNetworkIdControl(netId) ? netId : 0;
         }
 
-        public int SpawnVehicleProper(int modelHash, Vector3 pos) {
-            _game.Native.Call(Hash.REQUEST_MODEL, modelHash);
-            var remaining = 10000;
-            while (!_game.Native.Call<bool>(Hash.HAS_MODEL_LOADED, modelHash) && remaining > 0) {
-                remaining--;
+        /// <summary>Creates a vehicle after observing its requested model as loaded.</summary>
+        /// <remarks>A nonzero result transfers vehicle ownership to the caller even if releasing
+        /// the streaming model fails. That model release remains owned here and is retried before
+        /// another spawn, by ReleasePendingModel, or when the owning console is disposed.
+        /// With no created vehicle, operation and release errors are reported together.</remarks>
+        public int SpawnVehicleProper(int modelHash, Vector3 pos, int timeoutMs = 10000) {
+            ReleasePendingModel();
+            _world.RequestModel(modelHash);
+            _pendingModel = modelHash;
+            int vehicle = 0;
+            var failures = new List<Exception>();
+            try {
+                vehicle = CreateVehicleWhenLoaded(modelHash, pos, timeoutMs);
+            } catch (Exception error) { failures.Add(error); }
+            try { ReleasePendingModel(); }
+            catch (Exception error) {
+                // Do not hide a created vehicle handle behind an unrelated model-release failure.
+                if (vehicle == 0) failures.Add(error);
+            }
+            ThrowFailures(failures);
+            return vehicle;
+        }
+
+        private int CreateVehicleWhenLoaded(int modelHash, Vector3 pos, int timeoutMs) {
+            int started = _game.Host.GameTime;
+            while (!_world.ModelLoaded(modelHash)) {
+                if (unchecked(_game.Host.GameTime - started) >= timeoutMs) return 0;
                 _game.Host.Wait(0);
             }
-            return _game.Native.Call<int>(Hash.CREATE_VEHICLE, modelHash, pos.X, pos.Y, pos.Z, 0, 0);
+            return _world.CreateVehicle(modelHash, pos);
+        }
+
+        /// <summary>Retries the owned model release; failure retains it and preserves the exception.</summary>
+        public void ReleasePendingModel() {
+            if (!_pendingModel.HasValue) return;
+            _world.ReleaseModel(_pendingModel.Value);
+            _pendingModel = null;
         }
 
         public int RequestPlayerEntityControl(int player, int time = 10000) {
-            return RequestEntityControl(_game.Native.Call<int>(Hash.GET_PLAYER_PED, player), time);
+            return RequestEntityControl(_game.ConsolePlayers.Ped(player), time);
         }
 
         public int RequestEntityControl(int entity, int time = 10000) {
-            _game.Native.Call(Hash.NETWORK_REQUEST_CONTROL_OF_ENTITY, entity);
-            var remaining = time;
-            while (!_game.Native.Call<bool>(Hash.NETWORK_HAS_CONTROL_OF_ENTITY, entity) && remaining > 0) {
-                remaining--;
+            if (entity == 0) return 0;
+            _network.RequestEntityControl(entity);
+            int started = _game.Host.GameTime;
+            while (!_network.HasEntityControl(entity)) {
+                if (unchecked(_game.Host.GameTime - started) >= time) return 0;
                 _game.Host.Wait(0);
             }
             return entity;

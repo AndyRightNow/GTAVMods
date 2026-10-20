@@ -21,6 +21,20 @@ function Get-AllTypes($Types) {
 function Get-CanonicalPath([string]$Path) {
     [IO.Path]::GetFullPath($Path)
 }
+function Assert-DocumentSource($Document, [string[]]$SourcePaths, $CheckedDocuments) {
+    $path = Get-CanonicalPath $Document.Url
+    if ($SourcePaths -notcontains $path) { throw "PDB document was not a compiler input: $path" }
+    if (-not $CheckedDocuments.ContainsKey($path)) {
+        $algorithm = $Document.HashAlgorithm.ToString()
+        if ($algorithm -ne 'SHA256' -and $algorithm -ne 'SHA1') {
+            throw "PDB source checksum is absent or unsupported: $path"
+        }
+        $expected = [BitConverter]::ToString($Document.Hash).Replace('-', '').ToLowerInvariant()
+        $actual = (Get-FileHash -LiteralPath $path -Algorithm $algorithm).Hash.ToLowerInvariant()
+        if ($expected -ne $actual) { throw "Source changed since compilation: $path" }
+        $CheckedDocuments[$path] = $true
+    }
+}
 
 $RepositoryRoot = Get-CanonicalPath $RepositoryRoot
 $RunDirectory = Get-CanonicalPath $RunDirectory
@@ -28,12 +42,34 @@ $inputFiles = @(Get-ChildItem -LiteralPath (Join-Path $RunDirectory 'inputs') -F
 if ($inputFiles.Count -eq 0) { throw 'No compiler inventories were produced by the build.' }
 $records = @(
     foreach ($file in $inputFiles) {
-        $record = @{ Compile = @() }
+        $record = @{ Compile = @(); CompileHashes = @{} }
         foreach ($line in Get-Content -LiteralPath $file.FullName) {
             $parts = $line.Split([char[]]@('|'), 2)
             if ($parts.Count -ne 2) { throw "Invalid compiler inventory: $($file.FullName)" }
             if ($parts[0] -eq 'Compile') { $record.Compile += Get-CanonicalPath $parts[1] }
+            elseif ($parts[0] -eq 'CompileHash') {
+                $hashParts = $parts[1].Split([char[]]@('|'), 2)
+                if ($hashParts.Count -ne 2 -or $hashParts[1] -notmatch '^[0-9a-fA-F]{64}$') {
+                    throw "Invalid compiler input hash: $($file.FullName)"
+                }
+                $path = Get-CanonicalPath $hashParts[0]
+                if ($record.CompileHashes.ContainsKey($path)) { throw "Duplicate compiler input hash: $path" }
+                $record.CompileHashes[$path] = $hashParts[1].ToLowerInvariant()
+            }
             else { $record[$parts[0]] = $parts[1] }
+        }
+        if (-not $record.ContainsKey('Configuration') -or [string]::IsNullOrWhiteSpace($record.Configuration)) {
+            throw "Missing compiler build configuration: $($file.FullName)"
+        }
+        $sourcePaths = @($record.Compile | Sort-Object -Unique)
+        if ($record.CompileHashes.Count -ne $sourcePaths.Count) {
+            throw "Compiler input hashes are incomplete: $($file.FullName)"
+        }
+        foreach ($path in $sourcePaths) {
+            if (-not $record.CompileHashes.ContainsKey($path)) { throw "Missing compiler input hash: $path" }
+            if ((Get-Sha256 $path) -ne $record.CompileHashes[$path]) {
+                throw "Compiler input changed since compilation: $path"
+            }
         }
         $record
     }
@@ -72,6 +108,49 @@ $coverletAssembly = [Reflection.Assembly]::LoadFrom((Join-Path $coverletDirector
 $symbolType = $coverletAssembly.GetType('Coverlet.Core.Symbols.CecilSymbolHelper', $true)
 $symbols = [Activator]::CreateInstance($symbolType, $true)
 
+# The test binary and every actual Compile input participate in freshness,
+# including ignored regressions and generated sources without sequence points.
+$testRecord = $testRecords[0]
+$testAssemblyPath = Get-CanonicalPath $testRecord.TargetPath
+$testPdbPath = [IO.Path]::ChangeExtension($testAssemblyPath, '.pdb')
+foreach ($path in @($testAssemblyPath, $testPdbPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing compiled test artifact: $path" }
+}
+$testSourcePaths = @($testRecord.Compile | Sort-Object -Unique)
+if ($testSourcePaths.Count -eq 0) { throw 'The test assembly has no compiler inputs.' }
+$testSources = @(
+    foreach ($path in $testSourcePaths) {
+        [ordered]@{ path = $path; sha256 = $testRecord.CompileHashes[$path] }
+    }
+)
+$testParameters = [Mono.Cecil.ReaderParameters]::new()
+$testParameters.ReadSymbols = $true
+$testDefinition = [Mono.Cecil.AssemblyDefinition]::ReadAssembly($testAssemblyPath, $testParameters)
+try {
+    if ($testDefinition.MainModule.SymbolReader.GetType().Name -ne 'PortablePdbReader') {
+        throw "Portable PDB required for $($testRecord.AssemblyName)."
+    }
+    $checkedTestDocuments = @{}
+    foreach ($type in (Get-AllTypes $testDefinition.MainModule.Types)) {
+        foreach ($method in $type.Methods) {
+            foreach ($point in $method.DebugInformation.SequencePoints) {
+                if (-not $point.IsHidden) {
+                    Assert-DocumentSource $point.Document $testSourcePaths $checkedTestDocuments
+                }
+            }
+        }
+    }
+    if ($checkedTestDocuments.Count -eq 0) { throw 'The test assembly has no executable source documents.' }
+}
+finally { $testDefinition.Dispose() }
+$testAssembly = [ordered]@{
+    name = $testRecord.AssemblyName; project = $testRecord.Project
+    configuration = $testRecord.Configuration
+    assembly = $testAssemblyPath; assemblySha256 = Get-Sha256 $testAssemblyPath
+    pdb = $testPdbPath; pdbSha256 = Get-Sha256 $testPdbPath
+    sources = $testSources
+}
+
 $bindingsPath = Get-CanonicalPath $BoundaryManifest
 $boundary = Get-Content -Raw -LiteralPath $bindingsPath | ConvertFrom-Json
 if ($boundary.schemaVersion -ne 1) { throw 'Unsupported runtime boundary manifest.' }
@@ -100,7 +179,7 @@ foreach ($record in $production) {
     $sourcePaths = @($record.Compile | Sort-Object -Unique)
     $sources = @(
         foreach ($source in $sourcePaths) {
-            [ordered]@{ path = $source; sha256 = Get-Sha256 $source }
+            [ordered]@{ path = $source; sha256 = $record.CompileHashes[$source] }
         }
     )
     $parameters = [Mono.Cecil.ReaderParameters]::new()
@@ -124,6 +203,23 @@ foreach ($record in $production) {
                 if ($annotated -ne $exempt) {
                     throw "Primitive annotation and reviewed manifest disagree: $key"
                 }
+                if (-not $exempt -and $record.AssemblyName -ne 'GameBridge') {
+                    foreach ($instruction in $method.Body.Instructions) {
+                        if ($instruction.Operand -isnot [Mono.Cecil.MethodReference]) { continue }
+                        $targetType = $instruction.Operand.DeclaringType.FullName
+                        if (($targetType.StartsWith('GTA.') -and -not $targetType.StartsWith('GTA.Math.')) -or
+                            $targetType -in @('GTAVMods.Game.INativeInvoker', 'GTAVMods.Game.IRawNative',
+                                'GTAVMods.Game.NativeInvoker', 'GTAVMods.Game.GtaNative', 'GTAVMods.Game.GtaArgumentMarshaller',
+                                'GTAVMods.Game.IRawNativeOutputs', 'GTAVMods.Game.GtaOutputs',
+                                'GTAVMods.Game.IWorldQueryBindings', 'GTAVMods.Game.GtaWorldQueries',
+                                'GTAVMods.Game.IHandleLifetimeBindings', 'GTAVMods.Game.IEntityLifetimeBindings',
+                                'GTAVMods.Game.ICameraLifetimeBindings', 'GTAVMods.Game.IRopeLifetimeBindings',
+                                'GTAVMods.Game.GtaEntityLifetimeBindings', 'GTAVMods.Game.GtaCameraLifetimeBindings',
+                                'GTAVMods.Game.GtaRopeLifetimeBindings')) {
+                            throw "Behavior bypasses the typed engine contracts: $key calls $($instruction.Operand.FullName)"
+                        }
+                    }
+                }
                 if ($exempt) {
                     if ($method.Body.HasExceptionHandlers -or
                         @($method.Body.Instructions | Where-Object {
@@ -142,18 +238,7 @@ foreach ($record in $production) {
                 $documents = @()
                 foreach ($group in ($points | Group-Object { $_.Document.Url })) {
                     $path = Get-CanonicalPath $group.Name
-                    if ($sourcePaths -notcontains $path) { throw "PDB document was not a compiler input: $path" }
-                    if (-not $checkedDocuments.ContainsKey($path)) {
-                        $document = $group.Group[0].Document
-                        $algorithm = $document.HashAlgorithm.ToString()
-                        if ($algorithm -ne 'SHA256' -and $algorithm -ne 'SHA1') {
-                            throw "PDB source checksum is absent or unsupported: $path"
-                        }
-                        $expected = [BitConverter]::ToString($document.Hash).Replace('-', '').ToLowerInvariant()
-                        $actual = (Get-FileHash -LiteralPath $path -Algorithm $algorithm).Hash.ToLowerInvariant()
-                        if ($expected -ne $actual) { throw "Source changed since compilation: $path" }
-                        $checkedDocuments[$path] = $true
-                    }
+                    Assert-DocumentSource $group.Group[0].Document $sourcePaths $checkedDocuments
                     $lines = @($group.Group | ForEach-Object {
                         $instruction = $method.Body.Instructions | Where-Object Offset -eq $_.Offset | Select-Object -First 1
                         if ($null -ne $instruction -and -not $symbols.SkipNotCoverableInstruction($method, $instruction)) {
@@ -235,6 +320,7 @@ foreach ($record in $production) {
         }
         $modules += [ordered]@{
             name = $record.AssemblyName; project = $record.Project
+            configuration = $record.Configuration
             assembly = $assemblyPath; assemblySha256 = Get-Sha256 $assemblyPath
             pdb = $pdbPath; pdbSha256 = Get-Sha256 $pdbPath
             testCopy = $testCopy; testPdb = $testPdb
@@ -247,15 +333,15 @@ foreach ($key in $bindings.Keys) {
     if (-not $usedBindings.ContainsKey($key)) { throw "Stale or unknown runtime binding: $key" }
 }
 $inventory = [ordered]@{
-    schemaVersion = 1; createdUtc = [DateTime]::UtcNow.ToString('O')
+    schemaVersion = 2; createdUtc = [DateTime]::UtcNow.ToString('O')
     collectorVersion = $coverletVersion
     boundaryPath = $bindingsPath; boundarySha256 = Get-Sha256 $bindingsPath
-    modules = $modules
+    modules = $modules; testAssembly = $testAssembly
 }
 $inventoryPath = Join-Path $RunDirectory 'inventory.json'
 $inventory | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $inventoryPath -Encoding UTF8
 [ordered]@{
-    schemaVersion = 1; startedUtc = [DateTime]::UtcNow.ToString('O')
+    schemaVersion = 2; startedUtc = [DateTime]::UtcNow.ToString('O')
     inventorySha256 = Get-Sha256 $inventoryPath
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $RunDirectory 'run.json') -Encoding UTF8
-Write-Host "Inventoried $($modules.Count) production assemblies and $($usedBindings.Count) audited runtime bindings."
+Write-Host "Inventoried $($modules.Count) production assemblies, one test assembly and $($usedBindings.Count) audited runtime bindings."

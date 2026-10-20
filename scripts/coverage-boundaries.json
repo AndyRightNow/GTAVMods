@@ -148,8 +148,8 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "GTA.Math.Quaternion GTAVMods.Game.GtaOutputs::EntityQuaternion(System.Int32)",
-      "reason": "Raw native out-pointer allocation/copy only; callers cover result interpretation and coordinate calculations."
+      "method": "System.Void GTAVMods.Game.GtaOutputs::EntityQuaternion(System.Int32,System.Single&,System.Single&,System.Single&,System.Single&)",
+      "reason": "Raw native out-pointer allocation/copy only; measured NativeOutputs assembles and tests XYZW components without normalization."
     },
     {
       "assembly": "GameBridge",
@@ -203,18 +203,28 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "GTAVMods.Game.RayHit GTAVMods.Game.GtaWorld::Capsule(GTA.Math.Vector3,GTA.Math.Vector3,System.Single,GTA.IntersectFlags)",
-      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+      "method": "System.Void GTAVMods.Game.GtaWorldQueries::Capsule(GTA.Math.Vector3,GTA.Math.Vector3,System.Single,GTA.IntersectFlags,System.Boolean&,System.Int32&,GTA.Math.Vector3&)",
+      "reason": "Direct SHVDNE shape-test invocation and output transport; measured GtaWorld assembles RayHit and tests terrain/zero/miss semantics. Handle null conversion is measured in GameHandles."
     },
     {
       "assembly": "GameBridge",
-      "method": "GTAVMods.Game.RayHit GTAVMods.Game.GtaWorld::Raycast(GTA.Math.Vector3,GTA.Math.Vector3,GTA.IntersectFlags,System.Int32)",
-      "reason": "Direct SHVDNE world/model/shape-test operation and result transport; handle null mapping is covered separately."
+      "method": "System.Void GTAVMods.Game.GtaWorldQueries::Raycast(GTA.Math.Vector3,GTA.Math.Vector3,GTA.IntersectFlags,System.Int32,System.Boolean&,System.Int32&,GTA.Math.Vector3&)",
+      "reason": "Direct SHVDNE raycast invocation and output transport; measured GtaWorld assembles RayHit and tests terrain/zero/miss semantics. Handle null conversion is measured in GameHandles."
     },
     {
       "assembly": "GameBridge",
-      "method": "System.Boolean GTAVMods.Game.GtaEntities::Exists(System.Int32)",
-      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+      "method": "System.Boolean GTAVMods.Game.GtaEntityLifetimeBindings::Exists(System.Int32)",
+      "reason": "Direct entity existence native observation. Measured HandleLifetime confirms deletion, handles prior absence and reports silent refusal."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaCameraLifetimeBindings::Exists(System.Int32)",
+      "reason": "Direct SHVDNE camera existence observation. Measured HandleLifetime confirms deletion, handles prior absence and reports silent refusal."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaRopeLifetimeBindings::Exists(System.Int32)",
+      "reason": "Direct SHVDNE rope existence observation. Measured HandleLifetime confirms deletion, handles prior absence and reports silent refusal."
     },
     {
       "assembly": "GameBridge",
@@ -268,8 +278,8 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "System.Boolean GTAVMods.Game.GtaOutputs::WorldToScreen(GTA.Math.Vector3,System.Single&,System.Single&)",
-      "reason": "Raw native out-pointer allocation/copy only; callers cover result interpretation and coordinate calculations."
+      "method": "System.Boolean GTAVMods.Game.GtaOutputs::WorldToScreen(System.Single,System.Single,System.Single,System.Single&,System.Single&)",
+      "reason": "Raw scalar native call and out-pointer allocation/copy only; measured NativeOutputs maps XYZ and preserves screen coordinates and validity."
     },
     {
       "assembly": "GameBridge",
@@ -418,8 +428,8 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "System.Void GTAVMods.Game.GtaCameras::Delete(System.Int32)",
-      "reason": "Direct SHVDNE camera property or operation; camera ownership, timing and geometry remain covered."
+      "method": "System.Void GTAVMods.Game.GtaCameraLifetimeBindings::Delete(System.Int32)",
+      "reason": "Direct SHVDNE camera deletion request only. Measured HandleLifetime confirms absence and retains ownership on refusal or failure."
     },
     {
       "assembly": "GameBridge",
@@ -473,8 +483,8 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "System.Void GTAVMods.Game.GtaEntities::Delete(System.Int32)",
-      "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
+      "method": "System.Void GTAVMods.Game.GtaEntityLifetimeBindings::Delete(System.Int32)",
+      "reason": "Direct SHVDNE deletion request only. Measured HandleLifetime confirms absence and preserves caller ownership on refusal or failure."
     },
     {
       "assembly": "GameBridge",
@@ -653,8 +663,8 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "System.Void GTAVMods.Game.GtaRopes::Delete(System.Int32)",
-      "reason": "Direct SHVDNE rope creation or operation with caller-supplied arguments; rope lifecycle decisions remain covered."
+      "method": "System.Void GTAVMods.Game.GtaRopeLifetimeBindings::Delete(System.Int32)",
+      "reason": "Direct SHVDNE rope deletion request only. Measured HandleLifetime confirms absence and retains ownership on refusal or failure."
     },
     {
       "assembly": "GameBridge",
@@ -668,7 +678,7 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "System.Void GTAVMods.Game.GtaWeapons::Select(System.Int32,GTA.WeaponHash,System.Boolean)",
+      "method": "System.Boolean GTAVMods.Game.GtaWeapons::Select(System.Int32,GTA.WeaponHash,System.Boolean)",
       "reason": "Direct SHVDNE weapon observation or operation; weapon ownership and request policy remain covered."
     },
     {

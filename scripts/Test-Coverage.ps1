@@ -31,9 +31,22 @@ try {
     $run = Read-Json (Join-Path $RunDirectory 'run.json')
     $inventoryPath = Join-Path $RunDirectory 'inventory.json'
     $inventory = Read-Json $inventoryPath
-    if ($run.schemaVersion -ne 1 -or $inventory.schemaVersion -ne 1) { throw 'Unsupported coverage inventory format.' }
+    if ($run.schemaVersion -ne 2 -or $inventory.schemaVersion -ne 2) { throw 'Unsupported coverage inventory format.' }
     if ((Get-Sha256 $inventoryPath) -ne $run.inventorySha256) { throw 'Coverage inventory changed after the test run started.' }
     if ((Get-Sha256 $inventory.boundaryPath) -ne $inventory.boundarySha256) { throw 'Runtime boundary manifest changed during the test run.' }
+    $testAssembly = $inventory.testAssembly
+    if ($null -eq $testAssembly -or @($testAssembly.sources).Count -eq 0) {
+        throw 'Coverage inventory requires the test assembly and its compiler inputs.'
+    }
+    foreach ($artifact in @(
+        @($testAssembly.assembly, $testAssembly.assemblySha256),
+        @($testAssembly.pdb, $testAssembly.pdbSha256)
+    )) {
+        if ((Get-Sha256 $artifact[0]) -ne $artifact[1]) { throw "Compiled test artifact changed: $($artifact[0])" }
+    }
+    foreach ($source in $testAssembly.sources) {
+        if ((Get-Sha256 $source.path) -ne $source.sha256) { throw "Test source changed during the test run: $($source.path)" }
+    }
     $started = [DateTimeOffset]::Parse($run.startedUtc).UtcDateTime
     if ($started -gt [DateTime]::UtcNow) { throw 'Coverage run starts in the future.' }
     foreach ($name in @('coverage.json', 'coverage.cobertura.xml', 'unit-tests.trx')) {

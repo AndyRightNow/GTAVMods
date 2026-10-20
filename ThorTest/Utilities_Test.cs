@@ -49,10 +49,11 @@ namespace ModUtilsTest
             Assert.AreEqual(0, Utilities.Random.PickOneIf(Array.Empty<int>(), value => true, random));
             Assert.IsNull(Utilities.Random.PickOneIf(new[] { "x" }, value => value == "y", random));
             Assert.HasCount(0, random.Bounds);
-            Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.PickOne(new[] { 1 }, null));
+            Assert.AreEqual("random", Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.PickOne(new[] { 1 }, null)).ParamName);
+            Assert.AreEqual("random", Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.PickOne(Array.Empty<int>(), null)).ParamName);
             Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.PickOneIf(new[] { 1 }, null));
-            Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.RandomNegation(null));
-            Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.NextFloat(null));
+            Assert.AreEqual("random", Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.RandomNegation(null)).ParamName);
+            Assert.AreEqual("random", Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.NextFloat(null)).ParamName);
         }
 
         [TestMethod]
@@ -90,12 +91,25 @@ namespace ModUtilsTest
         [DataRow(0f, 0f, 0f)]
         [DataRow(0f, 0f, 1f)]
         [DataRow(1f, 0f, 0f)]
+        [DataRow(0f, 1f, 0f)]
         public void ZeroRandomSamplesStillProduceAUsablePerpendicular(float x, float y, float z)
         {
             var normal = new Vector3(x, y, z);
             var result = Utilities.Math.RandomVectorPerpendicularTo(normal, new FixedRandom(0, 0));
             Assert.AreEqual(1f, result.Length(), 0.00001f);
             Assert.AreEqual(0f, Vector3.Dot(normal, result), 0.00001f);
+        }
+
+        [TestMethod]
+        public void UnnormalizedPerpendicularPreservesSampleMagnitude()
+        {
+            // The XZ plane is perpendicular to Y. Two half-unit samples have length sqrt(1/2).
+            var raw = Utilities.Math.RandomVectorPerpendicularTo(Vector3.UnitY, new FixedRandom(1, 0.5), false);
+            Assert.AreEqual(0f, Vector3.Dot(Vector3.UnitY, raw), 0.00001f);
+            Assert.AreEqual((float)System.Math.Sqrt(0.5), raw.Length(), 0.00001f);
+            var unit = Utilities.Math.RandomVectorPerpendicularTo(Vector3.UnitY, new FixedRandom(1, 0.5));
+            Assert.AreEqual(1f, unit.Length(), 0.00001f);
+            Assert.IsTrue((unit - raw.Normalized).Length() < 0.00001f);
         }
 
         [TestMethod]
@@ -163,6 +177,34 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
+        [DataRow(1f, 0f, 0f, 1f, 1f, 0f)]
+        [DataRow(1f, 2f, 2f, 2f, 1f, 2f)]
+        [DataRow(1f, 2f, 2f, -2f, 1f, -2f)]
+        public void DirectionQuaternionRotatesAcuteAndObtuseNonAxisDirections(
+            float fx, float fy, float fz, float tx, float ty, float tz)
+        {
+            var from = new Vector3(fx, fy, fz);
+            var to = new Vector3(tx, ty, tz);
+            var rotation = Utilities.Math.DirectionToQuaternion(from * 7, to * 3);
+            Assert.AreEqual(1f, rotation.Length(), 0.00001f);
+            Assert.IsTrue((rotation * from.Normalized - to.Normalized).Length() < 0.00001f,
+                "The rotation must map the source direction onto the target, independent of vector magnitude.");
+        }
+
+        [TestMethod]
+        [DataRow(0.5f, 0.5f, 90f)]
+        [DataRow(-0.5f, -0.5f, -90f)]
+        public void EulerAnglesRepresentKnownCyclicAxisRotations(float x, float y, float roll)
+        {
+            // A 120-degree turn about (1,1,1) cycles X->Y->Z; reflecting X/Y reverses roll.
+            // These are the same orientations as +/-90 degrees of roll followed by 90 degrees of yaw.
+            var euler = Utilities.Math.QuaternionToEulerAngles(new Quaternion(x, y, 0.5f, 0.5f));
+            Assert.AreEqual(roll, euler.X, 0.001f);
+            Assert.AreEqual(0f, euler.Y, 0.001f);
+            Assert.AreEqual(90f, euler.Z, 0.001f);
+        }
+
+        [TestMethod]
         public void DistanceToleranceIncludesBothBoundaries()
         {
             Assert.IsTrue(Utilities.Math.CloseTo(8, 10, 2));
@@ -171,6 +213,10 @@ namespace ModUtilsTest
             Assert.IsFalse(Utilities.Math.CloseTo(12.01f, 10, 2));
             Assert.IsTrue(Utilities.Math.CloseTo(Vector3.Zero, new Vector3(3, 4, 0), 5));
             Assert.IsFalse(Utilities.Math.CloseTo(Vector3.Zero, new Vector3(3, 4, 0), 4.99f));
+            var first = new Vector3(10, -20, 30);
+            var second = new Vector3(13, -16, 30);
+            Assert.IsTrue(Utilities.Math.CloseTo(first, second, 5), "Translation must not change the five-unit separation.");
+            Assert.IsFalse(Utilities.Math.CloseTo(second, first, 4.99f));
             string left = "left", right = "right";
             Utilities.Swap(ref left, ref right);
             Assert.AreEqual("right", left);
@@ -189,6 +235,18 @@ namespace ModUtilsTest
             Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new Utilities.Timer(-1, () => { }, () => 0));
             Assert.ThrowsExactly<ArgumentNullException>(() => new Utilities.Timer(1, null, () => 0));
             Assert.ThrowsExactly<ArgumentNullException>(() => new Utilities.Timer(1, () => { }, null));
+        }
+
+        [TestMethod]
+        public void ZeroIntervalTimerFiresOncePerTickIncludingTheSameClockInstant()
+        {
+            int calls = 0;
+            var timer = new Utilities.Timer(0, () => calls++, () => 123);
+            Assert.AreEqual(0, calls, "Constructing a timer does not invoke its callback.");
+            timer.OnTick();
+            Assert.AreEqual(1, calls);
+            timer.OnTick();
+            Assert.AreEqual(2, calls);
         }
 
         [TestMethod]

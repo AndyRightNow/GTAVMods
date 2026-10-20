@@ -43,7 +43,29 @@ namespace GTAVMods.Game
         [GamePrimitive] public T Call<T>(Hash hash, InputArgument[] arguments) => Function.Call<T>(hash, arguments);
     }
 
-    public sealed class GtaOutputs : INativeOutputs
+    /// <summary>Scalar output transport used only by the measured output adapter.</summary>
+    public interface IRawNativeOutputs
+    {
+        bool LastDamageBone(int ped, out int bone);
+        void EntityQuaternion(int entity, out float x, out float y, out float z, out float w);
+        bool WorldToScreen(float worldX, float worldY, float worldZ, out float x, out float y);
+    }
+
+    public sealed class NativeOutputs : INativeOutputs
+    {
+        private readonly IRawNativeOutputs native;
+        public NativeOutputs(IRawNativeOutputs native) { this.native = native; }
+        public bool LastDamageBone(int ped, out int bone) => native.LastDamageBone(ped, out bone);
+        public Quaternion EntityQuaternion(int entity)
+        {
+            native.EntityQuaternion(entity, out float x, out float y, out float z, out float w);
+            return new Quaternion(x, y, z, w);
+        }
+        public bool WorldToScreen(Vector3 position, out float x, out float y)
+            => native.WorldToScreen(position.X, position.Y, position.Z, out x, out y);
+    }
+
+    public sealed class GtaOutputs : IRawNativeOutputs
     {
         [GamePrimitive] public unsafe bool LastDamageBone(int ped, out int bone)
         {
@@ -52,16 +74,19 @@ namespace GTAVMods.Game
             bone = result;
             return hit;
         }
-        [GamePrimitive] public unsafe Quaternion EntityQuaternion(int entity)
+        [GamePrimitive] public unsafe void EntityQuaternion(int entity, out float x, out float y, out float z, out float w)
         {
-            float x = 0, y = 0, z = 0, w = 0;
-            Function.Call(Hash.GET_ENTITY_QUATERNION, entity, &x, &y, &z, &w);
-            return new Quaternion(x, y, z, w);
+            float resultX = 0, resultY = 0, resultZ = 0, resultW = 0;
+            Function.Call(Hash.GET_ENTITY_QUATERNION, entity, &resultX, &resultY, &resultZ, &resultW);
+            x = resultX;
+            y = resultY;
+            z = resultZ;
+            w = resultW;
         }
-        [GamePrimitive] public unsafe bool WorldToScreen(Vector3 position, out float x, out float y)
+        [GamePrimitive] public unsafe bool WorldToScreen(float worldX, float worldY, float worldZ, out float x, out float y)
         {
             float screenX = 0, screenY = 0;
-            bool hit = Function.Call<bool>(Hash.GET_SCREEN_COORD_FROM_WORLD_COORD, position.X, position.Y, position.Z, &screenX, &screenY);
+            bool hit = Function.Call<bool>(Hash.GET_SCREEN_COORD_FROM_WORLD_COORD, worldX, worldY, worldZ, &screenX, &screenY);
             x = screenX;
             y = screenY;
             return hit;

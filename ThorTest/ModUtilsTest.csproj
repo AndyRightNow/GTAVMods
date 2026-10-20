@@ -21,5 +21,7 @@
     <PackageReference Include="MSTest.TestFramework" Version="4.5.1" />
     <ProjectReference Include="..\ModUtils\ModUtils.csproj" />
     <ProjectReference Include="..\Thor\Thor.csproj" />
+    <ProjectReference Include="..\GameBridge\GameBridge.csproj" />
+    <ProjectReference Include="..\gtav_console\DeveloperConsole.csproj" />
   </ItemGroup>
 </Project>

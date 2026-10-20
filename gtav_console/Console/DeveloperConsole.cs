@@ -56,7 +56,7 @@ namespace DeveloperConsole {
         private readonly List<string> _inputHistory = new List<string>();
         private readonly HashSet<Keys> _keyWasDown = new HashSet<Keys>();
         private readonly List<KeyValuePair<string, Color>> _lines = new List<KeyValuePair<string, Color>>();
-        private List<Control> _disabledControls = new List<Control>();
+        private List<Control> _disabledControls;
         private string _cursorChar = "";
         private int _historyCursor = -1;
         private int _inputOffset;
@@ -97,7 +97,12 @@ namespace DeveloperConsole {
             RegisteredScripts.RemoveAll(entry => ReferenceEquals(entry.Key, owner));
         }
         public void Dispose() {
-            ShowConsole(false);
+            var failures = new List<Exception>();
+            try { ShowConsole(false); }
+            catch (Exception error) { failures.Add(error); }
+            try { _game.ReleasePendingModel(); }
+            catch (Exception error) { failures.Add(error); }
+            GTAFuncs.ThrowFailures(failures);
             if (Instance == this) {
                 Instance = null;
                 RegisteredScripts.Clear();
@@ -284,17 +289,36 @@ namespace DeveloperConsole {
         public void ShowConsole(bool show) {
             _lineOffset = 0;
             _historyCursor = -1;
-            if (show == IsOpen) return;
-            _isHidden = !show;
             if (show) {
-                _disabledControls = _game.DisableAllControls();
-                SetConsoleControls();
+                if (IsOpen) return;
+                RestoreOwnedControls();
+                _disabledControls = _game.CaptureEnabledControls();
+                try {
+                    SetConsoleControls();
+                    _isHidden = false;
+                } catch (Exception error) {
+                    try { RestoreOwnedControls(); }
+                    catch (Exception restoreError) {
+                        throw new AggregateException("Console operations failed.", error, restoreError);
+                    }
+                    throw;
+                }
             } else {
-                _game.SetControlActions(false);
-                _game.EnableControls(_disabledControls);
-                _disabledControls.Clear();
+                _isHidden = true;
+                RestoreOwnedControls();
                 _keyWasDown.Clear();
             }
+        }
+        private void RestoreOwnedControls() {
+            if (_disabledControls == null) {
+                _game.RestorePendingControls();
+                return;
+            }
+            var controls = _disabledControls;
+            // GTAFuncs retains each failed restoration. Successful restores no longer belong
+            // to this console and must not overwrite later changes by other scripts.
+            _disabledControls = null;
+            _game.RestoreControls(controls);
         }
         private void SetConsoleControls() {
             _game.SetControlActions(false);

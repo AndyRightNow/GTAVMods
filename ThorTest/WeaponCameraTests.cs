@@ -108,12 +108,16 @@ namespace ModUtilsTest {
         [TestMethod]
         public void CancelOnlyStopsOwnedRenderingCameraAndDestroyReinitializesItsNextView() {
             var game = CreateWorld();
-            var camera = new WeaponCamera(game.Services, new CameraRandom(1, 3, 1, 1, 0, 0, 1, 1));
+            var log = new RecordingLog();
+            var camera = new WeaponCamera(game.Services, new CameraRandom(1, 3, 1, 1, 0, 0, 1, 1), log);
             camera.RenderCamera(20);
+            Assert.AreEqual("INFO", log.Last("camera.created").Level);
+            Assert.AreEqual(20, log.Last("camera.created").Data["weapon"]);
             game.Cameras.RenderingCamera = 99;
             game.Calls.Clear();
             camera.CancelRenderedCamera();
             Assert.AreEqual(0, game.Calls.Count, "Another script's rendering camera must remain untouched.");
+            Assert.HasCount(1, log.Records);
             game.Cameras.RenderingCamera = 30;
             camera.DestroyCamera();
             CollectionAssert.AreEqual(new[] { "camera.stopRendering", "camera.active", "camera.delete" },
@@ -121,6 +125,11 @@ namespace ModUtilsTest {
             CollectionAssert.AreEqual(new object[] { 30, false }, game.Calls[1].Arguments);
             Assert.AreEqual(0, game.Cameras.RenderingCamera);
             Assert.AreEqual(0, game.Cameras.Cameras.Count);
+            camera.DestroyCamera();
+            CollectionAssert.AreEqual(new[] { "camera.created", "camera.deleted", "camera.stopped" },
+                log.Records.Select(record => record.Name).ToArray());
+            Assert.AreEqual("INFO", log.Last("camera.deleted").Level);
+            Assert.AreEqual("INFO", log.Last("camera.stopped").Level);
             game.Cameras.Creations.Enqueue(31);
             game.Host.GameTime = 100;
             camera.RenderCamera(20);

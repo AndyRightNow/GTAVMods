@@ -29,6 +29,37 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
+        public void SilentCameraAndRopeRefusalsKeepOnlyThoseHandlesForCleanupRetry()
+        {
+            var f = AttachedHammer();
+            f.Game.Ropes.SilentDeletionRefusals.Add(70);
+            f.Game.Cameras.SilentDeletionRefusals.Add(80);
+            var error = Assert.ThrowsExactly<AggregateException>(() => f.Hammer.Dispose());
+
+            CollectionAssert.AreEquivalent(new[]
+            {
+                "Rope 70 still exists after its deletion request.",
+                "Camera 80 still exists after its deletion request."
+            }, error.Flatten().InnerExceptions.Select(exception => exception.Message).ToArray());
+            Assert.IsTrue(f.Game.Ropes.Ropes.Contains(70));
+            Assert.IsTrue(f.Game.Cameras.Cameras.ContainsKey(80));
+            Assert.IsFalse(f.Game.Observations[20].Exists);
+            Assert.IsFalse(f.Game.Observations[30].Exists);
+            Assert.AreEqual(0, f.Game.Cameras.RenderingCamera);
+            Assert.AreEqual(1, f.Audio.Clips["whirling-hammer.wav"].Disposals);
+
+            f.Game.Ropes.SilentDeletionRefusals.Clear();
+            f.Game.Cameras.SilentDeletionRefusals.Clear();
+            f.Game.Calls.Clear();
+            f.Hammer.Dispose();
+            f.Hammer.Dispose();
+            CollectionAssert.AreEqual(new[] { "rope.delete:70", "camera.delete:80" }, Deletions(f));
+            Assert.IsEmpty(f.Game.Ropes.Ropes);
+            Assert.IsEmpty(f.Game.Cameras.Cameras);
+            Assert.AreEqual(1, f.Audio.Clips["whirling-hammer.wav"].Disposals);
+        }
+
+        [TestMethod]
         [DataRow("entity.detach", 30)]
         [DataRow("entity.detach", 20)]
         [DataRow("native.SET_OBJECT_PHYSICS_PARAMS", 20)]
@@ -119,6 +150,8 @@ namespace ModUtilsTest
             Assert.AreEqual(0, f.Hammer.WeaponObject);
             CollectionAssert.AreEqual(new[] { "rope.delete:70", "camera.delete:80" }, Deletions(f));
             Assert.IsFalse(f.Game.Calls.Any(call => call.Name == "entity.detach"));
+            Assert.IsFalse(f.Game.Calls.Any(call => call.Name == "native.SET_OBJECT_PHYSICS_PARAMS"),
+                "Cleanup must not reconfigure physics on a hammer already removed by the engine.");
             Assert.IsEmpty(f.Game.Ropes.Ropes);
             Assert.IsEmpty(f.Game.Cameras.Cameras);
             Assert.AreEqual(1, f.Audio.Clips["whirling-hammer.wav"].Disposals);

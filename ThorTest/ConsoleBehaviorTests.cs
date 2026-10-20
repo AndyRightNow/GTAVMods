@@ -48,25 +48,32 @@ namespace ModUtilsTest {
                 var hiddenKey = new KeyEventArgs(Keys.B);
                 fixture.Model.KeyDown(hiddenKey);
                 Assert.IsFalse(hiddenKey.SuppressKeyPress);
-                fixture.Press(Keys.F8);
+                var toggle = new KeyEventArgs(Keys.F8);
+                fixture.Model.KeyDown(toggle);
+                Assert.IsTrue(toggle.SuppressKeyPress);
                 Assert.IsTrue(fixture.Model.IsOpen);
+                Assert.AreEqual("", fixture.Model.Input, "The toggle key must not also be inserted as text.");
+                fixture.Draw();
+                Assert.IsTrue(fixture.Platform.Text.Any(line => line.Text.Contains("F8") && line.Text.Contains("F4")),
+                    "The startup message must distinguish the two console shortcuts.");
                 var captures = fixture.Native.Calls.Count(c => c.Hash == Hash.IS_CONTROL_ENABLED);
                 fixture.Model.ShowConsole(true);
                 Assert.AreEqual(captures, fixture.Native.Calls.Count(c => c.Hash == Hash.IS_CONTROL_ENABLED));
                 fixture.Native.Calls.Clear();
                 fixture.Press(Keys.F8);
                 Assert.IsFalse(fixture.Model.IsOpen);
-                Assert.AreEqual(Hash.DISABLE_ALL_CONTROL_ACTIONS, fixture.Native.Calls[0].Hash);
                 CollectionAssert.AreEquivalent(originallyEnabled.Select(c => (int)c).ToArray(),
-                    fixture.Native.Calls.Skip(1).Select(c => (int)c.Arguments[1]).ToArray());
+                    fixture.Native.Calls.Where(c => c.Hash == Hash.ENABLE_CONTROL_ACTION).Select(c => (int)c.Arguments[1]).ToArray());
                 fixture.Model.ShowConsole(true);
-                fixture.Press(Keys.Escape);
+                var escape = new KeyEventArgs(Keys.Escape);
+                fixture.Model.KeyDown(escape);
+                Assert.IsTrue(escape.SuppressKeyPress);
                 Assert.IsFalse(fixture.Model.IsOpen);
                 fixture.Press(Keys.Escape);
                 fixture.Model.ShowConsole(true);
                 fixture.Native.Calls.Clear();
                 fixture.Model.Dispose();
-                Assert.AreEqual(3, fixture.Native.Calls.Count);
+                Assert.AreEqual(Enum.GetValues(typeof(Control)).Length, fixture.Native.Calls.Count);
             }
         }
 
@@ -105,6 +112,16 @@ namespace ModUtilsTest {
                 fixture.Type(Keys.C, "c");
                 fixture.Type(Keys.V, "v");
                 Assert.AreEqual("cv", fixture.Model.Input);
+                fixture.Model.Input = "abcd";
+                fixture.Press(Keys.Left);
+                fixture.Press(Keys.Left);
+                fixture.Platform.GameTime = 601;
+                fixture.Draw();
+                Assert.AreEqual("--> ab|cd", fixture.Platform.Text.Last().Text);
+                fixture.Press(Keys.Delete);
+                fixture.Type(Keys.X, "X");
+                Assert.AreEqual("abXd", fixture.Model.Input,
+                    "Deleting at the cursor must leave it before the following character.");
             }
         }
 
@@ -124,6 +141,12 @@ namespace ModUtilsTest {
                 fixture.Model.KeyUp(new KeyEventArgs(Keys.A));
                 fixture.Type(Keys.A, "a");
                 Assert.AreEqual("aa", fixture.Model.Input);
+                var typed = new KeyEventArgs(Keys.E);
+                fixture.Platform.Translation = "e";
+                fixture.Model.KeyDown(typed);
+                Assert.IsTrue(typed.SuppressKeyPress);
+                fixture.Model.KeyUp(typed);
+                fixture.Model.Input = "aa";
                 fixture.Platform.IsForeground = false;
                 fixture.Type(Keys.B, "b");
                 fixture.Platform.IsForeground = true;
@@ -136,6 +159,14 @@ namespace ModUtilsTest {
                 fixture.Platform.CapsLockState = unchecked((short)0x8000);
                 fixture.Type(Keys.D, "d");
                 Assert.AreEqual("aaBc1D", fixture.Model.Input);
+                fixture.Platform.CapsLockState = 0;
+                fixture.Platform.Translation = "z";
+                fixture.Press(Keys.Z);
+                fixture.Model.ShowConsole(false);
+                fixture.Model.ShowConsole(true);
+                fixture.Press(Keys.Z);
+                Assert.AreEqual("aaBc1Dzz", fixture.Model.Input,
+                    "Closing must release key-repeat ownership even when a key-up event was not delivered.");
             }
         }
 
@@ -158,11 +189,16 @@ namespace ModUtilsTest {
                 fixture.Press(Keys.Enter);
                 Assert.AreEqual(1, calls);
                 Assert.AreEqual("", fixture.Model.Input);
+                fixture.Draw();
+                Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.EndsWith("--> set 12")),
+                    "Submitted commands remain visible after the input is cleared.");
                 fixture.Model.Input = "set true";
                 fixture.Press(Keys.Enter);
                 Assert.AreEqual(1, calls);
                 fixture.Draw();
                 Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.Contains("Provided arguments are not valid")));
+                Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.Contains("System.Int32 number")),
+                    "Rejected arguments should show the accepted signature.");
                 fixture.Press(Keys.Up);
                 Assert.AreEqual("set true", fixture.Model.Input);
                 fixture.Press(Keys.Up);
@@ -174,9 +210,18 @@ namespace ModUtilsTest {
                 Assert.AreEqual("", fixture.Model.Input);
                 fixture.Press(Keys.Up);
                 Assert.AreEqual("set true", fixture.Model.Input, "Down past newest resets the history cursor.");
+                fixture.Press(Keys.Up);
+                fixture.Type(Keys.X, "x");
+                fixture.Press(Keys.Up);
+                Assert.AreEqual("set true", fixture.Model.Input, "Editing a recalled command starts a new history traversal.");
                 foreach (var invalid in new[] { "", "123 set", "\"set\"", "missing { throw null; }" }) {
+                    fixture.Model.ClearLines();
                     fixture.Model.Input = invalid;
                     fixture.Model.RunCommand();
+                    fixture.Draw();
+                    Assert.IsTrue(fixture.Platform.Text.Any(t =>
+                        t.Color == Color.FromArgb(ConsoleSettings.TextAlpha, Color.Red) && t.Text.Contains("not found")),
+                        "Invalid command input must produce an actionable error.");
                 }
                 Assert.AreEqual(0, fixture.Environment.Compilations, "Unknown commands must not execute argument code.");
                 fixture.Draw();
@@ -193,6 +238,11 @@ namespace ModUtilsTest {
                 Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.Contains("Failed to print info")));
                 Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.Contains("Description: show status")));
                 Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.EndsWith("status ")));
+                fixture.Model.ClearLines();
+                fixture.Model.PrintCommandInfo(new CommandDispatcher.Command("probe", "read diagnostics", args => { }));
+                fixture.Draw();
+                Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.Contains("probe")),
+                    "Help for a command without arguments must still identify the command.");
             }
         }
 
@@ -231,15 +281,36 @@ namespace ModUtilsTest {
                 for (var i = 0; i < 20; i++) fixture.Model.PrintLine("line" + i);
                 fixture.Draw();
                 Assert.AreEqual(new Size(1200, 300), fixture.Platform.Rectangles[0].Size);
+                var rows = fixture.Platform.Text.Take(15).ToArray();
+                CollectionAssert.AreEqual(Enumerable.Range(5, 15).Select(i => "12:34:56: line" + i).ToArray(),
+                    rows.Select(t => t.Text).ToArray());
+                Assert.AreEqual(5, rows[0].Position.Y);
+                Assert.AreEqual(257, rows[14].Position.Y);
+                Assert.IsTrue(rows.Zip(rows.Skip(1), (a, b) => b.Position.Y - a.Position.Y).All(gap => gap == 18),
+                    "Rows use evenly spaced baselines within the output area.");
+                var separator = fixture.Platform.Rectangles.Last();
+                Assert.IsTrue(separator.Position.Y > rows.Last().Position.Y && separator.Position.Y < 300);
+                Assert.IsTrue(fixture.Platform.Text.Last().Position.Y > separator.Position.Y);
+                var version = fixture.Platform.Text.Single(t => t.Text == ConsoleSettings.Version);
+                Assert.IsTrue(version.Position.X > 0 && version.Position.X < 1200);
+                Assert.IsTrue(version.Position.Y > 0 && version.Position.Y < separator.Position.Y);
                 Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.EndsWith("line19")));
                 Assert.IsFalse(fixture.Platform.Text.Any(t => t.Text.EndsWith("line4")));
                 for (var i = 0; i < 25; i++) fixture.Press(Keys.PageUp);
                 fixture.Draw();
                 Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.EndsWith("line0")));
                 Assert.IsFalse(fixture.Platform.Text.Any(t => t.Text.EndsWith("line19")));
+                Assert.AreEqual(new Point(1190, 1), fixture.Platform.Rectangles[1].Position);
+                fixture.Press(Keys.PageDown);
+                fixture.Draw();
+                CollectionAssert.AreEqual(Enumerable.Range(1, 15).Select(i => "12:34:56: line" + i).ToArray(),
+                    fixture.Platform.Text.Take(15).Select(t => t.Text).ToArray(),
+                    "One step down from the oldest page must immediately move the visible window.");
+                Assert.IsTrue(fixture.Platform.Rectangles[1].Position.Y > 1 && fixture.Platform.Rectangles[1].Position.Y < 69);
                 for (var i = 0; i < 25; i++) fixture.Press(Keys.PageDown);
                 fixture.Draw();
                 Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.EndsWith("line19")));
+                Assert.AreEqual(17, fixture.Platform.Text.Count, "Scrolling below the newest page must not discard a row.");
                 Assert.AreEqual(new Point(1190, 69), fixture.Platform.Rectangles[1].Position);
                 Assert.AreEqual(new Size(8, 206), fixture.Platform.Rectangles[1].Size);
                 fixture.Platform.GameTime = 600;
@@ -248,11 +319,22 @@ namespace ModUtilsTest {
                 fixture.Platform.GameTime = 601;
                 fixture.Draw();
                 Assert.AreEqual("--> |", fixture.Platform.Text.Last().Text);
+                fixture.Platform.GameTime = 602;
+                fixture.Draw();
+                Assert.AreEqual("--> |", fixture.Platform.Text.Last().Text, "A draw one millisecond later must not toggle again.");
                 fixture.Platform.GameTime = 1202;
                 fixture.Draw();
                 Assert.AreEqual("--> ", fixture.Platform.Text.Last().Text);
                 for (var i = 0; i < 25; i++) fixture.Press(Keys.PageUp);
-                for (var i = 0; i < 10; i++) fixture.Model.RemoveLastLine();
+                fixture.Model.RemoveLastLine();
+                fixture.Press(Keys.PageDown);
+                fixture.Draw();
+                Assert.IsTrue(fixture.Platform.Text.First().Text.EndsWith("line1"),
+                    "Removing a row while at the oldest page must clamp scroll ownership to the remaining range.");
+                for (var i = 0; i < 4; i++) fixture.Model.RemoveLastLine();
+                fixture.Draw();
+                Assert.AreEqual(2, fixture.Platform.Rectangles.Count, "An exactly full page needs no scrollbar.");
+                for (var i = 0; i < 5; i++) fixture.Model.RemoveLastLine();
                 fixture.Draw();
                 Assert.IsTrue(fixture.Platform.Text.Any(t => t.Text.EndsWith("line0")));
                 Assert.AreEqual(2, fixture.Platform.Rectangles.Count);
@@ -273,6 +355,12 @@ namespace ModUtilsTest {
                 var measured = fixture.Native.Calls.Where(c => c.Hash == Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME)
                     .Select(c => (string)c.Arguments[0]).Take(3).ToArray();
                 CollectionAssert.AreEqual(chunks.Select(t => t.Text).ToArray(), measured);
+                fixture.Model.ClearLines();
+                fixture.Model.PrintLine(new string('x', 89));
+                fixture.Draw();
+                Assert.AreEqual(99, fixture.Platform.Text.First().Text.Length);
+                Assert.AreEqual(3, fixture.Platform.Text.Count,
+                    "A line ending exactly at a chunk boundary must not draw an extra empty chunk.");
             }
         }
 
@@ -304,6 +392,8 @@ namespace ModUtilsTest {
             Assert.AreEqual(1, platform.CapsLockState);
             Assert.AreEqual(0x14, raw.StateKey);
             Assert.IsFalse(platform.IsForeground);
+            raw.ForegroundProcess = 42;
+            Assert.IsTrue(platform.IsForeground);
             Assert.AreEqual("a", platform.TranslateKey(Keys.A, false, false));
             Assert.IsTrue((DateTime.Now - platform.Now).Duration() < TimeSpan.FromSeconds(1));
             Assert.AreEqual("copied", platform.ReadClipboard());

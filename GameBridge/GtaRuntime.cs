@@ -14,7 +14,7 @@ namespace GTAVMods.Game
         public static GameServices Create() => new GameServices(
             new GtaHost(), new GtaInput(), new GtaEntities(), new GtaPeds(),
             new GtaWeapons(), new GtaWorld(), new GtaCameras(), new GtaRopes(),
-            new NativeInvoker(new GtaNative()), new GtaOutputs());
+            new NativeInvoker(new GtaNative()), new NativeOutputs(new GtaOutputs()));
     }
 
     public sealed class GtaHost : IGameHost
@@ -40,7 +40,10 @@ namespace GTAVMods.Game
 
     public sealed class GtaEntities : IEntityAccess
     {
-        [GamePrimitive] public bool Exists(int entity) => Function.Call<bool>(Hash.DOES_ENTITY_EXIST, entity);
+        private readonly HandleLifetime lifetime;
+        public GtaEntities() : this(new GtaEntityLifetimeBindings()) { }
+        public GtaEntities(IEntityLifetimeBindings bindings) { lifetime = new HandleLifetime(bindings, "Entity"); }
+        public bool Exists(int entity) => lifetime.Exists(entity);
         [GamePrimitive] public bool IsDead(int entity) => Entity.FromHandle(entity).IsDead;
         [GamePrimitive] public bool IsInAir(int entity) => Entity.FromHandle(entity).IsInAir;
         [GamePrimitive] public Vector3 Position(int entity) => Entity.FromHandle(entity).Position;
@@ -73,7 +76,7 @@ namespace GTAVMods.Game
         [GamePrimitive] public void ApplyForce(int entity, Vector3 force) => Entity.FromHandle(entity).ApplyForce(force);
         [GamePrimitive] public void AttachToBone(int entity, int ped, Bone bone) => Entity.FromHandle(entity).AttachTo(((Ped)Entity.FromHandle(ped)).Bones[bone]);
         [GamePrimitive] public void Detach(int entity) => Entity.FromHandle(entity).Detach();
-        [GamePrimitive] public void Delete(int entity) => Entity.FromHandle(entity).Delete();
+        public void Delete(int entity) => lifetime.Delete(entity);
         [GamePrimitive] public int AddBlip(int entity) => GameHandles.Of(Entity.FromHandle(entity).AddBlip());
         [GamePrimitive] public void SetBlipFriendly(int blip, bool friendly) => new Blip(blip).IsFriendly = friendly;
         [GamePrimitive] public void SetBlipName(int blip, string name) => new Blip(blip).Name = name;
@@ -116,24 +119,25 @@ namespace GTAVMods.Game
         [GamePrimitive] public int CurrentObject(int ped) => GameHandles.Of(((Ped)Entity.FromHandle(ped)).Weapons.CurrentWeaponObject);
         [GamePrimitive] public void Give(int ped, WeaponHash weapon, int ammo, bool equipNow, bool loaded) => ((Ped)Entity.FromHandle(ped)).Weapons.Give(weapon, ammo, equipNow, loaded);
         [GamePrimitive] public void Remove(int ped, WeaponHash weapon) => ((Ped)Entity.FromHandle(ped)).Weapons.Remove(weapon);
-        [GamePrimitive] public void Select(int ped, WeaponHash weapon, bool equipNow) => ((Ped)Entity.FromHandle(ped)).Weapons.Select(weapon, equipNow);
+        [GamePrimitive] public bool Select(int ped, WeaponHash weapon, bool equipNow) => ((Ped)Entity.FromHandle(ped)).Weapons.Select(weapon, equipNow);
         [GamePrimitive] public bool RequestAsset(WeaponHash weapon, int timeoutMs) => new WeaponAsset(weapon).Request(timeoutMs);
     }
 
     public sealed class GtaWorld : IWorldAccess
     {
+        private readonly IWorldQueryBindings queries;
+        public GtaWorld() : this(new GtaWorldQueries()) { }
+        public GtaWorld(IWorldQueryBindings queries) { this.queries = queries; }
         [GamePrimitive] public int[] NearbyEntities(Vector3 position, float radius) => GameHandles.OfMany(World.GetNearbyEntities(position, radius));
-        [GamePrimitive] public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0)
+        public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0)
         {
-            var hit = World.Raycast(from, to, flags, Entity.FromHandle(ignoreEntity));
-            return new RayHit(hit.DidHit, GameHandles.Of(hit.HitEntity), hit.HitPosition);
+            queries.Raycast(from, to, flags, ignoreEntity, out bool hit, out int entity, out Vector3 position);
+            return new RayHit(hit, entity, position);
         }
-        [GamePrimitive] public RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags)
+        public RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags)
         {
-            var test = ShapeTest.StartTestCapsule(from, to, radius, flags);
-            test.GetResult(out ShapeTestResult result);
-            result.TryGetHitEntity(out Entity entity);
-            return new RayHit(result.DidHit, GameHandles.Of(entity), result.HitPosition);
+            queries.Capsule(from, to, radius, flags, out bool hit, out int entity, out Vector3 position);
+            return new RayHit(hit, entity, position);
         }
         [GamePrimitive] public void DrawMarker(MarkerType type, Vector3 position, Vector3 direction, Vector3 rotation, Vector3 scale, Color color)
             => World.DrawMarker(type, position, direction, rotation, scale, color);
@@ -147,6 +151,9 @@ namespace GTAVMods.Game
 
     public sealed class GtaCameras : ICameraAccess
     {
+        private readonly HandleLifetime lifetime;
+        public GtaCameras() : this(new GtaCameraLifetimeBindings()) { }
+        public GtaCameras(ICameraLifetimeBindings bindings) { lifetime = new HandleLifetime(bindings, "Camera"); }
         public Vector3 GameplayPosition { [GamePrimitive] get => GameplayCamera.Position; }
         public Vector3 GameplayDirection { [GamePrimitive] get => GameplayCamera.Direction; }
         public Vector3 GameplayRotation { [GamePrimitive] get => GameplayCamera.Rotation; }
@@ -158,7 +165,7 @@ namespace GTAVMods.Game
         [GamePrimitive] public void SetActive(int camera, bool active) => new Camera(camera).IsActive = active;
         [GamePrimitive] public void StartRendering() => ScriptCameraDirector.StartRendering();
         [GamePrimitive] public void StopRendering() => ScriptCameraDirector.StopRendering();
-        [GamePrimitive] public void Delete(int camera) => new Camera(camera).Delete();
+        public void Delete(int camera) => lifetime.Delete(camera);
         [GamePrimitive] public void Shake(CameraShake shake, float amplitude) => GameplayCamera.Shake(shake, amplitude);
         [GamePrimitive] public void SetHeadingLimits(float minimum, float maximum) => GameplayCamera.SetThirdPersonCameraRelativeHeadingLimitsThisUpdate(minimum, maximum);
         [GamePrimitive] public void SetPitchLimits(float minimum, float maximum) => GameplayCamera.SetThirdPersonCameraRelativePitchLimitsThisUpdate(minimum, maximum);
@@ -166,11 +173,14 @@ namespace GTAVMods.Game
 
     public sealed class GtaRopes : IRopeAccess
     {
+        private readonly HandleLifetime lifetime;
+        public GtaRopes() : this(new GtaRopeLifetimeBindings()) { }
+        public GtaRopes(IRopeLifetimeBindings bindings) { lifetime = new HandleLifetime(bindings, "Rope"); }
         [GamePrimitive] public int Create(RopeType type, Vector3 position, Vector3 rotation, float length, float minLength, bool breakable)
             => GameHandles.Of(World.AddRope(type, position, rotation, length, minLength, breakable));
         [GamePrimitive] public void Connect(int rope, int firstEntity, Vector3 firstPosition, int secondEntity, Vector3 secondPosition, float length)
             => new Rope(rope).Connect(Entity.FromHandle(firstEntity), firstPosition, Entity.FromHandle(secondEntity), secondPosition, length);
         [GamePrimitive] public void ActivatePhysics(int rope) => new Rope(rope).ActivatePhysics();
-        [GamePrimitive] public void Delete(int rope) => new Rope(rope).Delete();
+        public void Delete(int rope) => lifetime.Delete(rope);
     }
 }

@@ -34,7 +34,13 @@ namespace ModUtilsTest {
         public Version FileVersion => new Version(1, 0, 1158, 16);
         public bool IsEnhanced => true;
         internal readonly List<int> Waits = new List<int>();
-        public void Wait(int milliseconds) { Waits.Add(milliseconds); }
+        internal int FrameMilliseconds = 1;
+        internal Action OnWait;
+        public void Wait(int milliseconds) {
+            Waits.Add(milliseconds);
+            GameTime = unchecked(GameTime + FrameMilliseconds);
+            OnWait?.Invoke();
+        }
         public void Yield() { throw new NotSupportedException(); }
         public void Notify(string text) { throw new NotSupportedException(); }
     }
@@ -115,6 +121,7 @@ namespace ModUtilsTest {
         public Vector3 Position { get; set; } = new Vector3(1, 2, 3);
         public string PlayerName => "Franklin";
         public int PlayerHandle => 7;
+        public int NetworkPlayerIndex { get; set; } = 37;
         internal int Compilations;
         internal CompilerParameters Parameters;
         internal string Source;
@@ -167,11 +174,15 @@ namespace ModUtilsTest {
         internal readonly ConsolePlatform Platform = new ConsolePlatform();
         internal readonly ConsoleEnvironment Environment = new ConsoleEnvironment();
         internal readonly GTAFuncs Functions;
+        internal readonly GameServices Game;
         internal ConsoleModel Model;
         internal ConsoleFixture(bool createConsole = true) {
             Native.Returns(Hash.IS_CONTROL_ENABLED, false);
             Native.Returns(Hash.END_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, .01f);
-            Functions = new GTAFuncs(new GameServices(Host, null, null, null, null, World, Camera, null, Native, Outputs), Platform);
+            Native.Returns(Hash.NETWORK_REQUEST_CONTROL_OF_ENTITY, true);
+            Native.Returns(Hash.NETWORK_REQUEST_CONTROL_OF_NETWORK_ID, true);
+            Game = new GameServices(Host, null, null, null, null, World, Camera, null, Native, Outputs);
+            Functions = new GTAFuncs(Game, Platform);
             if (createConsole) Model = new ConsoleModel(Platform, Environment, Functions) { Debug = false };
         }
         internal void Press(Keys key) { Model.KeyDown(new KeyEventArgs(key)); }
@@ -186,6 +197,6 @@ namespace DeveloperConsoleCodeEval {
     public class DeveloperConsoleCodeEval {
         public static object Result;
         public static int Evaluations;
-        public object EvalCode() { Evaluations++; return Result; }
+        public object EvalCode(ICommandEnvironment environment) { Evaluations++; return Result; }
     }
 }

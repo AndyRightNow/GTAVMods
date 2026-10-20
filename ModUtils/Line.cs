@@ -1,6 +1,5 @@
 ﻿using GTA.Math;
 using System.Drawing;
-using GTA.Native;
 using GTAVMods.Game;
 
 namespace ADModUtils
@@ -20,10 +19,9 @@ namespace ADModUtils
 
         private Color Color { get; }
 
-        public void Draw(INativeInvoker native)
+        public void Draw(IDrawingAccess drawing)
         {
-            native.Call(Hash.DRAW_LINE, Start.X, Start.Y, Start.Z, End.X, End.Y, End.Z,
-                Color.R, Color.G, Color.B, Color.A);
+            drawing.DrawLine(Start, End, Color);
         }
 
         public override string ToString()

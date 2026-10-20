@@ -50,11 +50,22 @@ function New-Fixture([string]$Name) {
             }
         }
     }
+    $testBinary = Join-Path $folder 'ModUtilsTest.dll'
+    $testPdb = Join-Path $folder 'ModUtilsTest.pdb'
+    $testSource = Join-Path $folder 'BehaviorTests.cs'
+    'test binary fixture' | Set-Content -LiteralPath $testBinary
+    'test symbols fixture' | Set-Content -LiteralPath $testPdb
+    'class BehaviorTests { void Check() { } }' | Set-Content -LiteralPath $testSource
     Write-Json @{
-        schemaVersion = 1; modules = $modules
+        schemaVersion = 2; modules = $modules
+        testAssembly = @{
+            name = 'ModUtilsTest'; assembly = $testBinary; assemblySha256 = Hash $testBinary
+            pdb = $testPdb; pdbSha256 = Hash $testPdb
+            sources = @(@{ path = $testSource; sha256 = Hash $testSource })
+        }
         boundaryPath = $boundary; boundarySha256 = Hash $boundary
     } (Join-Path $folder 'inventory.json')
-    Write-Json @{ schemaVersion = 1; startedUtc = $started.ToString('O'); inventorySha256 = Hash (Join-Path $folder 'inventory.json') } (Join-Path $folder 'run.json')
+    Write-Json @{ schemaVersion = 2; startedUtc = $started.ToString('O'); inventorySha256 = Hash (Join-Path $folder 'inventory.json') } (Join-Path $folder 'run.json')
     Write-Json $report (Join-Path $folder 'coverage.json')
     $timestamp = [long]([DateTime]::UtcNow - [DateTime]::new(1970, 1, 1)).TotalSeconds
     "<coverage timestamp='$timestamp'><packages><package name='Thor'/><package name='ModUtils'/><package name='DeveloperConsole'/></packages></coverage>" |
@@ -210,6 +221,39 @@ try {
     $folder = New-Fixture 'changed-source'
     Add-Content -LiteralPath (Join-Path $folder 'Thor.cs') -Value '// changed'
     Assert-Gate $folder 'Source changed'
+
+    foreach ($extension in @('dll', 'pdb')) {
+        $folder = New-Fixture "changed-test-$extension"
+        Add-Content -LiteralPath (Join-Path $folder "ModUtilsTest.$extension") -Value 'different test build'
+        Assert-Gate $folder 'Compiled test artifact changed'
+    }
+
+    $folder = New-Fixture 'changed-test-source'
+    Add-Content -LiteralPath (Join-Path $folder 'BehaviorTests.cs') -Value '// regression changed'
+    Assert-Gate $folder 'Test source changed'
+
+    $folder = New-Fixture 'missing-test-inventory'
+    $inventoryPath = Join-Path $folder 'inventory.json'
+    $inventory = Get-Content -Raw -LiteralPath $inventoryPath | ConvertFrom-Json
+    $inventory.testAssembly = $null
+    Write-Json $inventory $inventoryPath
+    $runPath = Join-Path $folder 'run.json'
+    $run = Get-Content -Raw -LiteralPath $runPath | ConvertFrom-Json
+    $run.inventorySha256 = Hash $inventoryPath
+    Write-Json $run $runPath
+    Assert-Gate $folder 'requires the test assembly'
+
+    $folder = New-Fixture 'old-schema'
+    $inventoryPath = Join-Path $folder 'inventory.json'
+    $inventory = Get-Content -Raw -LiteralPath $inventoryPath | ConvertFrom-Json
+    $inventory.schemaVersion = 1
+    Write-Json $inventory $inventoryPath
+    $runPath = Join-Path $folder 'run.json'
+    $run = Get-Content -Raw -LiteralPath $runPath | ConvertFrom-Json
+    $run.schemaVersion = 1
+    $run.inventorySha256 = Hash $inventoryPath
+    Write-Json $run $runPath
+    Assert-Gate $folder 'Unsupported coverage inventory format'
 
     $folder = New-Fixture 'missing-report'
     Remove-Item -LiteralPath (Join-Path $folder 'coverage.json')

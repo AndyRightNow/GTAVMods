@@ -24,14 +24,14 @@ namespace ModUtilsTest
             public int PathfinderDisposals;
             public long DroppedRecords = 13;
             public long Time { get; set; }
-            public Fixture()
+            public Fixture(Func<long> timestamp = null, long frequency = 1000)
             {
                 Game.AddEntity(10);
                 Game.Host.FileVersion = new Version(2, 0, 1158, 17);
                 var diagnostics = new GameplayDiagnostics(Game.Services, Log, () => Time, () => 0);
                 Controller = new ThorController(Game.Services, Ability, diagnostics, Log,
                     () => { PathfinderDisposals++; if (ThrowPathfinderCleanup) throw new InvalidOperationException("pathfinder"); },
-                    () => ConsoleOpen, () => Time, 1000,
+                    () => ConsoleOpen, timestamp ?? (() => Time), frequency,
                     new ThorSessionInfo("scripts/Logs/Thor-test.jsonl", "2026-10-20T00:00:00.0000000Z", "3.9.0.0"),
                     () => DroppedRecords);
             }
@@ -43,6 +43,10 @@ namespace ModUtilsTest
         public void PlayerChangesAndDeathDetachBeforeReapplyingAndMissingPlayersAreIgnored()
         {
             var f = new Fixture();
+            f.Game.AddEntity(1);
+            f.Game.Host.PlayerPed = 1;
+            f.Ability.ApplyOn(99);
+            f.Ability.Calls.Clear();
             f.Controller.Start();
             f.Controller.Tick();
             f.Controller.Tick();
@@ -57,14 +61,24 @@ namespace ModUtilsTest
             f.Controller.Tick();
             f.Game.Host.PlayerPed = 0;
             f.Controller.Tick();
-            CollectionAssert.AreEqual(new[] { "apply:10", "tick:False", "tick:False", "remove", "apply:20", "tick:False", "remove" }, f.Ability.Calls);
+            CollectionAssert.AreEqual(new[] { "remove", "apply:1", "tick:False", "tick:False", "remove", "apply:20", "tick:False", "remove" }, f.Ability.Calls,
+                "Even the first observed player must replace an attachment whose ownership is unknown to this controller.");
             Assert.AreEqual("1.0.1158.17", f.Log.Last("session.start").Data["executableVersion"]);
             var startup = f.Log.Last("session.start");
             Assert.AreEqual("scripts/Logs/Thor-test.jsonl", startup.Data["logPath"]);
             Assert.AreEqual("2026-10-20T00:00:00.0000000Z", startup.Data["buildUtc"]);
             Assert.AreEqual("3.9.0.0", startup.Data["apiVersion"]);
             Assert.AreEqual("2.0.1158.17", startup.Data["shvdneVersion"]);
+            Assert.AreEqual("INFO", startup.Level);
+            Assert.AreEqual(typeof(ThorController).Assembly.GetName().Version.ToString(), startup.Data["modVersion"]);
+            Assert.AreEqual(Environment.Version.ToString(), startup.Data["runtime"]);
+            Assert.AreEqual(Environment.Is64BitProcess, startup.Data["is64Bit"]);
+            Assert.AreEqual(true, startup.Data["enhanced"]);
             Assert.HasCount(1, f.Log.Records.Where(record => record.Name == "compatibility.baseline").ToArray());
+            Assert.AreEqual("WARN", f.Log.Last("compatibility.baseline").Level);
+            Assert.AreEqual("1.0.1158.13", f.Log.Last("compatibility.baseline").Data["assessed"]);
+            var notice = f.Game.Calls.Single(call => call.Name == "host.notify");
+            Assert.IsFalse(string.IsNullOrWhiteSpace((string)notice.Arguments[0]));
         }
 
         [TestMethod]
@@ -96,9 +110,17 @@ namespace ModUtilsTest
             f.Chord(Keys.F); f.Chord(Keys.F); f.Controller.Tick();
             Assert.HasCount(1, f.Ability.Calls.Where(call => call == "remove").ToArray());
             Assert.IsTrue(f.Game.Entity(10).Weapons.Contains(WeaponHash.Parachute));
+            CollectionAssert.AreEqual(new object[] { 10, WeaponHash.Parachute, 1, false, false },
+                f.Game.Calls.Single(call => call.Name == "weapon.give").Arguments,
+                "Disabling supplies a parachute without equipping it or changing loaded ammo.");
+            Assert.AreEqual("INFO", f.Log.Last("ability.disabled").Level);
             Assert.HasCount(1, f.Ability.Calls.Where(call => call == "tick:False").ToArray());
             f.Chord(Keys.O); f.Controller.Tick();
             Assert.AreEqual("Ctrl+A+O", f.Log.Last("ability.enabled").Data["reason"]);
+            Assert.AreEqual("INFO", f.Log.Last("ability.enabled").Level);
+            var notices = f.Game.Calls.Where(call => call.Name == "host.notify").ToArray();
+            Assert.HasCount(2, notices);
+            Assert.IsTrue(notices.All(call => !string.IsNullOrWhiteSpace((string)call.Arguments[0])));
             Assert.HasCount(2, f.Ability.Calls.Where(call => call == "apply:10").ToArray());
             Assert.IsFalse(f.Ability.Calls.Contains("reset"), "An ordinary disable/enable preserves the dropped hammer.");
         }
@@ -127,8 +149,15 @@ namespace ModUtilsTest
             f.Controller.Tick(); f.Controller.Tick();
             Assert.HasCount(1, f.Ability.Calls.Where(call => call == "tick:False").ToArray());
             Assert.AreEqual("ERROR", f.Log.Last("tick.exception").Level);
+            Assert.AreEqual("idle", f.Log.Last("tick.exception").Data["state"]);
             Assert.IsTrue(f.Log.Records.Any(record => record.Name == "diagnostics.exception" && record.Interval == null));
             Assert.IsTrue(f.Log.Records.Any(record => record.Name == "diagnostics.exception" && record.Interval == 10000));
+            foreach (var diagnostic in f.Log.Records.Where(record => record.Name == "diagnostics.exception"))
+            {
+                Assert.AreEqual("WARN", diagnostic.Level);
+                StringAssert.Contains((string)diagnostic.Data["exception"], "log unavailable");
+            }
+            Assert.IsFalse(string.IsNullOrWhiteSpace((string)f.Game.Calls.Single(call => call.Name == "host.notify").Arguments[0]));
             f.Log.FailOn = null; f.Ability.Failure = null; f.Ability.Calls.Clear();
             f.Chord(Keys.O); f.Controller.Tick();
             CollectionAssert.AreEqual(new[] { "remove", "reset", "apply:10", "tick:False" }, f.Ability.Calls);
@@ -202,6 +231,7 @@ namespace ModUtilsTest
             Assert.IsFalse(f.Ability.IsAttachedToPed);
             Assert.AreEqual(200, f.Player.MaxHealth);
             StringAssert.Contains((string)f.Log.Last("tick.exception").Data["exception"], setupFailure.Message);
+            Assert.AreEqual("exception", f.Log.Last("gameplay.snapshot").Data["reason"]);
             Assert.IsFalse(f.Game.Calls.Any(call => call.Name == "blip.create"));
 
             f.Game.BeforeCall = call =>
@@ -257,6 +287,10 @@ namespace ModUtilsTest
             Assert.AreEqual(1, f.PathfinderDisposals);
             Assert.HasCount(2, f.Log.Records.Where(record => record.Name == "cleanup.exception").ToArray());
             Assert.AreEqual("session.end", f.Log.Records.Last().Name);
+            Assert.AreEqual("session.stopping", f.Log.Records.First().Name);
+            Assert.AreEqual("INFO", f.Log.Last("session.stopping").Level);
+            Assert.AreEqual("script-aborted-or-reloaded", f.Log.Last("session.stopping").Data["reason"]);
+            Assert.AreEqual("INFO", f.Log.Last("session.end").Level);
             Assert.AreEqual(13L, f.Log.Last("session.end").Data["droppedLogRecords"]);
         }
 
@@ -264,17 +298,32 @@ namespace ModUtilsTest
         public void GameplayKeysAreThrottledAndManualSnapshotsAreBestEffort()
         {
             var f = new Fixture();
+            f.Game.Host.GameTime = 4567;
             foreach (Keys key in new[] { Keys.H, Keys.T, Keys.U, Keys.Y, Keys.Z, Keys.R, Keys.F9 })
             {
                 f.Key(key | Keys.Shift);
                 var record = f.Log.Last("input." + key);
                 Assert.AreEqual(250, record.Interval);
+                Assert.AreEqual("INFO", record.Level);
+                Assert.AreEqual(false, record.Data["control"]);
                 Assert.AreEqual(true, record.Data["shift"]);
+                Assert.AreEqual(4567, record.Data["gameTime"]);
             }
             Assert.AreEqual("manual-F9", f.Log.Last("gameplay.snapshot").Data["reason"]);
             f.Log.FailOn = "gameplay.snapshot";
             f.Key(Keys.F9);
             Assert.AreEqual("WARN", f.Log.Last("diagnostics.exception").Level);
+            StringAssert.Contains((string)f.Log.Last("diagnostics.exception").Data["exception"], "log unavailable");
+        }
+
+        [TestMethod]
+        public void TickDurationConvertsTimestampDifferenceToMilliseconds()
+        {
+            var timestamps = new System.Collections.Generic.Queue<long>(new[] { 1000000L, 1000050L });
+            var f = new Fixture(() => timestamps.Dequeue(), 2000);
+            f.Controller.Tick();
+            Assert.AreEqual(25.0, f.Log.Last("performance").Data["averageTickMs"]);
+            Assert.AreEqual(25.0, f.Log.Last("performance").Data["maxTickMs"]);
         }
 
         [TestMethod]

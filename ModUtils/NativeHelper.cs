@@ -1,7 +1,6 @@
 using GTA;
 using GTAVMods.Game;
 using GTA.Math;
-using GTA.Native;
 using System.Collections.Generic;
 using System.Drawing;
 
@@ -20,6 +19,7 @@ namespace ADModUtils
     public class NativeHelper
     {
         private readonly GameServices game;
+        private readonly IEventLog log;
 
         public NativeHelper(
             GameServices game,
@@ -33,8 +33,27 @@ namespace ADModUtils
             int meleeHitPedDamage,
             float meleeHitForce
         )
+            : this(game, animationDictNames, animationNames, animationWaitTime, animationWithAngles,
+                animationWithAnglesAndIncompletePlusOrMinusSign, particleEffectSetNames, particleEffectNames,
+                meleeHitPedDamage, meleeHitForce, Logger.Default)
+        {
+        }
+
+        public NativeHelper(
+            GameServices game,
+            string[] animationDictNames,
+            string[] animationNames,
+            AnimationWaitTimeDict animationWaitTime,
+            bool[] animationWithAngles,
+            bool[] animationWithAnglesAndIncompletePlusOrMinusSign,
+            string[] particleEffectSetNames,
+            string[] particleEffectNames,
+            int meleeHitPedDamage,
+            float meleeHitForce,
+            IEventLog log)
         {
             this.game = game;
+            this.log = log;
             AnimationDictNames = animationDictNames;
             AnimationNames = animationNames;
             AnimationWaitTime = animationWaitTime;
@@ -97,12 +116,12 @@ namespace ADModUtils
                 game.Peds.ApplyDamage(ped, (int)(MeleeHitPedDamage * powerLevel / 100.0f));
             }
             game.Entities.ApplyForce(ent, direction * MeleeHitForce * powerLevel / 100.0f);
-            game.Native.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, ent);
+            game.Gameplay.ClearLastDamage(ent);
         }
 
         public void ClearPlayerAnimation(int ped, string dictName, string animName)
         {
-            game.Native.Call(Hash.STOP_ANIM_TASK, ped, dictName, animName, 3);
+            game.Animations.Stop(ped, dictName, animName, 3f);
         }
 
         public Bone GetLastDamagedBone(int ped)
@@ -116,105 +135,103 @@ namespace ADModUtils
             {
                 return;
             }
-            game.Native.Call(Hash.REQUEST_ANIM_DICT, dictName);
+            game.Animations.RequestDictionary(dictName);
             int started = game.Host.GameTime;
-            while (!game.Native.Call<bool>(Hash.HAS_ANIM_DICT_LOADED, dictName))
+            while (!game.Animations.IsDictionaryLoaded(dictName))
             {
                 if (unchecked(game.Host.GameTime - started) >= 1000)
                 {
-                    Logger.Throttled("WARN", "animation.timeout." + dictName, 10000, "dictionary", dictName, "animation", animName);
+                    log.Throttled("WARN", "animation.timeout." + dictName, 10000, "dictionary", dictName, "animation", animName);
                     return;
                 }
                 game.Host.Yield();
             }
 
-            game.Native.Call(Hash.TASK_PLAY_ANIM, ped, dictName, animName, 8.0f, 1.0f, duration, (int)flag, -8.0f, 0, 0, 0);
+            game.Animations.Play(ped, dictName, animName, flag, duration, 8f, 1f, -8f);
         }
 
         public bool IsEntityPlayingAnim(int ent, string dictName, string animName)
         {
-            return game.Native.Call<bool>(Hash.IS_ENTITY_PLAYING_ANIM, ent, dictName, animName, 3);
+            return game.Animations.IsPlaying(ent, dictName, animName);
         }
 
         public void SetEntityVelocity(int entity, Vector3 velocity)
         {
-            game.Native.Call(Hash.SET_ENTITY_VELOCITY, entity, velocity.X, velocity.Y, velocity.Z);
+            game.Gameplay.SetVelocity(entity, velocity);
         }
 
         public int CreateWeaponObject(WeaponHash weaponHash, int amountCount, Vector3 position, bool showWorldModel = true, float scale = 1.0f)
         {
-            Logger.Event("INFO", "asset.weapon.request", "weapon", weaponHash.ToString(), "position", position.ToString(), "scale", scale);
+            log.Event("INFO", "asset.weapon.request", "weapon", weaponHash.ToString(), "position", position.ToString(), "scale", scale);
             if (!game.Weapons.RequestAsset(weaponHash, 3000))
                 throw new System.InvalidOperationException("Could not load weapon asset " + weaponHash);
-            // Supply the complete current native signature; the seventh parameter is scale.
-            var prop = game.Native.Call<int>(Hash.CREATE_WEAPON_OBJECT, (int)weaponHash, amountCount,
-                position.X, position.Y, position.Z, showWorldModel, scale, false, false, 0);
-            Logger.Event(prop == 0 ? "ERROR" : "INFO", "asset.weapon.created", "weapon", weaponHash.ToString(), "handle", prop);
+            var prop = game.Gameplay.CreateWeaponObject(weaponHash, amountCount, position, showWorldModel, scale);
+            log.Event(prop == 0 ? "ERROR" : "INFO", "asset.weapon.created", "weapon", weaponHash.ToString(), "handle", prop);
             return prop;
         }
 
         public void DrawLine(Vector3 start, Vector3 end, Color color)
         {
-            game.Native.Call(Hash.DRAW_LINE, start.X, start.Y, start.Z, end.X, end.Y, end.Z, color.R, color.G, color.B, color.A);
+            game.Drawing.DrawLine(start, end, color);
         }
 
         public bool IsPed(int entity)
         {
-            return game.Native.Call<bool>(Hash.IS_ENTITY_A_PED, entity);
+            return game.Gameplay.IsPed(entity);
         }
 
         public bool IsVehicle(int entity)
         {
-            return game.Native.Call<bool>(Hash.IS_ENTITY_A_VEHICLE, entity);
+            return game.Gameplay.IsVehicle(entity);
         }
 
         public void SetPedWeaponVisible(int ped, bool visible)
         {
-            game.Native.Call(Hash.SET_PED_CURRENT_WEAPON_VISIBLE, ped, visible, 0, 0, 0);
+            game.Gameplay.SetWeaponVisible(ped, visible);
         }
 
         private bool BeforePlayingParticleFx(string effectSetName)
         {
-            game.Native.Call(Hash.REQUEST_NAMED_PTFX_ASSET, effectSetName);
-            if (!game.Native.Call<bool>(Hash.HAS_NAMED_PTFX_ASSET_LOADED, effectSetName)) return false;
-            game.Native.Call(Hash.USE_PARTICLE_FX_ASSET, effectSetName);
+            game.Particles.RequestAsset(effectSetName);
+            if (!game.Particles.IsAssetLoaded(effectSetName)) return false;
+            game.Particles.UseAsset(effectSetName);
             return true;
         }
 
         public void PlayParticleFx(string effectSetName, string effect, int entity, float scale = 1.0f)
         {
             if (!BeforePlayingParticleFx(effectSetName)) return;
-            game.Native.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY, effect, entity, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
+            game.Particles.PlayOnEntity(effect, entity, Vector3.Zero, Vector3.Zero, scale);
         }
 
         public void PlayParticleFx(string effectSetName, string effect, int entity, Vector3 pos, float scale = 1.0f)
         {
             if (!BeforePlayingParticleFx(effectSetName)) return;
-            game.Native.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY, effect, entity, pos.X, pos.Y, pos.Z, 0.0f, 0.0f, 0.0f, scale, 0, 0, 0);
+            game.Particles.PlayOnEntity(effect, entity, pos, Vector3.Zero, scale);
         }
 
         public void PlayParticleFx(string effectSetName, string effect, int ped, Bone boneId, float scale = 1.0f)
         {
             if (!BeforePlayingParticleFx(effectSetName)) return;
-            game.Native.Call(Hash.START_PARTICLE_FX_NON_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, (int)boneId, scale, 0, 0, 0);
+            game.Particles.PlayOnPedBone(effect, ped, boneId, Vector3.Zero, Vector3.Zero, scale);
         }
 
         public void PlayParticleFx(string effectSetName, string effect, Vector3 pos, Vector3 rot, float scale = 1.0f)
         {
             if (!BeforePlayingParticleFx(effectSetName)) return;
-            game.Native.Call(Hash.START_PARTICLE_FX_NON_LOOPED_AT_COORD, effect, pos.X, pos.Y, pos.Z, rot.X, rot.Y, rot.Z, scale, 0, 0, 0);
+            game.Particles.PlayAt(effect, pos, rot, scale);
         }
 
         public int PlayParticleFxLooped(string effectSetName, string effect, int ped, Bone boneId, float scale = 1.0f)
         {
             if (!BeforePlayingParticleFx(effectSetName)) return 0;
-            return game.Native.Call<int>(Hash.START_PARTICLE_FX_LOOPED_ON_PED_BONE, effect, ped, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, (int)boneId, scale, 0, 0, 0);
+            return game.Particles.StartLoopedOnPedBone(effect, ped, boneId, Vector3.Zero, Vector3.Zero, scale);
         }
 
         public int PlayParticleFxLooped(string effectSetName, string effect, Vector3 pos, Vector3 rot, float scale = 1.0f)
         {
             if (!BeforePlayingParticleFx(effectSetName)) return 0;
-            return game.Native.Call<int>(Hash.START_PARTICLE_FX_LOOPED_AT_COORD, effect, pos.X, pos.Y, pos.Z, rot.X, rot.Y, rot.Z, scale, 0, 0, 0);
+            return game.Particles.StartLoopedAt(effect, pos, rot, scale);
         }
 
         public void SetObjectPhysicsParams(
@@ -228,38 +245,28 @@ namespace ADModUtils
             float rotationDragCoefficient2 = 0.0f,
             float rotationDragCoefficient3 = 0.0f)
         {
-            game.Native.Call(
-                Hash.SET_OBJECT_PHYSICS_PARAMS,
-                entity,
-                mass,
-                gravity,
-                dragCoefficient1,
-                dragCoefficient2,
-                dragCoefficient3,
-                rotationDragCoefficient1,
-                rotationDragCoefficient2,
-                rotationDragCoefficient3,
-                0.0f
-            );
+            game.Gameplay.SetObjectPhysics(entity, mass, gravity,
+                new Vector3(dragCoefficient1, dragCoefficient2, dragCoefficient3),
+                new Vector3(rotationDragCoefficient1, rotationDragCoefficient2, rotationDragCoefficient3));
         }
 
         public void SetPedToRagdoll(int ped, RagdollType ragdollType, int timeToStayInRagdoll, int timeToStandUp)
         {
             game.Peds.SetCanRagdoll(ped, true);
-            game.Native.Call(Hash.SET_PED_TO_RAGDOLL, ped, timeToStayInRagdoll, timeToStandUp, (int)ragdollType, 0, 0, 0);
+            game.Gameplay.SetRagdoll(ped, (GTA.RagdollType)ragdollType, timeToStayInRagdoll, timeToStandUp);
         }
 
         public void DrawLines(ref List<Line> lines)
         {
             foreach (var line in lines)
             {
-                line.Draw(game.Native);
+                line.Draw(game.Drawing);
             }
         }
 
         public void DrawBox(Vector3 a, Vector3 b, Color col)
         {
-            game.Native.Call(Hash.DRAW_BOX, a.X, a.Y, a.Z, b.X, b.Y, b.Z, col.R, col.G, col.B, col.A);
+            game.Drawing.DrawBox(a, b, col);
         }
 
         public static IntersectFlags IntersectAllObjects

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization.Json;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using ADModUtils;
@@ -74,7 +76,7 @@ namespace ModUtilsTest
                 { "text", text }, { "yes", true }, { "no", false }, { "missing", null },
                 { "byte", (byte)2 }, { "sbyte", (sbyte)-2 }, { "short", (short)-3 }, { "ushort", ushort.MaxValue }, { "int", 4 }, { "long", 5000000000L },
                 { "uint", uint.MaxValue }, { "ulong", ulong.MaxValue }, { "decimal", 1.25m },
-                { "float", 0.5f }, { "double", -1.75d }, { "nan", float.NaN },
+                { "float", 0.5f }, { "double", -1.75d }, { "preciseDouble", 1.2345678901234567d }, { "nan", float.NaN },
                 { "positiveInfinity", double.PositiveInfinity }, { "negativeInfinity", double.NegativeInfinity }
             };
             CultureInfo original = CultureInfo.CurrentCulture;
@@ -93,10 +95,18 @@ namespace ModUtilsTest
             Assert.AreEqual("NaN", LogJson.Text(record, "data/nan"));
             Assert.AreEqual("Infinity", LogJson.Text(record, "data/positiveInfinity"));
             Assert.AreEqual("-Infinity", LogJson.Text(record, "data/negativeInfinity"));
+            foreach (string name in new[] { "nan", "positiveInfinity", "negativeInfinity" })
+                Assert.AreEqual("string", record.SelectSingleNode("data/" + name).Attributes["type"].Value,
+                    "JSON has no nonfinite numeric literals; these diagnostics must remain strings.");
+            Assert.AreEqual((double)data["preciseDouble"],
+                double.Parse(LogJson.Text(record, "data/preciseDouble"), CultureInfo.InvariantCulture),
+                "Finite double values must survive serialization without losing significant digits.");
             Assert.AreEqual("2026-10-20T01:02:03.0000000Z", LogJson.Text(record, "utc"));
             Assert.AreEqual("123", LogJson.Text(record, "elapsedMs"));
             Assert.AreEqual("1", LogJson.Text(record, "sequence"));
             Assert.AreEqual("0", LogJson.Text(record, "droppedRecords"));
+            Assert.AreEqual(Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture), LogJson.Text(record, "process"));
+            Assert.AreEqual(Thread.CurrentThread.ManagedThreadId.ToString(CultureInfo.InvariantCulture), LogJson.Text(record, "thread"));
             Assert.IsTrue(Guid.TryParseExact(LogJson.Text(record, "session"), "N", out _));
         }
 
@@ -151,6 +161,19 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
+        public void LiveLogReaderDoesNotPreventAppendingTheNextRecord()
+        {
+            string path = Path.Combine(folder, "Thor-live.jsonl");
+            File.WriteAllText(path, "first\n");
+            using (var reader = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                new FileLogStorage().Append(path, Encoding.UTF8.GetBytes("second\n"));
+                using (var text = new StreamReader(reader))
+                    Assert.AreEqual("first\nsecond\n", text.ReadToEnd());
+            }
+        }
+
+        [TestMethod]
         public void FailedStorageBacksOffUntilExactDeadlineThenReportsLoss()
         {
             var storage = new MemoryLogStorage { BeforeCreate = path => throw new UnauthorizedAccessException("denied") };
@@ -181,6 +204,37 @@ namespace ModUtilsTest
             Assert.AreEqual(3, attempts);
             CollectionAssert.AreEqual(new[] { "log.recovered", "kept" }, storage.Records.Select(record => LogJson.Text(record, "event")).ToArray());
             Assert.AreEqual(0L, log.DroppedRecords);
+            Assert.AreEqual(2, storage.Creates);
+            string recovered = log.FilePath;
+            log.Write("INFO", "next");
+            Assert.AreEqual(recovered, log.FilePath);
+            Assert.AreEqual(2, storage.Creates, "A recovered session must not rescan retention on every write.");
+            Assert.AreEqual("next", LogJson.Text(storage.Records.Last(), "event"));
+        }
+
+        [TestMethod]
+        public void RotationOccursOnlyWhenTheNextUtf8RecordWouldExceedTheLimit()
+        {
+            var storage = new MemoryLogStorage();
+            var log = new SessionLog(folder, folder, storage, new ManualLogClock(), 4096);
+            var payload = new Dictionary<string, object> { { "message", "" } };
+            log.Write("INFO", "boundary", payload);
+            string first = log.FilePath;
+            int emptyRecordBytes = Encoding.UTF8.GetByteCount(storage.Files[first]);
+            // Each accented character takes two UTF-8 bytes. The fixed-width session IDs
+            // and one-digit sequence numbers leave the two record envelopes the same size.
+            payload["message"] = new string('é', (4096 - 2 * emptyRecordBytes) / 2);
+            log.Write("INFO", "boundary", payload);
+            Assert.AreEqual(first, log.FilePath, "Exactly filling the limit must not rotate early.");
+            Assert.AreEqual(4096, Encoding.UTF8.GetByteCount(storage.Files[first]));
+            Assert.AreEqual(1, storage.Creates, "Retention preparation belongs to each file, not each record.");
+            payload["message"] = "";
+            log.Write("INFO", "boundary", payload);
+            Assert.AreNotEqual(first, log.FilePath);
+            Assert.AreEqual(2, storage.Creates);
+            Assert.HasCount(2, storage.Files);
+            Assert.AreEqual(4096, Encoding.UTF8.GetByteCount(storage.Files[first]));
+            Assert.AreEqual("3", LogJson.Text(LogJson.Parse(storage.Files[log.FilePath]), "sequence"));
         }
 
         [TestMethod]
@@ -242,16 +296,16 @@ namespace ModUtilsTest
         public void DiagnosticLoggerThrottlesEachNameAndReleasesAtExactInterval()
         {
             var storage = new MemoryLogStorage();
-            var clock = new ManualLogClock();
+            var clock = new ManualLogClock { ElapsedMilliseconds = 5000 };
             var session = new SessionLog(folder, folder, storage, clock);
             var log = new DiagnosticLog(session, () => clock.ElapsedMilliseconds);
             var printed = new List<string>();
             log.AttachConsole(printed.Add);
             Assert.AreEqual("Thor diagnostics: " + log.FilePath, printed.Single());
             log.Throttled("WARN", "repeat", 1000, "value", 1);
-            clock.ElapsedMilliseconds = 999; log.Throttled("WARN", "repeat", 1000, "value", 2);
+            clock.ElapsedMilliseconds = 5999; log.Throttled("WARN", "repeat", 1000, "value", 2);
             log.Throttled("WARN", "other", 1000);
-            clock.ElapsedMilliseconds = 1000; log.Throttled("WARN", "repeat", 1000, "value", 3);
+            clock.ElapsedMilliseconds = 6000; log.Throttled("WARN", "repeat", 1000, "value", 3);
             log.Event("INFO", "fields", "value", 1, "value", 2, "unpaired");
             log.LogConsole("INFO", "hello", "world");
             log.AttachConsole(null); log.LogConsole("INFO", "file-only");
@@ -297,6 +351,29 @@ namespace ModUtilsTest
                 }
                 finally { Logger.Init(null); }
             }
+        }
+
+        [TestMethod]
+        public void DefaultLoggerUsesScriptLogsAndRecoversInTheApplicationSpecificFallback()
+        {
+            string scripts = Path.Combine(folder, "scripts");
+            string localData = Path.Combine(folder, "local-data");
+            string primary = Path.Combine(scripts, "Logs");
+            string fallback = Path.Combine(localData, "GTAVMods", "Logs");
+            var storage = new MemoryLogStorage();
+            var clock = new ManualLogClock { ElapsedMilliseconds = 4000 };
+            var log = Logger.CreateDefault(scripts, localData, storage, clock);
+            Assert.AreEqual(primary, Path.GetDirectoryName(log.FilePath));
+            storage.BeforeCreate = path => { if (path == primary) throw new UnauthorizedAccessException("read-only scripts"); };
+            log.Throttled("WARN", "retry", 1000);
+            Assert.AreEqual(fallback, Path.GetDirectoryName(log.FilePath));
+            clock.ElapsedMilliseconds = 4999;
+            log.Throttled("WARN", "retry", 1000);
+            clock.ElapsedMilliseconds = 5000;
+            log.Throttled("WARN", "retry", 1000);
+            CollectionAssert.AreEqual(new[] { "log.recovered", "retry", "retry" },
+                storage.Records.Select(record => LogJson.Text(record, "event")).ToArray());
+            Assert.AreEqual(0L, log.DroppedRecords);
         }
     }
 }

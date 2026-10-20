@@ -23,7 +23,8 @@ namespace ModUtilsTest {
         [TestMethod]
         public void InitialTickCreatesHiddenProtectedHelpersAndMaintainsVelocityCollisionAndDriver() {
             var game = CreateWorld();
-            var finder = new Finder(game.Services);
+            var log = new RecordingLog();
+            var finder = new Finder(game.Services, log);
             Assert.IsNull(finder.Position);
             Assert.AreEqual(Vector3.Zero, finder.GetTargetVelocity(Vector3.One));
             Assert.IsFalse(finder.IsRelatedEntity(0), "Zero is never an owned engine entity.");
@@ -31,7 +32,11 @@ namespace ModUtilsTest {
             finder.SetNoCollision(20);
             finder.Dispose();
             Assert.AreEqual(0, game.Calls.Count);
+            Assert.IsEmpty(log.Records, "No lifecycle event is emitted before resources exist.");
             finder.OnTick(20);
+            Assert.AreEqual("INFO", log.Last("pathfinder.created").Level);
+            Assert.AreEqual(40, log.Last("pathfinder.created").Data["driver"]);
+            Assert.AreEqual(30, log.Last("pathfinder.created").Data["vehicle"]);
             Assert.AreEqual(new Vector3(500, 500, 500), finder.Position);
             Assert.IsTrue(finder.IsRelatedEntity(30));
             Assert.IsTrue(finder.IsRelatedEntity(40));
@@ -77,6 +82,11 @@ namespace ModUtilsTest {
             var deletes = game.Calls.Count(c => c.Name == "entity.delete");
             finder.Dispose();
             Assert.AreEqual(deletes, game.Calls.Count(c => c.Name == "entity.delete"));
+            CollectionAssert.AreEqual(new[] { "pathfinder.created", "pathfinder.dispose" },
+                log.Records.Select(record => record.Name).ToArray());
+            Assert.AreEqual("INFO", log.Last("pathfinder.dispose").Level);
+            Assert.AreEqual(40, log.Last("pathfinder.dispose").Data["driver"]);
+            Assert.AreEqual(30, log.Last("pathfinder.dispose").Data["vehicle"]);
         }
 
         [TestMethod]
@@ -107,6 +117,9 @@ namespace ModUtilsTest {
             game.Calls.Clear();
             finder.UpdateCurrentTarget(50);
             Assert.AreEqual(0, game.Calls.Count);
+            finder.UpdateCurrentTarget(0);
+            finder.UpdateCurrentTarget(50);
+            Assert.AreEqual(0, game.Calls.Count, "A missing target must preserve the currently followed ped.");
             finder.UpdateCurrentTarget(51);
             Assert.AreEqual(1, game.Calls.Count(c => c.Name == "ped.clearTasks"));
             game.Calls.Clear();
@@ -190,33 +203,55 @@ namespace ModUtilsTest {
         [TestMethod]
         [DataRow(30)]
         [DataRow(40)]
-        public void FailedHelperDeletionStillReleasesTheOtherHelperAndRetainsOnlyFailedOwnership(int failedHandle) {
+        [DataRow(0)]
+        public void FailedHelperDeletionsRetireRemainingOwnershipBeforeRecreation(int failedHandle) {
             var game = CreateWorld();
-            var finder = new Finder(game.Services);
+            var failedHandles = failedHandle == 0 ? new[] { 40, 30 } : new[] { failedHandle };
+            var log = new RecordingLog();
+            var finder = new Finder(game.Services, log);
             finder.OnTick(20);
             game.Calls.Clear();
             var failure = new InvalidOperationException("helper deletion failure");
             game.BeforeCall = call => {
-                if (call.Name == "entity.delete" && (int)call.Arguments[0] == failedHandle) throw failure;
+                if (call.Name == "entity.delete" && failedHandles.Contains((int)call.Arguments[0])) throw failure;
             };
 
             var error = Assert.ThrowsExactly<AggregateException>(() => finder.Dispose());
 
-            Assert.AreSame(failure, error.Flatten().InnerExceptions.Single());
+            Assert.HasCount(failedHandles.Length, error.Flatten().InnerExceptions);
+            foreach (var actual in error.Flatten().InnerExceptions) Assert.AreSame(failure, actual);
             CollectionAssert.AreEqual(new[] { 40, 30 },
                 game.Calls.Where(call => call.Name == "entity.delete").Select(call => (int)call.Arguments[0]).ToArray());
-            Assert.IsTrue(finder.IsRelatedEntity(failedHandle));
-            var releasedHandle = failedHandle == 30 ? 40 : 30;
-            Assert.IsFalse(finder.IsRelatedEntity(releasedHandle));
-            Assert.IsFalse(game.Observations[releasedHandle].Exists);
+            foreach (int handle in new[] { 40, 30 }) {
+                Assert.AreEqual(failedHandles.Contains(handle), finder.IsRelatedEntity(handle));
+                Assert.AreEqual(failedHandles.Contains(handle), game.Observations[handle].Exists);
+            }
             game.BeforeCall = null;
             game.Calls.Clear();
-            finder.Dispose();
-            finder.Dispose();
-            Assert.IsFalse(game.Observations[failedHandle].Exists);
-            Assert.IsFalse(finder.IsRelatedEntity(failedHandle));
-            CollectionAssert.AreEqual(new[] { failedHandle },
+            log.Records.Clear();
+            game.AddEntity(31);
+            game.AddEntity(41);
+            game.World.Vehicles.Enqueue(31);
+            game.World.Drivers.Enqueue(41);
+            finder.OnTick(20);
+            foreach (int handle in new[] { 40, 30 }) {
+                Assert.IsFalse(game.Observations[handle].Exists);
+                Assert.IsFalse(finder.IsRelatedEntity(handle));
+            }
+            CollectionAssert.AreEqual(failedHandles,
                 game.Calls.Where(call => call.Name == "entity.delete").Select(call => (int)call.Arguments[0]).ToArray());
+            Assert.AreEqual("entity.delete", game.Calls.First().Name,
+                "A retained helper must be retired before new resources overwrite its handle.");
+            Assert.AreEqual(failedHandles.Contains(40) ? 40 : 0, log.Last("pathfinder.dispose").Data["driver"]);
+            Assert.AreEqual(failedHandles.Contains(30) ? 30 : 0, log.Last("pathfinder.dispose").Data["vehicle"]);
+            Assert.IsTrue(finder.IsRelatedEntity(31));
+            Assert.IsTrue(finder.IsRelatedEntity(41));
+            finder.Dispose();
+            game.Calls.Clear();
+            log.Records.Clear();
+            finder.Dispose();
+            Assert.IsEmpty(game.Calls);
+            Assert.IsEmpty(log.Records);
         }
 
         [TestMethod]

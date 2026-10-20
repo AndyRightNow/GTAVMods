@@ -22,7 +22,7 @@ namespace Thor
         public Mjolnir(GameServices game, NativeHelper effects, Random random,
             PathFinder.PathFinder pathfinder, WeaponCamera camera, Thunder thunder,
             IAudioPlaybackFactory audio, IEventLog log)
-            : base(WeaponHash.Hammer, game, effects, random, pathfinder, camera, thunder)
+            : base(WeaponHash.Hammer, game, effects, random, pathfinder, camera, thunder, log)
         {
             hammerWhirlingSoundPlayer = new AudioClip(AudioClip.ResourcePath("whirling-hammer.wav"), 1, audio, log);
             isWhirling = false;
@@ -64,11 +64,10 @@ namespace Thor
         public void PointAt(Vector3 direction, bool shouldLerp = true)
         {
             var prevQua = game.Entities.Quaternion(weaponObject);
-
-            game.Entities.SetQuaternion(weaponObject, Quaternion.Zero);
-
+            // Aim from the model's identity basis; no temporary engine pose or
+            // immediate readback is needed to determine the desired orientation.
             Quaternion targetQua = Quaternion.Normalize(
-                Utilities.Math.DirectionToQuaternion(game.Entities.ForwardVector(weaponObject), direction) *
+                Utilities.Math.DirectionToQuaternion(Vector3.UnitY, direction) *
                 Utilities.Math.DirectionToQuaternion(Vector3.UnitZ, LocalForwardVector)
             );
 
@@ -183,7 +182,7 @@ namespace Thor
 
         public void AttachHammerRopeTo(int ped, Bone boneId)
         {
-            Logger.Event("INFO", "rope.attach", "ped", ped, "bone", boneId.ToString());
+            log.Event("INFO", "rope.attach", "ped", ped, "bone", boneId.ToString());
             if (weaponObject == 0)
             {
                 return;
@@ -194,7 +193,11 @@ namespace Thor
 
             // DetachRope has released both previous owned resources.
             hammerRope = game.Ropes.Create(RopeType.ThickRope, planeCenter, Vector3.Zero, HAMMER_ROPE_LENGTH, 0.0f, false);
+            if (hammerRope == 0)
+                throw new InvalidOperationException("Could not create the hammer rope.");
             hammerRopeAttachedIntermediateEnt = effects.Operations.CreateWeaponObject(WeaponHash.Grenade, 1, planeCenter);
+            if (hammerRopeAttachedIntermediateEnt == 0)
+                throw new InvalidOperationException("Could not create the hammer rope anchor.");
             game.Entities.SetCollisionEnabled(hammerRopeAttachedIntermediateEnt, true);
             game.Entities.SetNoCollision(hammerRopeAttachedIntermediateEnt, ped, true);
             game.Entities.SetVisible(hammerRopeAttachedIntermediateEnt, false);
@@ -219,7 +222,7 @@ namespace Thor
 
         public void DetachRope()
         {
-            if (hammerRope != 0) Logger.Event("INFO", "rope.detach");
+            if (hammerRope != 0) log.Event("INFO", "rope.detach");
             hammerRopeAttachedPed = 0;
             Cleanup.Run(ReleaseRopeAnchor, ReleaseRope, RestoreHammerPhysics);
         }

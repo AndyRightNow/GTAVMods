@@ -49,6 +49,7 @@ namespace ModUtilsTest {
         [DataRow(" return '\\\\'; ")]
         [DataRow(" return @\"C:\\\"; ")]
         [DataRow(" return @\"a\"\"}b\"; ")]
+        [DataRow(" return @\"a\"\"b\\\"; ")]
         [DataRow(" return @\"a\\}b\"; ")]
         [DataRow("\"a\"")]
         public void CodeBlockPreservesCharacterLiteralsAndVerbatimStringDelimiters(string source) {
@@ -116,7 +117,9 @@ namespace ModUtilsTest {
                 Assert.AreEqual(1, environment.Compilations);
                 Assert.AreEqual(1, EvaluatedCode.Evaluations);
                 Assert.IsTrue(environment.Source.Contains("return 37;"));
-                Assert.IsTrue(environment.Source.Contains("Player PLAYER = Game.Player;"));
+                Assert.IsTrue(environment.Source.Contains("context.NetworkPlayerIndex"));
+                Assert.IsFalse(environment.Source.Contains("Function.Call"));
+                Assert.IsFalse(environment.Source.Contains("Game.Player"));
                 Assert.IsTrue(environment.Parameters.GenerateInMemory);
                 Assert.AreEqual("/t:library", environment.Parameters.CompilerOptions);
                 CollectionAssert.Contains(environment.Parameters.ReferencedAssemblies, owner.GetType().Assembly.Location);
@@ -127,7 +130,9 @@ namespace ModUtilsTest {
         public void ActualGeneratedCodeWrapperCompilesWithCollectedProductionReferences() {
             using (var fixture = new ConsoleFixture()) {
                 EvaluatedCode.Result = 37;
-                var token = new CommandToken(CommandTokenKind.CodeBlock, "return 37", new ConsoleMessages(), fixture.Environment);
+                fixture.Environment.Player = null;
+                fixture.Environment.Character = null;
+                var token = new CommandToken(CommandTokenKind.CodeBlock, "return Tuple.Create(MP_ID, POS, PLAYER, PED)", new ConsoleMessages(), fixture.Environment);
                 Assert.AreEqual(typeof(int), token.Type);
                 var compiled = new LiveCommandEnvironment().Compile(fixture.Environment.Parameters, fixture.Environment.Source);
                 Assert.IsFalse(compiled.Errors.HasErrors,
@@ -135,7 +140,12 @@ namespace ModUtilsTest {
                 var evaluator = compiled.CompiledAssembly.GetType("DeveloperConsoleCodeEval.DeveloperConsoleCodeEval");
                 Assert.IsNotNull(evaluator);
                 Assert.AreEqual(typeof(object), evaluator.GetMethod("EvalCode").ReturnType);
-                // The contract check compiles the actual wrapper; it does not run GTA.
+                var instance = Activator.CreateInstance(evaluator);
+                Assert.AreEqual(Tuple.Create(37, fixture.Environment.Position, (GTA.Player)null, (GTA.Ped)null),
+                    evaluator.GetMethod("EvalCode").Invoke(instance, new object[] { fixture.Environment }));
+                fixture.Native.Returns(GTA.Native.Hash.NETWORK_GET_PLAYER_INDEX, 19);
+                Assert.AreEqual(19, new LiveCommandEnvironment(fixture.Game).NetworkPlayerIndex);
+                CollectionAssert.AreEqual(new object[] { 11 }, fixture.Native.Calls.Last().Arguments);
             }
         }
 
@@ -217,6 +227,19 @@ namespace ModUtilsTest {
             Assert.AreEqual(-1, command.AreTokensValid(new List<CommandToken>()));
             command.AddArgumentSet();
             Assert.AreEqual(3, command.AreTokensValid(new List<CommandToken>()));
+        }
+
+        [TestMethod]
+        public void RejectedArgumentSetDoesNotEvaluateLaterCodeArguments() {
+            var messages = new ConsoleMessages();
+            var environment = new ConsoleEnvironment();
+            var command = new CommandDispatcher.Command("pair", "pair of numbers", args => { });
+            command.AddArgumentSet(new CommandDispatcher.CommandArgument("first", "", typeof(int)),
+                new CommandDispatcher.CommandArgument("second", "", typeof(int)));
+            var tokens = new CommandParser("true { return 42; }", messages, environment).Tokens;
+            Assert.AreEqual(-1, command.AreTokensValid(tokens));
+            Assert.AreEqual(0, environment.Compilations,
+                "Once an argument set cannot match, evaluating later user code would introduce unrelated side effects.");
         }
     }
 }

@@ -202,10 +202,16 @@ and recorded primitive commands exercise the real recall, catch, throw, flight,
 targeting, ropes, cameras, health, input interpretation and cleanup logic.
 Console, audio ownership, numerical helpers and diagnostics are also covered.
 The same production assemblies ship in the package, including `GameBridge.dll`.
+The [engine contracts](docs/engine-contracts.md) define units, timing, failure
+results and resource ownership. Tests distinguish requests from observed
+completion, exercise clock rollover and cleanup retries, and verify native
+argument mappings without simulating physics.
 
 Only individually reviewed game/OS binding methods are outside the measurement;
 no gameplay class or assembly is excluded. See [the coverage gate guide](docs/coverage-gate.md)
 for the exact boundary manifest, deterministic test design and local workflow.
+The [mutation workflow](docs/mutation-testing.md) tests whether assertions detect
+deliberate behavior changes and records surviving mutations for review.
 These tests do not certify GTA physics, rendered output, keyboard delivery,
 audible playback or native compatibility. Keep the live checks above after
 runtime or gameplay changes.

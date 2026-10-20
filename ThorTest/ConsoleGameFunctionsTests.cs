@@ -107,7 +107,7 @@ namespace ModUtilsTest {
                     (() => game.StatSetFloat("float", .7f, false), Hash.STAT_SET_FLOAT, new object[] { 123, .7f, false }),
                     (() => game.StatSetBool("flag", true, false), Hash.STAT_SET_BOOL, new object[] { 123, true, false }),
                     (() => game.CreateAmbientPickup("pickup", new Vector3(1, 2, 3), 40), Hash.CREATE_AMBIENT_PICKUP,
-                        new object[] { 123, 1f, 2f, 3f, 0, 40, 1, false, true })
+                        new object[] { 123, 1f, 2f, 3f, 0, 40, 0, false, true })
                 }) {
                     fixture.Native.Calls.Clear();
                     test.Action();
@@ -186,13 +186,20 @@ namespace ModUtilsTest {
         }
 
         [TestMethod]
-        public void PlayerEntitySelectsVehicleWhenEnteringOrSeatedAndOtherwisePed() {
+        public void PlayerEntityUsesCurrentVehicleObservationAndOtherwisePed() {
             using (var fixture = new ConsoleFixture(false)) {
                 fixture.Native.Returns(Hash.GET_PLAYER_PED, 11);
                 fixture.Native.Returns(Hash.GET_VEHICLE_PED_IS_IN, 22);
                 fixture.Native.Returns(Hash.IS_PED_IN_ANY_VEHICLE, true);
                 Assert.AreEqual(22, fixture.Functions.GetPlayerEntity(7));
                 Assert.IsFalse(fixture.Native.Calls.Any(c => c.Hash == Hash.IS_PED_SITTING_IN_ANY_VEHICLE));
+                CollectionAssert.AreEqual(new object[] { 7 },
+                    fixture.Native.Calls.Single(c => c.Hash == Hash.GET_PLAYER_PED).Arguments);
+                // false excludes entering-only observations and selects the current, not last, vehicle.
+                CollectionAssert.AreEqual(new object[] { 11, false },
+                    fixture.Native.Calls.Single(c => c.Hash == Hash.IS_PED_IN_ANY_VEHICLE).Arguments);
+                CollectionAssert.AreEqual(new object[] { 11, false },
+                    fixture.Native.Calls.Single(c => c.Hash == Hash.GET_VEHICLE_PED_IS_IN).Arguments);
                 fixture.Native.Returns(Hash.IS_PED_IN_ANY_VEHICLE, false);
                 fixture.Native.Returns(Hash.IS_PED_SITTING_IN_ANY_VEHICLE, true);
                 Assert.AreEqual(22, fixture.Functions.GetPlayerEntity(7));
@@ -214,10 +221,10 @@ namespace ModUtilsTest {
                 Assert.AreEqual(Hash.NETWORK_REQUEST_CONTROL_OF_ENTITY, fixture.Native.Calls[0].Hash);
                 fixture.Native.Returns(Hash.NETWORK_HAS_CONTROL_OF_ENTITY, false);
                 fixture.Host.Waits.Clear();
-                fixture.Functions.RequestEntityControl(11, 2);
+                Assert.AreEqual(0, fixture.Functions.RequestEntityControl(11, 2));
                 Assert.AreEqual(2, fixture.Host.Waits.Count);
                 fixture.Host.Waits.Clear();
-                fixture.Functions.RequestEntityControl(11, 0);
+                Assert.AreEqual(0, fixture.Functions.RequestEntityControl(11, 0));
                 Assert.AreEqual(0, fixture.Host.Waits.Count);
                 fixture.Native.Returns(Hash.GET_PLAYER_PED, 11);
                 fixture.Native.Returns(Hash.NETWORK_HAS_CONTROL_OF_ENTITY, true);
@@ -237,11 +244,17 @@ namespace ModUtilsTest {
                 Assert.AreEqual(Hash.REQUEST_MODEL, fixture.Native.Calls.First().Hash);
                 CollectionAssert.AreEqual(new object[] { 17 }, fixture.Native.Calls.First().Arguments);
                 Assert.AreEqual(2, fixture.Host.Waits.Count);
-                CollectionAssert.AreEqual(new object[] { 17, 1f, 2f, 3f, 0, 0 }, fixture.Native.Calls.Last().Arguments);
+                // The pinned SHVDNE World.CreateVehicle supplies heading and both network flags.
+                CollectionAssert.AreEqual(new object[] { 17, 1f, 2f, 3f, 0f, false, false },
+                    fixture.Native.Calls.Single(c => c.Hash == Hash.CREATE_VEHICLE).Arguments);
+                Assert.AreEqual(Hash.SET_MODEL_AS_NO_LONGER_NEEDED, fixture.Native.Calls.Last().Hash);
                 fixture.Native.Returns(Hash.HAS_MODEL_LOADED, false);
                 fixture.Host.Waits.Clear();
-                fixture.Functions.SpawnVehicleProper(17, Vector3.Zero);
-                Assert.AreEqual(10000, fixture.Host.Waits.Count, "Existing spawn behavior caps frame waits.");
+                fixture.Native.Calls.Clear();
+                Assert.AreEqual(0, fixture.Functions.SpawnVehicleProper(17, Vector3.Zero));
+                Assert.AreEqual(10000, fixture.Host.Waits.Count);
+                Assert.IsFalse(fixture.Native.Calls.Any(c => c.Hash == Hash.CREATE_VEHICLE));
+                Assert.AreEqual(Hash.SET_MODEL_AS_NO_LONGER_NEEDED, fixture.Native.Calls.Last().Hash);
             }
         }
 

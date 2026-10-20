@@ -20,10 +20,14 @@ namespace DeveloperConsole {
         Vector3 Position { get; }
         string PlayerName { get; }
         int PlayerHandle { get; }
+        int NetworkPlayerIndex { get; }
         CompilerResults Compile(CompilerParameters parameters, string source);
     }
 
     internal sealed class LiveCommandEnvironment : ICommandEnvironment {
+        private readonly GameServices _game;
+        public LiveCommandEnvironment() : this(GtaRuntime.Create()) { }
+        internal LiveCommandEnvironment(GameServices game) { _game = game; }
         public object Player { [GamePrimitive] get { return Game.Player; } }
         public object Character { [GamePrimitive] get { return Game.Player.Character; } }
         public bool IsInVehicle { [GamePrimitive] get { return Game.Player.Character.IsInVehicle(); } }
@@ -31,6 +35,7 @@ namespace DeveloperConsole {
         public Vector3 Position { [GamePrimitive] get { return Game.Player.Character.Position; } }
         public string PlayerName { [GamePrimitive] get { return Game.Player.Name; } }
         public int PlayerHandle { [GamePrimitive] get { return Game.Player.Handle; } }
+        public int NetworkPlayerIndex { get { return _game.ConsolePlayers.Index(_game.Host.PlayerPed); } }
 
         public CompilerResults Compile(CompilerParameters parameters, string source) {
             using (var provider = new CSharpCodeProvider())
@@ -185,8 +190,12 @@ namespace DeveloperConsole {
             var code = "using System;\nusing System.Drawing;\nusing System.Windows.Forms;\n" +
                 "using GTA;\nusing GTA.Math;\nusing GTA.Native;\nusing DeveloperConsole;\n" +
                 "namespace DeveloperConsoleCodeEval { public class DeveloperConsoleCodeEval { " +
-                "public object EvalCode() { Player PLAYER = Game.Player; Ped PED = PLAYER.Character; " +
-                "int MP_ID = Function.Call<int>(Hash.NETWORK_GET_PLAYER_INDEX, PED.Handle);\n" +
+                "private ICommandEnvironment context; " +
+                "public Player PLAYER { get { return (Player)context.Player; } } " +
+                "public Ped PED { get { return (Ped)context.Character; } } " +
+                "public int MP_ID { get { return context.NetworkPlayerIndex; } } " +
+                "public Vector3 POS { get { return context.Position; } } " +
+                "public object EvalCode(ICommandEnvironment environment) { context = environment;\n" +
                 source + ";\nreturn null;\n} } }";
             var result = _environment.Compile(parameters, code);
             if (result.Errors.HasErrors) {
@@ -196,7 +205,7 @@ namespace DeveloperConsole {
             }
             var instance = result.CompiledAssembly.CreateInstance("DeveloperConsoleCodeEval.DeveloperConsoleCodeEval");
             if (instance == null) return null;
-            return instance.GetType().GetMethod("EvalCode").Invoke(instance, null);
+            return instance.GetType().GetMethod("EvalCode").Invoke(instance, new object[] { _environment });
         }
 
         internal static void AddReferences(CompilerParameters parameters, IEnumerable<Assembly> assemblies) {

@@ -11,6 +11,7 @@ namespace Thor
     {
         private readonly GameServices game;
         private readonly Random random;
+        private readonly IEventLog log;
         private int camera;
         private int? lastSetPosition;
         private MjolnirCameraType cameraType;
@@ -21,10 +22,13 @@ namespace Thor
             MjolnirCameraType.StationaryViewFollow, MjolnirCameraType.StationaryViewFollow
         };
 
-        public WeaponCamera(GameServices game, Random random)
+        public WeaponCamera(GameServices game, Random random) : this(game, random, Logger.Default) { }
+
+        public WeaponCamera(GameServices game, Random random, IEventLog log)
         {
             this.game = game;
             this.random = random;
+            this.log = log;
         }
 
         public void RenderCamera(int weapon)
@@ -33,7 +37,7 @@ namespace Thor
             {
                 camera = game.Cameras.Create(game.Entities.Position(weapon), Vector3.Zero, 50);
                 if (camera == 0) return;
-                Logger.Event("INFO", "camera.created", "weapon", weapon);
+                log.Event("INFO", "camera.created", "weapon", weapon);
             }
             Vector3 direction = game.Entities.Velocity(weapon).Normalized;
             int sign = random.Next(0, 2) > 0 ? 1 : -1;
@@ -60,7 +64,7 @@ namespace Thor
         public void DestroyCamera()
         {
             if (camera == 0) return;
-            Logger.Event("INFO", "camera.deleted");
+            log.Event("INFO", "camera.deleted");
             Cleanup.Run(CancelRenderedCamera, () =>
             {
                 game.Cameras.Delete(camera);
@@ -73,7 +77,7 @@ namespace Thor
         {
             if (camera != 0 && game.Cameras.RenderingCamera == camera)
             {
-                Logger.Event("INFO", "camera.stopped");
+                log.Event("INFO", "camera.stopped");
                 Cleanup.Run(game.Cameras.StopRendering, () => game.Cameras.SetActive(camera, false));
             }
         }

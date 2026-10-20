@@ -228,7 +228,7 @@ namespace Thor
 
         protected void DropAndHoldWeaponRope()
         {
-            ThrowWeaponOut(false);
+            if (!ThrowWeaponOut(false)) return;
             Weapon.AttachHammerRopeTo(attachedPed, WEAPON_HOLDING_HAND_ID);
             isHoldingWeaponRope = true;
         }

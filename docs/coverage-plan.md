@@ -130,3 +130,31 @@ projection, independent cleanup, and native argument order. The first projection
 mutation survived and exposed a missing assertion; the strengthened asymmetric
 positive/negative coordinate test now detects it. All four mutations were then
 detected. These are spot checks, not a claim of exhaustive mutation testing.
+
+## Contract assurance enhancement
+
+The follow-up goal strengthens confidence beyond executing every line and branch.
+The contract specification is [engine-contracts.md](engine-contracts.md).
+No game files or physics simulator are involved.
+
+- [x] Specify timing, units, results, failures and ownership for every capability.
+- [x] Replace raw native calls in mod behavior with typed, measured mappings.
+- [x] Enforce the boundary in the compiler/PDB inventory with negative fixtures.
+- [x] Verify fakes against explicit observation and command contracts.
+- [x] Exercise real production composition with varied frame schedules,
+      reproducible lifecycle sequences and partial failures.
+- [x] Run systematic mutation analysis, strengthen meaningful assertions and
+      document equivalent/domain-restricted survivors without adding tautologies.
+- [x] Resolve independent xhigh reviews of contracts, fakes and test quality.
+- [x] Restore 100% line and branch coverage and pass the local build/package.
+
+The enhancement passes 374 tests with no skips, warnings or errors. Coverage is
+100% of inventoried behavior lines and branches in all four production assemblies.
+The [review record](mutation-review.md) contains counts, regression findings and
+accepted mutation outcomes. The goal also requires the final commit's
+[PR #7 CI check](https://github.com/AndyRightNow/GTAVMods/pull/7/checks) to pass;
+the PR tracks that result without duplicating feature push and pull-request runs.
+
+Changes discovered by these tests require a failing regression before a fix
+where practicable. A mock's convenience is not evidence of an engine guarantee.
+Unverified native assumptions remain explicit and localized to the adapter.

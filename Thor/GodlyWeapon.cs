@@ -4,7 +4,6 @@ using System.Linq;
 using ADModUtils;
 using GTA;
 using GTA.Math;
-using GTA.Native;
 using GTAVMods.Game;
 
 namespace Thor
@@ -16,6 +15,7 @@ namespace Thor
         protected readonly GameServices game;
         protected readonly NativeHelper effects;
         protected readonly Random random;
+        protected readonly IEventLog log;
         private readonly PathFinder.PathFinder pathfinder;
         private readonly WeaponCamera camera;
         private readonly Thunder thunder;
@@ -32,7 +32,7 @@ namespace Thor
         protected AnimationActions[] throwActions;
 
         protected GodlyWeapon(WeaponHash weapon, GameServices game, NativeHelper effects,
-            Random random, PathFinder.PathFinder pathfinder, WeaponCamera camera, Thunder thunder)
+            Random random, PathFinder.PathFinder pathfinder, WeaponCamera camera, Thunder thunder, IEventLog log)
         {
             weaponHash = weapon;
             this.game = game;
@@ -41,6 +41,7 @@ namespace Thor
             this.pathfinder = pathfinder;
             this.camera = camera;
             this.thunder = thunder;
+            this.log = log;
         }
 
         public virtual void OnTick()
@@ -68,7 +69,7 @@ namespace Thor
         {
             if (weaponObject == 0 || !game.Entities.Exists(weaponObject)) return;
             game.Entities.SetPersistent(weaponObject, true);
-            game.Native.Call(Hash.SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION, weaponObject, false);
+            game.Gameplay.SetFreezeWhileWaitingForCollision(weaponObject, false);
             if (game.Entities.HeightAboveGround(weaponObject) - previousHeight > 50)
             {
                 if (!isBeingSummoned) idleOutOfRange = true;
@@ -136,18 +137,21 @@ namespace Thor
 
         private void ConfigureWeapon(int value)
         {
-            game.Native.Call(Hash.ACTIVATE_PHYSICS, value);
+            game.Gameplay.ActivatePhysics(value);
             game.Entities.SetCollisionEnabled(value, true);
             effects.Operations.SetObjectPhysicsParams(value, WEAPON_MASS);
             int blip = game.Entities.AddBlip(value);
-            game.Entities.SetBlipFriendly(blip, true);
-            game.Entities.SetBlipName(blip, "GodlyWeapon");
+            if (blip != 0)
+            {
+                game.Entities.SetBlipFriendly(blip, true);
+                game.Entities.SetBlipName(blip, "GodlyWeapon");
+            }
             pathfinder.SetNoCollision(value);
             weaponFxTimer = new Utilities.Timer(1000, () => effects.PlayThunderFx(weaponObject), () => game.Host.GameTime);
         }
 
         public Vector3 Position => weaponObject == 0 ? Vector3.Zero :
-            game.Native.Call<Vector3>(Hash.GET_ENTITY_COORDS, weaponObject);
+            game.Gameplay.Position(weaponObject);
 
         public void SetSummonStatus(bool summoning, bool closeToPed = false)
         {
@@ -160,7 +164,7 @@ namespace Thor
             if (!IsMoving) return;
             effects.Operations.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
             Vector3 direction = -game.Entities.Velocity(weaponObject).Normalized;
-            float speed = game.Native.Call<float>(Hash.GET_ENTITY_SPEED, weaponObject);
+            float speed = game.Gameplay.Speed(weaponObject);
             Vector3 position = game.Entities.Position(weaponObject);
             thunder.Shoot(position, position + direction * speed * 0.08f, -1, -1, false);
         }
@@ -193,7 +197,7 @@ namespace Thor
             catch (Exception error)
             {
                 game.Host.Notify("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.");
-                Logger.Log("ERROR", error.ToString());
+                log.Event("ERROR", "hammer.createFailed", "exception", error.ToString());
                 throw;
             }
         }
@@ -218,7 +222,7 @@ namespace Thor
                 (effects.Operations.IsVehicle(target) && distance <= 2)))
             {
                 targets.Remove(target);
-                Logger.Event("INFO", "hammer.targetReached", "target", target, "remaining", targets.Count);
+                log.Event("INFO", "hammer.targetReached", "target", target, "remaining", targets.Count);
             }
             else FindWaysToMoveToCoord(game.Entities.Position(target), false);
             return true;
@@ -238,7 +242,7 @@ namespace Thor
             if (weaponObject == 0) return;
             bool blocked = HasObstaclesInBetween(position);
             if (blocked != previouslyObstructed)
-                Logger.Throttled("INFO", "hammer.pathObstruction", 500, "blocked", blocked, "target", position.ToString());
+                log.Throttled("INFO", "hammer.pathObstruction", 500, "blocked", blocked, "target", position.ToString());
             if (blocked && !IsInOpenAir())
             {
                 if (!pathfinder.Position.HasValue) return;

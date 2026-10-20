@@ -59,6 +59,9 @@ namespace ModUtilsTest
             CollectionAssert.AreEqual(new[] { "audio.loaded", "audio.play.hammer.wav" }, records.Select(record => LogJson.Text(record, "event")).ToArray());
             Assert.AreEqual("2.5", LogJson.Text(records[0], "data/durationSeconds"));
             Assert.AreEqual("hammer.wav", LogJson.Text(records[0], "data/file"));
+            Assert.AreEqual("INFO", LogJson.Text(records[0], "level"));
+            Assert.AreEqual(0.3f, float.Parse(LogJson.Text(records[0], "data/volume"), System.Globalization.CultureInfo.InvariantCulture));
+            Assert.AreEqual("INFO", LogJson.Text(records[1], "level"));
             Assert.AreEqual("false", LogJson.Text(records[1], "data/restart"));
         }
 
@@ -72,6 +75,7 @@ namespace ModUtilsTest
             Assert.HasCount(1, factory.Opens);
             Assert.HasCount(0, factory.Playback.Calls);
             Assert.AreEqual("audio.disabled", LogJson.Text(storage.Records.Single(), "event"));
+            Assert.AreEqual("WARN", LogJson.Text(storage.Records.Single(), "level"));
             StringAssert.Contains(LogJson.Text(storage.Records.Single(), "data/exception"), "missing clip");
         }
 
@@ -97,14 +101,21 @@ namespace ModUtilsTest
             var factory = new Factory();
             var storage = new MemoryLogStorage();
             var clip = new AudioClip("hammer.wav", 1, factory, Log(storage));
-            clip.Play(); factory.Playback.FailOn = "stop"; clip.Stop(); clip.Play();
+            clip.Play(); factory.Playback.FailOn = "stop"; clip.Stop();
             Assert.AreEqual(1, factory.Playback.Calls.Count(call => call == "dispose"));
             Assert.AreEqual("audio.disabled", LogJson.Text(storage.Records.Last(), "event"));
+            int callsAfterFailure = factory.Playback.Calls.Count;
+            clip.Play(); clip.Stop(); clip.Dispose();
+            Assert.AreEqual(callsAfterFailure, factory.Playback.Calls.Count,
+                "The failed Stop must disable the clip immediately, before another Play can fail.");
             var other = new Factory();
             var otherClip = new AudioClip("other.wav", 1, other, Log(storage));
             otherClip.Play(); other.Playback.FailOn = "dispose"; otherClip.Dispose(); otherClip.Dispose();
             Assert.AreEqual(1, other.Playback.Calls.Count(call => call == "dispose"));
             Assert.AreEqual("audio.disposeFailed", LogJson.Text(storage.Records.Last(), "event"));
+            Assert.AreEqual("WARN", LogJson.Text(storage.Records.Last(), "level"));
+            Assert.AreEqual("other.wav", LogJson.Text(storage.Records.Last(), "data/file"));
+            StringAssert.Contains(LogJson.Text(storage.Records.Last(), "data/exception"), "dispose failed");
         }
 
         [TestMethod]

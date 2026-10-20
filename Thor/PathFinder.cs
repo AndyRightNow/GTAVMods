@@ -9,12 +9,14 @@ namespace Thor.PathFinder
     public sealed class PathFinder
     {
         private readonly GameServices game;
+        private readonly IEventLog log;
         private int driver, chasingVehicle, currentTargetPed;
         private Vector3? currentTargetPosition;
         private bool initialized;
         private static readonly Vector3 DefaultSpawnPosition = new Vector3(500, 500, 500);
 
-        public PathFinder(GameServices game) { this.game = game; }
+        public PathFinder(GameServices game) : this(game, Logger.Default) { }
+        public PathFinder(GameServices game, IEventLog log) { this.game = game; this.log = log; }
 
         private void Init()
         {
@@ -44,13 +46,13 @@ namespace Thor.PathFinder
             finally { game.World.ReleaseModel(model); }
 
             initialized = true;
-            Logger.Event("INFO", "pathfinder.created", "driver", driver, "vehicle", chasingVehicle);
+            log.Event("INFO", "pathfinder.created", "driver", driver, "vehicle", chasingVehicle);
         }
 
         public void Dispose()
         {
             if (driver != 0 || chasingVehicle != 0)
-                Logger.Event("INFO", "pathfinder.dispose", "driver", driver, "vehicle", chasingVehicle);
+                log.Event("INFO", "pathfinder.dispose", "driver", driver, "vehicle", chasingVehicle);
             currentTargetPed = 0;
             currentTargetPosition = null;
             initialized = false;

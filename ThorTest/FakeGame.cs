@@ -76,6 +76,7 @@ namespace ModUtilsTest
         public FakeNative Native { get; }
         public FakeOutputs Outputs { get; }
         public GameServices Services { get; }
+        private readonly Queue<Action<FakeGame>> nextFrameObservations = new Queue<Action<FakeGame>>();
         // A failed primitive is still recorded, but its immediate assignment has not happened.
         public Action<GameCall> BeforeCall { get; set; }
         public FakeGame()
@@ -101,6 +102,32 @@ namespace ModUtilsTest
             var call = new GameCall(name, arguments);
             Calls.Add(call);
             BeforeCall?.Invoke(call);
+        }
+
+        // Observation playback is independent of submitted commands. A velocity, force,
+        // animation or inventory request does not predict motion or successful completion.
+        public void ObserveNextFrame(Action<FakeGame> observation)
+            => nextFrameObservations.Enqueue(observation ?? throw new ArgumentNullException(nameof(observation)));
+
+        public void AdvanceFrame(int elapsedMilliseconds)
+        {
+            if (elapsedMilliseconds < 0) throw new ArgumentOutOfRangeException(nameof(elapsedMilliseconds));
+            Host.GameTime = unchecked(Host.GameTime + elapsedMilliseconds);
+            Host.LastFrameTime = elapsedMilliseconds / 1000f;
+            Input.Released.Clear();
+            int count = nextFrameObservations.Count;
+            for (int index = 0; index < count; index++) nextFrameObservations.Dequeue()(this);
+        }
+
+        public void ApplyWeaponObservation(int ped, WeaponHash weapon, int objectHandle)
+        {
+            var player = Entity(ped);
+            if (weapon == WeaponHash.Unarmed && objectHandle != 0)
+                throw new ArgumentException("An unarmed observation cannot have a current weapon object.", nameof(objectHandle));
+            if (objectHandle != 0) Entity(objectHandle);
+            player.CurrentWeapon = weapon;
+            player.CurrentWeaponObject = objectHandle;
+            if (weapon != WeaponHash.Unarmed) player.Weapons.Add(weapon);
         }
     }
 
@@ -131,12 +158,15 @@ namespace ModUtilsTest
         public bool IsControlJustReleased(GTA.Control control) => Released.Contains(control);
     }
 
-    internal sealed class FakeEntities : IEntityAccess
+    internal sealed class FakeEntities : IEntityAccess, IEntityLifetimeBindings
     {
         private readonly FakeGame game;
+        private readonly HandleLifetime lifetime;
         public readonly Queue<int> CreatedBlips = new Queue<int>();
-        public FakeEntities(FakeGame game) { this.game = game; }
-        public bool Exists(int entity)
+        public readonly HashSet<int> SilentDeletionRefusals = new HashSet<int>();
+        public FakeEntities(FakeGame game) { this.game = game; lifetime = new HandleLifetime(this, "Entity"); }
+        public bool Exists(int entity) => lifetime.Exists(entity);
+        bool IHandleLifetimeBindings.Exists(int entity)
         {
             if (entity == 0) return false;
             if (!game.Observations.TryGetValue(entity, out var observation)) throw new InvalidOperationException("Unregistered entity: " + entity);
@@ -174,7 +204,12 @@ namespace ModUtilsTest
         public void ApplyForce(int entity, Vector3 force) { game.Record("entity.force", entity, force); game.Entity(entity); }
         public void AttachToBone(int entity, int ped, Bone bone) { game.Record("entity.attach", entity, ped, bone); game.Entity(ped); var state = game.Entity(entity); state.AttachedTo = ped; state.AttachedBone = bone; }
         public void Detach(int entity) { game.Record("entity.detach", entity); game.Entity(entity).AttachedTo = 0; }
-        public void Delete(int entity) { game.Record("entity.delete", entity); game.Entity(entity).Exists = false; }
+        public void Delete(int entity) => lifetime.Delete(entity);
+        void IHandleLifetimeBindings.Delete(int entity)
+        {
+            game.Record("entity.delete", entity);
+            if (!SilentDeletionRefusals.Contains(entity)) game.Entity(entity).Exists = false;
+        }
         public int AddBlip(int entity) { game.Entity(entity); int blip = CreatedBlips.Peek(); game.Record("blip.create", entity, blip); CreatedBlips.Dequeue(); return blip; }
         public void SetBlipFriendly(int blip, bool friendly) => game.Record("blip.friendly", blip, friendly);
         public void SetBlipName(int blip, string name) => game.Record("blip.name", blip, name);
@@ -214,9 +249,28 @@ namespace ModUtilsTest
         public bool HasWeapon(int ped, WeaponHash weapon) => game.Entity(ped).Weapons.Contains(weapon);
         public WeaponHash Current(int ped) => game.Entity(ped).CurrentWeapon;
         public int CurrentObject(int ped) => game.Entity(ped).CurrentWeaponObject;
-        public void Give(int ped, WeaponHash weapon, int ammo, bool equipNow, bool loaded) { game.Record("weapon.give", ped, weapon, ammo, equipNow, loaded); var state = game.Entity(ped); state.Weapons.Add(weapon); if (equipNow) state.CurrentWeapon = weapon; }
-        public void Remove(int ped, WeaponHash weapon) { game.Record("weapon.remove", ped, weapon); var state = game.Entity(ped); state.Weapons.Remove(weapon); if (state.CurrentWeapon == weapon) state.CurrentWeapon = WeaponHash.Unarmed; }
-        public void Select(int ped, WeaponHash weapon, bool equipNow) { game.Record("weapon.select", ped, weapon, equipNow); game.Entity(ped).CurrentWeapon = weapon; }
+        public void Give(int ped, WeaponHash weapon, int ammo, bool equipNow, bool loaded)
+        {
+            game.Record("weapon.give", ped, weapon, ammo, equipNow, loaded);
+            game.Entity(ped).Weapons.Add(weapon);
+            // SHVDNE documents Give(equipNow:true) as a switch request, not an
+            // immediate equip. The scene must supply the resulting observation.
+        }
+        public void Remove(int ped, WeaponHash weapon)
+        {
+            game.Record("weapon.remove", ped, weapon);
+            var state = game.Entity(ped);
+            state.Weapons.Remove(weapon);
+            if (state.CurrentWeapon == weapon) game.ApplyWeaponObservation(ped, WeaponHash.Unarmed, 0);
+        }
+        public bool Select(int ped, WeaponHash weapon, bool equipNow)
+        {
+            game.Record("weapon.select", ped, weapon, equipNow);
+            var state = game.Entity(ped);
+            if (weapon != WeaponHash.Unarmed && !state.Weapons.Contains(weapon)) return false;
+            if (equipNow && state.CurrentWeapon != weapon) game.ApplyWeaponObservation(ped, weapon, 0);
+            return true;
+        }
         public bool RequestAsset(WeaponHash weapon, int timeoutMs) { game.Record("weapon.request", weapon, timeoutMs); return AssetResults[weapon]; }
     }
 
@@ -228,10 +282,24 @@ namespace ModUtilsTest
         public readonly Dictionary<int, bool> ModelResults = new Dictionary<int, bool>();
         public Func<Vector3, float, int[]> Nearby { get; set; }
         public Func<Vector3, Tuple<bool, float>> Ground { get; set; }
+        public Func<Vector3, Vector3, IntersectFlags, int, RayHit> RaycastObservation { get; set; }
+        public Func<Vector3, Vector3, float, IntersectFlags, RayHit> CapsuleObservation { get; set; }
         public FakeWorld(FakeGame game) { this.game = game; }
         public int[] NearbyEntities(Vector3 position, float radius) { game.Record("world.nearby", position, radius); if (Nearby == null) throw new InvalidOperationException("Unscripted nearby query."); return Nearby(position, radius); }
-        public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0) { game.Record("world.raycast", from, to, flags, ignoreEntity); return Rays.Dequeue(); }
-        public RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags) { game.Record("world.capsule", from, to, radius, flags); return Capsules.Dequeue(); }
+        public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0)
+        {
+            game.Record("world.raycast", from, to, flags, ignoreEntity);
+            if (Rays.Count != 0) return Rays.Dequeue();
+            if (RaycastObservation == null) throw new InvalidOperationException("Unscripted raycast observation.");
+            return RaycastObservation(from, to, flags, ignoreEntity);
+        }
+        public RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags)
+        {
+            game.Record("world.capsule", from, to, radius, flags);
+            if (Capsules.Count != 0) return Capsules.Dequeue();
+            if (CapsuleObservation == null) throw new InvalidOperationException("Unscripted capsule observation.");
+            return CapsuleObservation(from, to, radius, flags);
+        }
         public void DrawMarker(MarkerType type, Vector3 position, Vector3 direction, Vector3 rotation, Vector3 scale, Color color) => game.Record("world.marker", type, position, direction, rotation, scale, color);
         public bool GetGroundHeight(Vector3 position, out float height) { if (Ground == null) throw new InvalidOperationException("Unscripted ground query."); var result = Ground(position); height = result.Item2; return result.Item1; }
         public bool RequestModel(int modelHash, int timeoutMs) { game.Record("world.requestModel", modelHash, timeoutMs); return ModelResults[modelHash]; }
@@ -246,12 +314,14 @@ namespace ModUtilsTest
         public Vector3 Position;
         public bool Active;
     }
-    internal sealed class FakeCameras : ICameraAccess
+    internal sealed class FakeCameras : ICameraAccess, ICameraLifetimeBindings
     {
         private readonly FakeGame game;
-        public FakeCameras(FakeGame game) { this.game = game; }
+        private readonly HandleLifetime lifetime;
+        public FakeCameras(FakeGame game) { this.game = game; lifetime = new HandleLifetime(this, "Camera"); }
         public readonly Dictionary<int, CameraObservation> Cameras = new Dictionary<int, CameraObservation>();
         public readonly Queue<int> Creations = new Queue<int>();
+        public readonly HashSet<int> SilentDeletionRefusals = new HashSet<int>();
         public Vector3 GameplayPosition { get; set; }
         public Vector3 GameplayDirection { get; set; } = Vector3.UnitY;
         public Vector3 GameplayRotation { get; set; }
@@ -262,23 +332,37 @@ namespace ModUtilsTest
         public void SetActive(int camera, bool active) { game.Record("camera.active", camera, active); Cameras[camera].Active = active; }
         public void StartRendering() => game.Record("camera.startRendering");
         public void StopRendering() { game.Record("camera.stopRendering"); RenderingCamera = 0; }
-        public void Delete(int camera) { game.Record("camera.delete", camera); if (!Cameras.Remove(camera)) throw new InvalidOperationException("Unknown or deleted camera: " + camera); }
+        public void Delete(int camera) => lifetime.Delete(camera);
+        bool IHandleLifetimeBindings.Exists(int camera) => Cameras.ContainsKey(camera);
+        void IHandleLifetimeBindings.Delete(int camera)
+        {
+            game.Record("camera.delete", camera);
+            if (!SilentDeletionRefusals.Contains(camera)) Cameras.Remove(camera);
+        }
         public void Shake(CameraShake shake, float amplitude) => game.Record("camera.shake", shake, amplitude);
         public void SetHeadingLimits(float minimum, float maximum) => game.Record("camera.headingLimits", minimum, maximum);
         public void SetPitchLimits(float minimum, float maximum) => game.Record("camera.pitchLimits", minimum, maximum);
     }
 
-    internal sealed class FakeRopes : IRopeAccess
+    internal sealed class FakeRopes : IRopeAccess, IRopeLifetimeBindings
     {
         private readonly FakeGame game;
-        public FakeRopes(FakeGame game) { this.game = game; }
+        private readonly HandleLifetime lifetime;
+        public FakeRopes(FakeGame game) { this.game = game; lifetime = new HandleLifetime(this, "Rope"); }
         public readonly HashSet<int> Ropes = new HashSet<int>();
         public readonly Queue<int> Creations = new Queue<int>();
+        public readonly HashSet<int> SilentDeletionRefusals = new HashSet<int>();
         public int Create(RopeType type, Vector3 position, Vector3 rotation, float length, float minLength, bool breakable) { int handle = Creations.Peek(); game.Record("rope.create", type, position, rotation, length, minLength, breakable, handle); Creations.Dequeue(); if (handle != 0 && !Ropes.Add(handle)) throw new InvalidOperationException("Duplicate rope."); return handle; }
         private void Require(int rope) { if (!Ropes.Contains(rope)) throw new InvalidOperationException("Unknown or deleted rope: " + rope); }
         public void Connect(int rope, int firstEntity, Vector3 firstPosition, int secondEntity, Vector3 secondPosition, float length) { game.Record("rope.connect", rope, firstEntity, firstPosition, secondEntity, secondPosition, length); Require(rope); game.Entity(firstEntity); game.Entity(secondEntity); }
         public void ActivatePhysics(int rope) { game.Record("rope.physics", rope); Require(rope); }
-        public void Delete(int rope) { game.Record("rope.delete", rope); Require(rope); Ropes.Remove(rope); }
+        public void Delete(int rope) => lifetime.Delete(rope);
+        bool IHandleLifetimeBindings.Exists(int rope) => Ropes.Contains(rope);
+        void IHandleLifetimeBindings.Delete(int rope)
+        {
+            game.Record("rope.delete", rope);
+            if (!SilentDeletionRefusals.Contains(rope)) Ropes.Remove(rope);
+        }
     }
 
     internal sealed class FakeNative : INativeInvoker

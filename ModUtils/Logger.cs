@@ -64,10 +64,14 @@ namespace ADModUtils
     public static class Logger
     {
         private static readonly LogClock clock = new LogClock();
-        public static DiagnosticLog Default { get; } = new DiagnosticLog(new SessionLog(
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GTAVMods", "Logs")),
-            () => clock.ElapsedMilliseconds);
+        public static DiagnosticLog Default { get; } = CreateDefault(
+            AppDomain.CurrentDomain.BaseDirectory,
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), new FileLogStorage(), clock);
+
+        public static DiagnosticLog CreateDefault(string baseDirectory, string localApplicationData, ILogStorage storage, ILogClock clock) =>
+            new DiagnosticLog(new SessionLog(Path.Combine(baseDirectory, "Logs"),
+                Path.Combine(localApplicationData, "GTAVMods", "Logs"), storage, clock),
+                () => clock.ElapsedMilliseconds);
         public static string LogFilePath => Default.FilePath;
         public static long DroppedRecords => Default.DroppedRecords;
 

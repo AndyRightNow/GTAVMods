@@ -109,19 +109,20 @@ namespace ModUtilsTest {
             var game = CreateWorld();
             var random = new ThunderRandom(sign, .75, .25, .5, .5, .4, .5, .5, .6);
             var thunder = new Thunder(game.Services, new Thor.NativeHelper(game.Services), random);
-            thunder.Shoot(Vector3.Zero, new Vector3(0, 0, 10), 2, .1f, false);
+            var origin = new Vector3(4, -3, 7);
+            thunder.Shoot(origin, origin + new Vector3(0, 0, 10), 2, .1f, false);
             Assert.IsFalse(game.Calls.Any(c => c.Name == "world.raycast"), "Visual-only bolts never query damage hits.");
             var particles = Particles(game);
             Assert.AreEqual(12, particles.Length);
-            var firstJoint = new Vector3((float)Math.Sqrt(.08), (float)Math.Sqrt(.08), 2.5f);
-            var secondJoint = new Vector3((float)Math.Sqrt(.18), (float)Math.Sqrt(.18), 7.5f);
+            var firstJoint = origin + new Vector3((float)Math.Sqrt(.08), (float)Math.Sqrt(.08), 2.5f);
+            var secondJoint = origin + new Vector3((float)Math.Sqrt(.18), (float)Math.Sqrt(.18), 7.5f);
             // The same chosen sign is used for both perpendicular basis and sway.
-            AssertVector(Vector3.Zero, Position(particles[0]));
+            AssertVector(origin, Position(particles[0]));
             AssertVector(firstJoint, Position(particles[1]));
             AssertVector(firstJoint, Position(particles[4]));
             AssertVector(secondJoint, Position(particles[5]));
             AssertVector(secondJoint, Position(particles[8]));
-            AssertVector(new Vector3(0, 0, 10), Position(particles[9]));
+            AssertVector(origin + new Vector3(0, 0, 10), Position(particles[9]));
             for (var index = 0; index < particles.Length; index += 4) {
                 var from = Position(particles[index]);
                 var to = Position(particles[index + 1]);
@@ -199,8 +200,16 @@ namespace ModUtilsTest {
             var effects = new Thor.NativeHelper(CreateWorld().Services);
             foreach (var scenario in new[] {
                 (AnimationActions.ThrowHammer3, -90f, 600), (AnimationActions.ThrowHammer3, 90f, 400),
+                (AnimationActions.ThrowHammer3, -180f, 500), (AnimationActions.ThrowHammer3, 180f, 800),
+                (AnimationActions.ThrowHammer4, 0f, 1000), (AnimationActions.ThrowHammer4, -90f, 700),
+                (AnimationActions.ThrowHammer4, 90f, 700), (AnimationActions.ThrowHammer4, -180f, 1000),
+                (AnimationActions.ThrowHammer4, 180f, 800),
+                (AnimationActions.ThrowHammer5, 0f, 1000), (AnimationActions.ThrowHammer5, -90f, 600),
+                (AnimationActions.ThrowHammer5, 90f, 700),
                 (AnimationActions.ThrowHammer5, -180f, 1100), (AnimationActions.ThrowHammer5, 180f, 800),
+                (AnimationActions.ThrowTwoHandHammer1, 0f, 800), (AnimationActions.ThrowTwoHandHammer1, 90f, 800),
                 (AnimationActions.ThrowTwoHandHammer1, -90f, 800), (AnimationActions.ThrowTwoHandHammer1, -180f, 700),
+                (AnimationActions.ThrowTwoHandHammer2, 0f, 1150), (AnimationActions.ThrowTwoHandHammer2, 180f, 1000),
                 (AnimationActions.ThrowTwoHandHammer2, -90f, 1300), (AnimationActions.ThrowTwoHandHammer2, 90f, 1000)
             }) {
                 Assert.AreEqual(scenario.Item3, effects.Operations.GetAnimationWaitTimeByDictNameAndAnimName(

@@ -169,9 +169,9 @@ namespace Thor
         public static ThorController Create(GameServices game, IAudioPlaybackFactory audio, IEventLog log, Random random,
             Func<bool> consoleOpen, Func<long> droppedRecords, ThorSessionInfo session)
         {
-            var effects = new NativeHelper(game);
-            var pathfinder = new PathFinder.PathFinder(game);
-            var camera = new WeaponCamera(game, random);
+            var effects = new NativeHelper(game, log);
+            var pathfinder = new PathFinder.PathFinder(game, log);
+            var camera = new WeaponCamera(game, random, log);
             var thunder = new Thunder(game, effects, random);
             var weapon = new Mjolnir(game, effects, random, pathfinder, camera, thunder, audio, log);
             var ability = new MjolnirWorthyAbility(game, effects, random, weapon, thunder, audio, log);

@@ -232,12 +232,14 @@ namespace Thor
         {
             "ent_dst_elec_fire_sp"
         }).ToArray();
-        public NativeHelper(GameServices game)
+        public NativeHelper(GameServices game) : this(game, ADModUtils.Logger.Default) { }
+
+        public NativeHelper(GameServices game, ADModUtils.IEventLog log)
         {
             Operations = new ADModUtils.NativeHelper(game,
                 AnimationDictNames, AnimationNames, AnimationWaitTime,
                 AnimationWithAngles, AnimationWithAnglesAndIncompletePlusOrMinusSign,
-                ParticleEffectSetNames, ParticleEffectNames, MELEE_HIT_PED_DAMAGE, MELEE_HIT_FORCE);
+                ParticleEffectSetNames, ParticleEffectNames, MELEE_HIT_PED_DAMAGE, MELEE_HIT_FORCE, log);
         }
 
         public ADModUtils.NativeHelper Operations { get; }
