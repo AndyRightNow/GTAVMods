@@ -26,16 +26,11 @@ namespace ADModUtils
         public string FilePath { get; private set; }
         public long DroppedRecords { get; private set; }
 
-        public SessionLog(string directory, string fallbackDirectory, long maxBytes = 5 * 1024 * 1024, int retainedFiles = 10)
-            : this(directory, fallbackDirectory, new FileLogStorage(), new LogClock(), maxBytes, retainedFiles)
-        {
-        }
-
         public SessionLog(string directory, string fallbackDirectory, ILogStorage storage, ILogClock clock,
             long maxBytes = 5 * 1024 * 1024, int retainedFiles = 10)
         {
-            this.storage = storage ?? throw new ArgumentNullException(nameof(storage));
-            this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+            this.storage = Require.NotNull(storage, nameof(storage));
+            this.clock = Require.NotNull(clock, nameof(clock));
             this.directory = directory;
             this.fallbackDirectory = fallbackDirectory;
             this.maxBytes = Math.Max(1024, maxBytes);
@@ -59,8 +54,7 @@ namespace ADModUtils
                     { "thread", Thread.CurrentThread.ManagedThreadId }, { "level", level },
                     { "event", name }, { "droppedRecords", DroppedRecords }
                 };
-                string line = "{" + string.Join(",", row.Select(p => Quote(p.Key) + ":" + Value(p.Value))) +
-                    ",\"data\":{" + string.Join(",", (data ?? new Dictionary<string, object>()).Select(p => Quote(p.Key) + ":" + Value(p.Value))) + "}}\n";
+                string line = JsonLogFormat.Record(row, data);
                 var bytes = Encoding.UTF8.GetBytes(line);
                 try
                 {
@@ -76,7 +70,7 @@ namespace ADModUtils
                         try
                         {
                             FilePath = NewPath(folder); length = 0; Prepare();
-                            Append(Encoding.UTF8.GetBytes("{\"level\":\"WARN\",\"event\":\"log.recovered\",\"reason\":" + Quote(ex.Message) + "}\n"));
+                            Append(Encoding.UTF8.GetBytes("{\"level\":\"WARN\",\"event\":\"log.recovered\",\"reason\":" + JsonLogFormat.Quote(ex.Message) + "}\n"));
                             Append(bytes); initialized = true; return;
                         }
                         catch (Exception retry) when (IsStorageFailure(retry)) { }
@@ -105,7 +99,17 @@ namespace ADModUtils
                 catch (Exception ex) when (IsStorageFailure(ex)) { }
             }
         }
-        private static string Value(object value)
+    }
+
+    /// <summary>Pure JSON encoding shared by the persistent session log and recovery records.</summary>
+    public static class JsonLogFormat
+    {
+        public static string Record(IDictionary<string, object> envelope, IDictionary<string, object> data) =>
+            "{" + string.Join(",", envelope.Select(p => Quote(p.Key) + ":" + Value(p.Value)).Concat(new[] {
+                "\"data\":{" + string.Join(",", (data ?? new Dictionary<string, object>()).Select(p => Quote(p.Key) + ":" + Value(p.Value))) + "}"
+            })) + "}\n";
+
+        public static string Value(object value)
         {
             if (value == null) return "null";
             if (value is bool b) return b ? "true" : "false";
@@ -118,7 +122,7 @@ namespace ADModUtils
             }
             return Quote(Convert.ToString(value, CultureInfo.InvariantCulture));
         }
-        private static string Quote(string value)
+        public static string Quote(string value)
         {
             if (value == null) return "null";
             var result = new StringBuilder("\"");

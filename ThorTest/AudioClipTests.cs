@@ -2,240 +2,181 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Windows.Forms;
 using ADModUtils;
+using GTA;
+using GTA.Math;
+using GTAVMods.Game;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NAudio.Wave;
 
 namespace ModUtilsTest
 {
-    [TestClass]
-    public class AudioClipTests
+    [TestClass, TestCategory("PlayerIntegration")]
+    public class PlayerAudioTests
     {
-        private sealed class Playback : IAudioPlayback
+        private static void Whirl(PlayerSessionFixture s)
         {
-            public readonly List<string> Calls = new List<string>();
-            public string FailOn;
-            public bool CompleteSynchronously;
-            public bool IsPlaying { get; set; }
-            public double DurationSeconds => 2.5;
-            public event EventHandler Stopped;
-            private void Call(string operation) { Calls.Add(operation); if (FailOn == operation) throw new IOException(operation + " failed"); }
-            public void Rewind() => Call("rewind");
-            public void Play() { Call("play"); IsPlaying = true; if (CompleteSynchronously) Complete(); }
-            public void Stop() { Call("stop"); IsPlaying = false; }
-            public void Dispose() => Call("dispose");
-            public void Complete() => Stopped?.Invoke(this, EventArgs.Empty);
-        }
-
-        private sealed class Factory : IAudioPlaybackFactory
-        {
-            public readonly Playback Playback = new Playback();
-            public Exception Failure;
-            public readonly List<Tuple<string, float>> Opens = new List<Tuple<string, float>>();
-            public IAudioPlayback Open(string path, float volume)
-            {
-                Opens.Add(Tuple.Create(path, volume));
-                if (Failure != null) throw Failure;
-                return Playback;
-            }
-        }
-
-        private static DiagnosticLog Log(MemoryLogStorage storage) => new DiagnosticLog(
-            new SessionLog(Path.GetTempPath(), Path.GetTempPath(), storage, new ManualLogClock()), () => 0);
-
-        [TestMethod]
-        public void ClipReusesPlaybackHonorsRestartAndDisposesOnlyOnce()
-        {
-            var factory = new Factory();
-            var storage = new MemoryLogStorage();
-            var clip = new AudioClip("hammer.wav", 0.3f, factory, Log(storage));
-            clip.Stop();
-            clip.Play(false); clip.Play(false); clip.Play(true); clip.Stop(); clip.Play(false);
-            clip.Dispose(); clip.Dispose(); clip.Play(); clip.Stop();
-            CollectionAssert.AreEqual(new[] { "stop", "rewind", "play", "stop", "rewind", "play", "stop", "stop", "rewind", "play", "dispose" }, factory.Playback.Calls);
-            Assert.HasCount(1, factory.Opens);
-            Assert.AreEqual(Tuple.Create("hammer.wav", 0.3f), factory.Opens[0]);
-            var records = storage.Records;
-            CollectionAssert.AreEqual(new[] { "audio.loaded", "audio.play.hammer.wav" }, records.Select(record => LogJson.Text(record, "event")).ToArray());
-            Assert.AreEqual("2.5", LogJson.Text(records[0], "data/durationSeconds"));
-            Assert.AreEqual("hammer.wav", LogJson.Text(records[0], "data/file"));
-            Assert.AreEqual("INFO", LogJson.Text(records[0], "level"));
-            Assert.AreEqual(0.3f, float.Parse(LogJson.Text(records[0], "data/volume"), System.Globalization.CultureInfo.InvariantCulture));
-            Assert.AreEqual("INFO", LogJson.Text(records[1], "level"));
-            Assert.AreEqual("false", LogJson.Text(records[1], "data/restart"));
+            s.Game.Ropes.Creations.Enqueue(70);
+            s.Frame(0, Keys.Z);
+            s.Frame(0, Keys.Z);
         }
 
         [TestMethod]
-        public void OpenFailureIsLoggedOnceAndDoesNotRetryEveryTick()
+        public void RepeatedCatchRequestsRestartOneQuietClipUntilTheEngineConfirmsTheCatch()
         {
-            var factory = new Factory { Failure = new FileNotFoundException("missing clip") };
-            var storage = new MemoryLogStorage();
-            using (var clip = new AudioClip("missing.wav", 1, factory, Log(storage)))
-            { clip.Play(); clip.Play(); clip.Stop(); }
-            Assert.HasCount(1, factory.Opens);
-            Assert.HasCount(0, factory.Playback.Calls);
-            Assert.AreEqual("audio.disabled", LogJson.Text(storage.Records.Single(), "event"));
-            Assert.AreEqual("WARN", LogJson.Text(storage.Records.Single(), "level"));
-            StringAssert.Contains(LogJson.Text(storage.Records.Single(), "data/exception"), "missing clip");
+            var audio = new SilentAudio();
+            var s = new PlayerSessionFixture(audio: audio);
+            s.DropHammer(new Vector3(0, 0, 1));
+            s.Game.World.CapsuleObservation = (from, to, radius, flags) =>
+                new RayHit(true, 10, Vector3.UnitZ);
+            s.Recall();
+            s.Recall();
+            var output = audio.Clips["catch-hammer.wav"];
+            Assert.AreEqual(2, output.Plays);
+            CollectionAssert.AreEqual(new long[] { 0, 0 }, output.PlayPositions,
+                "Each catch begins at the start of the decoded WAV, after the previous output consumed samples.");
+            Assert.HasCount(1, audio.Opens);
+            Assert.AreEqual(0.3f, audio.Opens.Single().Item2);
+            Assert.AreEqual(0.3f, ((AudioFileReader)output.Input).Volume);
+            Assert.AreEqual(WeaponHash.Unarmed, s.Player.CurrentWeapon,
+                "Playing the catch sound cannot fabricate the engine's weapon transfer.");
+            s.ObserveHeldHammer();
+            s.Frame(0);
+            Assert.AreEqual(2, output.Plays, "The observed catch ends transfer retries and their audio.");
+            s.Controller.Abort();
+            Assert.AreEqual(1, output.Disposals);
         }
 
         [TestMethod]
-        [DataRow("play", "stop,rewind,play,dispose")]
-        [DataRow("rewind", "stop,rewind,dispose")]
-        [DataRow("stop", "stop,dispose")]
-        public void PlaybackFailureDisablesAndReleasesTheAcquiredResource(string operation, string expectedCalls)
+        public void HoldingWhirlReusesItsSoundAndDisablingStopsItWithoutLeakingTheDevice()
         {
-            var factory = new Factory();
-            factory.Playback.FailOn = operation;
-            var storage = new MemoryLogStorage();
-            var clip = new AudioClip("hammer.wav", 1, factory, Log(storage));
-            clip.Play(); clip.Play(); clip.Dispose();
-            CollectionAssert.AreEqual(expectedCalls.Split(','), factory.Playback.Calls,
-                "Failure must stop the playback sequence and later frames must not retry the disabled resource.");
-            Assert.HasCount(1, factory.Opens);
-            Assert.HasCount(2, storage.Records, "The clip records its load and one disabling failure.");
-            Assert.AreEqual("audio.disabled", LogJson.Text(storage.Records.Last(), "event"));
-            StringAssert.Contains(LogJson.Text(storage.Records.Last(), "data/exception"), operation + " failed");
+            var audio = new SilentAudio();
+            var s = new PlayerSessionFixture(audio: audio);
+            s.Frame(0);
+            Whirl(s);
+            var clip = audio.Clips["whirling-hammer.wav"];
+            int firstPlay = clip.Plays;
+            s.Frame(0, Keys.Z);
+            Assert.AreEqual(firstPlay, clip.Plays, "Holding Z must not restart a sound that is still playing.");
+            Assert.IsTrue(clip.IsPlaying);
+            Assert.HasCount(1, audio.Opens.Where(open => Path.GetFileName(open.Item1) == "whirling-hammer.wav").ToArray());
+            Assert.AreEqual(1f, audio.Opens.Single(open => Path.GetFileName(open.Item1) == "whirling-hammer.wav").Item2);
+            Assert.AreEqual(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Thor", "whirling-hammer.wav"),
+                audio.Opens.Single(open => Path.GetFileName(open.Item1) == "whirling-hammer.wav").Item1);
+            s.Chord(Keys.F);
+            Assert.IsFalse(clip.IsPlaying);
+            Assert.IsEmpty(s.Game.Ropes.Ropes);
+            Assert.AreEqual(200, s.Player.MaxHealth);
+            s.Controller.Abort();
+            s.Controller.Abort();
+            Assert.IsTrue(audio.Clips.Values.All(output => output.Disposals == 1));
         }
 
         [TestMethod]
-        public void StopAndDisposeFailuresCannotEscapeGameplayOrCauseRepeatedDisposal()
+        [DataRow("missing")]
+        [DataRow("play")]
+        [DataRow("stop")]
+        public void UnavailableWhirlAudioDoesNotPreventWhirlingAndWarnsOnlyOnce(string failure)
         {
-            var factory = new Factory();
-            var storage = new MemoryLogStorage();
-            var clip = new AudioClip("hammer.wav", 1, factory, Log(storage));
-            clip.Play(); factory.Playback.FailOn = "stop"; clip.Stop();
-            Assert.AreEqual(1, factory.Playback.Calls.Count(call => call == "dispose"));
-            Assert.AreEqual("audio.disabled", LogJson.Text(storage.Records.Last(), "event"));
-            int callsAfterFailure = factory.Playback.Calls.Count;
-            clip.Play(); clip.Stop(); clip.Dispose();
-            Assert.AreEqual(callsAfterFailure, factory.Playback.Calls.Count,
-                "The failed Stop must disable the clip immediately, before another Play can fail.");
-            var other = new Factory();
-            var otherClip = new AudioClip("other.wav", 1, other, Log(storage));
-            otherClip.Play(); other.Playback.FailOn = "dispose"; otherClip.Dispose(); otherClip.Dispose();
-            Assert.AreEqual(1, other.Playback.Calls.Count(call => call == "dispose"));
-            Assert.AreEqual("audio.disposeFailed", LogJson.Text(storage.Records.Last(), "event"));
-            Assert.AreEqual("WARN", LogJson.Text(storage.Records.Last(), "level"));
-            Assert.AreEqual("other.wav", LogJson.Text(storage.Records.Last(), "data/file"));
-            StringAssert.Contains(LogJson.Text(storage.Records.Last(), "data/exception"), "dispose failed");
+            var audio = new SilentAudio { Failure = failure };
+            var s = new PlayerSessionFixture(audio: audio);
+            s.Frame(0);
+            Whirl(s);
+            for (int i = 0; i < 3; i++) s.Frame(0, Keys.Z);
+            Assert.IsTrue(s.Game.Ropes.Ropes.Contains(70), "Audio failure cannot cancel the active hammer ability.");
+            Assert.AreEqual(30000, s.Player.MaxHealth);
+            var warnings = s.Log.Records.Where(record => record.Name == "audio.disabled" &&
+                Path.GetFileName((string)record.Data["file"]) == "whirling-hammer.wav").ToArray();
+            Assert.HasCount(1, warnings);
+            StringAssert.Contains((string)warnings[0].Data["exception"],
+                failure == "missing" ? "FileNotFoundException" : failure + " failed");
+            Assert.HasCount(1, audio.Opens.Where(open => Path.GetFileName(open.Item1) == "whirling-hammer.wav").ToArray());
+            s.Controller.Abort();
+            Assert.IsEmpty(s.Game.Ropes.Ropes);
+            Assert.IsTrue(audio.Clips.Values.All(output => output.Disposals == 1));
         }
 
         [TestMethod]
-        public void OneShotSubscribesBeforePlayAndReleasesOnCompletionOrFailure()
+        [DataRow("stop")]
+        [DataRow("dispose")]
+        public void AudioReleaseFailureStillRestoresPlayerHealthAndReleasesTheHammerRope(string failure)
         {
-            var factory = new Factory();
-            factory.Playback.CompleteSynchronously = true;
-            OneShotAudio.Play("short.wav", factory);
-            factory.Playback.Complete();
-            CollectionAssert.AreEqual(new[] { "play", "dispose" }, factory.Playback.Calls);
-            Assert.AreEqual(Tuple.Create("short.wav", 1f), factory.Opens.Single());
-            var failed = new Factory(); failed.Playback.FailOn = "play";
-            Assert.ThrowsExactly<IOException>(() => OneShotAudio.Play("bad.wav", failed));
-            failed.Playback.Complete();
-            CollectionAssert.AreEqual(new[] { "play", "dispose" }, failed.Playback.Calls);
-        }
-
-        [TestMethod]
-        public void MissingPackagedClipLogsOnceAndOneShotReportsTheMissingFile()
-        {
-            string name = "missing-" + Guid.NewGuid() + ".wav";
-            string missing = AudioClip.ResourcePath(name);
-            Assert.AreEqual(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Thor", name), missing);
-            using (var clip = new AudioClip(missing)) { clip.Play(); clip.Play(); clip.Stop(); }
-            var failures = File.ReadAllLines(Logger.LogFilePath).Select(LogJson.Parse)
-                .Where(record => LogJson.Text(record, "event") == "audio.disabled" && LogJson.Text(record, "data/file") == missing).ToArray();
-            Assert.HasCount(1, failures);
-            Assert.ThrowsExactly<FileNotFoundException>(() => Utilities.Audio.Play(missing));
-        }
-
-        [TestMethod]
-        public void InvalidAudioDependenciesAreRejectedBeforeOpeningAClip()
-        {
-            var factory = new Factory();
-            Assert.AreEqual("factory", Assert.ThrowsExactly<ArgumentNullException>(
-                () => new AudioClip("x", 1, null, Log(new MemoryLogStorage()))).ParamName);
-            Assert.AreEqual("log", Assert.ThrowsExactly<ArgumentNullException>(() => new AudioClip("x", 1, factory, null)).ParamName);
-            Assert.HasCount(0, factory.Opens, "An invalid clip must not acquire an output it cannot safely diagnose or release.");
-            Assert.AreEqual("createOutput", Assert.ThrowsExactly<ArgumentNullException>(() => new NAudioPlaybackFactory(null)).ParamName);
+            var audio = new SilentAudio();
+            var s = new PlayerSessionFixture(audio: audio);
+            s.Frame(0);
+            Whirl(s);
+            var output = audio.Clips["whirling-hammer.wav"];
+            output.Failure = failure;
+            s.Controller.Abort();
+            s.Controller.Abort();
+            Assert.AreEqual(1, output.Disposals);
+            Assert.IsEmpty(s.Game.Ropes.Ropes);
+            Assert.AreEqual(200, s.Player.MaxHealth);
+            Assert.AreEqual("WARN", s.Log.Last(failure == "stop" ? "audio.disabled" : "audio.disposeFailed").Level);
         }
 
         private sealed class WavePlayer : IWavePlayer
         {
             public IWaveProvider Input;
-            public bool FailInitialization, FailDisposal;
-            public int Disposals, Plays, Stops;
+            public string Failure;
+            public int Disposals, Plays;
             public PlaybackState PlaybackState { get; private set; }
             public float Volume { get; set; }
             public WaveFormat OutputWaveFormat => Input.WaveFormat;
             public event EventHandler<StoppedEventArgs> PlaybackStopped;
-            public void Init(IWaveProvider waveProvider) { Input = waveProvider; if (FailInitialization) throw new IOException("init failed"); }
+            public void Init(IWaveProvider provider) { Input = provider; if (Failure == "init") throw new IOException("initialization failed"); }
             public void Play() { Plays++; PlaybackState = PlaybackState.Playing; }
-            public void Stop() { Stops++; PlaybackState = PlaybackState.Stopped; }
+            public void Stop() { PlaybackState = PlaybackState.Stopped; PlaybackStopped?.Invoke(this, new StoppedEventArgs(null)); }
             public void Pause() => throw new NotSupportedException();
-            public void Dispose() { Disposals++; if (FailDisposal) throw new IOException("dispose failed"); }
-            public void Complete() => PlaybackStopped?.Invoke(this, new StoppedEventArgs(null));
+            public void Dispose() { Disposals++; if (Failure == "dispose") throw new IOException("device disposal failed"); }
         }
 
-        private static string CreateWave()
+        private sealed class WaveFiles : IAudioPlaybackFactory
         {
-            string path = Path.Combine(Path.GetTempPath(), "ThorAudio-" + Guid.NewGuid() + ".wav");
-            using (var writer = new WaveFileWriter(path, new WaveFormat(8000, 16, 1)))
+            public string Path;
+            public string Failure;
+            public readonly List<WavePlayer> Outputs = new List<WavePlayer>();
+            public IAudioPlayback Open(string ignored, float volume)
             {
-                var data = new byte[16000];
-                for (int i = 0; i < data.Length; i += 2) { data[i] = 0; data[i + 1] = 64; }
-                writer.Write(data, 0, data.Length);
-            }
-            return path;
-        }
-
-        [TestMethod]
-        public void NAudioAdapterMapsVolumeRewindPlaybackAndStoppedEvents()
-        {
-            string path = CreateWave();
-            try
-            {
-                var player = new WavePlayer();
-                int completions = 0;
-                using (var playback = new NAudioPlaybackFactory(() => player).Open(path, 0.25f))
+                if (Failure == "missing") return new NAudioPlaybackFactory().Open(Path + ".missing", volume);
+                return new NAudioPlaybackFactory(() =>
                 {
-                    Assert.AreEqual(1d, playback.DurationSeconds, 0.0001d);
-                    Assert.IsFalse(playback.IsPlaying);
-                    var sample = new byte[4];
-                    Assert.AreEqual(4, player.Input.Read(sample, 0, sample.Length));
-                    Assert.AreEqual(0.125f, BitConverter.ToSingle(sample, 0), 0.00001f);
-                    Assert.IsTrue(((AudioFileReader)player.Input).Position > 0);
-                    playback.Rewind(); Assert.AreEqual(0L, ((AudioFileReader)player.Input).Position);
-                    playback.Play(); Assert.IsTrue(playback.IsPlaying); Assert.AreEqual(1, player.Plays);
-                    playback.Stop(); Assert.IsFalse(playback.IsPlaying); Assert.AreEqual(1, player.Stops);
-                    player.Complete();
-                    playback.Stopped += (sender, args) => { Assert.AreSame(playback, sender); completions++; };
-                    player.Complete(); Assert.AreEqual(1, completions);
-                }
-                Assert.AreEqual(1, player.Disposals);
-                player.Complete();
-                Assert.AreEqual(1, completions, "Disposal must disconnect the output callback.");
-                using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
+                    if (Failure == "create") throw new IOException("output creation failed");
+                    var output = new WavePlayer { Failure = Failure };
+                    Outputs.Add(output);
+                    return output;
+                }).Open(Path, volume);
             }
-            finally { File.Delete(path); }
         }
 
         [TestMethod]
-        public void NAudioAdapterReleasesReaderWhenCreationInitializationOrDisposalFails()
+        [DataRow(null)]
+        [DataRow("create")]
+        [DataRow("missing")]
+        [DataRow("init")]
+        [DataRow("dispose")]
+        public void PlayerWhirlingThroughNAudioReleasesTheWaveFileEvenWhenTheDeviceFails(string failure)
         {
-            string path = CreateWave();
+            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Thor-wave-" + Guid.NewGuid() + ".wav");
             try
             {
-                Assert.ThrowsExactly<IOException>(() => new NAudioPlaybackFactory(() => throw new IOException("factory failed")).Open(path, 1));
-                using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
-                var failed = new WavePlayer { FailInitialization = true };
-                Assert.ThrowsExactly<IOException>(() => new NAudioPlaybackFactory(() => failed).Open(path, 1));
-                Assert.AreEqual(1, failed.Disposals);
-                using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
-                var badDisposal = new WavePlayer { FailDisposal = true };
-                var playback = new NAudioPlaybackFactory(() => badDisposal).Open(path, 1);
-                Assert.ThrowsExactly<IOException>(() => playback.Dispose());
-                Assert.AreEqual(1, badDisposal.Disposals);
+                using (var writer = new WaveFileWriter(path, new WaveFormat(8000, 16, 1)))
+                    writer.Write(new byte[16000], 0, 16000);
+                var audio = new WaveFiles { Path = path, Failure = failure };
+                var s = new PlayerSessionFixture(audio: audio);
+                s.Frame(0);
+                Whirl(s);
+                Assert.IsTrue(s.Game.Ropes.Ropes.Contains(70));
+                if (failure == null)
+                {
+                    Assert.IsTrue(audio.Outputs.Any(output => output.Plays > 0));
+                    Assert.IsTrue(s.Log.Records.Any(record => record.Name == "audio.loaded" && Convert.ToDouble(record.Data["durationSeconds"]) == 1));
+                }
+                else if (failure != "dispose") Assert.IsTrue(s.Log.Records.Any(record => record.Name == "audio.disabled"));
+                s.Controller.Abort();
+                Assert.AreEqual(200, s.Player.MaxHealth);
+                Assert.IsTrue(audio.Outputs.All(output => output.Disposals == 1));
                 using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { }
             }
             finally { File.Delete(path); }

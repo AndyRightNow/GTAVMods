@@ -74,6 +74,21 @@ into the game or install assemblies into the GAC.
 
 ## Test design
 
+- Unit tests are reserved for pure utility/helper functions: explicit inputs
+  determine the result, with no mutable global state, clock reads, randomness,
+  I/O, callbacks with side effects, or changes to caller-owned state. A helper's
+  name does not make a stateful component eligible for unit testing.
+- All other mod tests must be integration scenarios expressed from the player's
+  perspective. Drive the shipped entry points with player input, frame/lifecycle
+  events and explicit engine observations, then assert the expected gameplay,
+  console, presentation, recovery or diagnostic outcome. Use the real cooperating
+  mod components and adapters; replace only external game, device, storage and
+  host boundaries. Do not replace an ability, controller, logger or other mod
+  collaborator with a probe.
+- Do not retain isolated module, adapter, fake-conformance or wiring tests under
+  an "integration" label. Protect their useful contracts inside the player
+  scenario that depends on them. Do not invent player actions or expose internal
+  state solely to make otherwise unreachable code satisfy the coverage gate.
 - Every test case must specify a real behavior: a meaningful starting condition
   and trigger, an observable expected outcome, and the regression it prevents.
   This applies to gameplay, engine contracts, utilities, diagnostics and CI

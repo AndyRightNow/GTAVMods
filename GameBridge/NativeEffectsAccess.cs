@@ -17,8 +17,6 @@ namespace GTAVMods.Game
             int durationMilliseconds, float blendInSpeed, float blendOutSpeed, float playbackRate)
             => native.Call(Hash.TASK_PLAY_ANIM, ped, dictionary, animation, blendInSpeed, blendOutSpeed,
                 durationMilliseconds, (int)flags, playbackRate, 0, 0, 0);
-        public void Stop(int ped, string dictionary, string animation, float blendOutSpeed)
-            => native.Call(Hash.STOP_ANIM_TASK, ped, dictionary, animation, blendOutSpeed);
     }
 
     public sealed class NativeParticleAccess : IParticleAccess
@@ -37,15 +35,6 @@ namespace GTAVMods.Game
         public void PlayAt(string effect, Vector3 position, Vector3 rotationDegrees, float scale)
             => native.Call(Hash.START_PARTICLE_FX_NON_LOOPED_AT_COORD, effect,
                 position.X, position.Y, position.Z, rotationDegrees.X, rotationDegrees.Y, rotationDegrees.Z, scale, 0, 0, 0);
-        public int StartLoopedOnPedBone(string effect, int ped, Bone bone, Vector3 offset, Vector3 rotationDegrees, float scale)
-            => native.Call<int>(Hash.START_PARTICLE_FX_LOOPED_ON_PED_BONE, effect, ped,
-                offset.X, offset.Y, offset.Z, rotationDegrees.X, rotationDegrees.Y, rotationDegrees.Z, (int)bone, scale, 0, 0, 0);
-        public int StartLoopedAt(string effect, Vector3 position, Vector3 rotationDegrees, float scale)
-            => native.Call<int>(Hash.START_PARTICLE_FX_LOOPED_AT_COORD, effect,
-                position.X, position.Y, position.Z, rotationDegrees.X, rotationDegrees.Y, rotationDegrees.Z, scale, 0, 0, 0, false);
-        public void StopLooped(int effect) => native.Call(Hash.STOP_PARTICLE_FX_LOOPED, effect, 0);
-        public void SetLoopedColor(int effect, Color color)
-            => native.Call(Hash.SET_PARTICLE_FX_LOOPED_COLOUR, effect, color.R / 255f, color.G / 255f, color.B / 255f, 0);
     }
 
     public sealed class NativeDrawingAccess : IDrawingAccess

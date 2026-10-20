@@ -232,8 +232,6 @@ namespace Thor
         {
             "ent_dst_elec_fire_sp"
         }).ToArray();
-        public NativeHelper(GameServices game) : this(game, ADModUtils.Logger.Default) { }
-
         public NativeHelper(GameServices game, ADModUtils.IEventLog log)
         {
             Operations = new ADModUtils.NativeHelper(game,
@@ -247,13 +245,19 @@ namespace Thor
         public string GetAnimationNameForAngle(AnimationActions action, float signedAngle)
         {
             uint actionId = (uint)action;
-            string name = Operations.GetAnimationNameByAction(actionId);
+            return AnimationNameForAngle(Operations.GetAnimationNameByAction(actionId), signedAngle,
+                Operations.DoesAnimationActionHaveAngles(actionId),
+                Operations.DoesAnimationActionHaveAnglesAndIncompletePlusOrMinusSign(actionId));
+        }
+
+        public static string AnimationNameForAngle(string name, float signedAngle, bool hasAngles, bool incompleteSign)
+        {
             float angle = System.Math.Abs(signedAngle);
-            if (!Operations.DoesAnimationActionHaveAngles(actionId) || angle < 45)
+            if (!hasAngles || angle < 45)
                 return name;
             string angleName = angle < 135 ? "90" : "180";
             bool toLeft = signedAngle < 0;
-            string sign = Operations.DoesAnimationActionHaveAnglesAndIncompletePlusOrMinusSign(actionId)
+            string sign = incompleteSign
                 ? (angleName == "90" && toLeft ? "" : "-")
                 : (toLeft ? "+" : "-");
             return name.Replace("_0", "_" + sign + angleName);
@@ -269,9 +273,5 @@ namespace Thor
             Operations.PlayParticleFx(Operations.GetParticleSetName((uint)ParticleEffects.Thunder), Operations.GetParticleName((uint)ParticleEffects.Thunder), ped, boneId, scale);
         }
 
-        public void PlayThunderFx(Vector3 pos, float scale = 1.0f)
-        {
-            Operations.PlayParticleFx(Operations.GetParticleSetName((uint)ParticleEffects.Thunder), Operations.GetParticleName((uint)ParticleEffects.Thunder), pos, Vector3.Zero, scale);
-        }
     }
 }

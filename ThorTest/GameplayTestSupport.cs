@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ADModUtils;
+using NAudio.Wave;
 
 namespace ModUtilsTest
 {
@@ -10,66 +11,56 @@ namespace ModUtilsTest
     {
         public string Name;
         public string Level;
-        public int? Interval;
         public Dictionary<string, object> Data;
-    }
-
-    internal sealed class RecordingLog : IEventLog
-    {
-        public readonly List<EventRecord> Records = new List<EventRecord>();
-        public string FailOn;
-        public void Event(string level, string name, params object[] data) => Add(level, name, null, data);
-        public void Throttled(string level, string name, int intervalMs, params object[] data) => Add(level, name, intervalMs, data);
-        private void Add(string level, string name, int? interval, object[] data)
-        {
-            if (name == FailOn) throw new IOException("log unavailable");
-            var values = new Dictionary<string, object>();
-            for (int i = 0; i < data.Length; i += 2) values.Add((string)data[i], data[i + 1]);
-            Records.Add(new EventRecord { Name = name, Level = level, Interval = interval, Data = values });
-        }
-        public EventRecord Last(string name) => Records.Last(record => record.Name == name);
     }
 
     internal sealed class SilentAudio : IAudioPlaybackFactory
     {
-        internal sealed class Clip : IAudioPlayback
+        // Only the physical output is substituted. Decoding, volume, seeking and
+        // ownership all pass through the production NAudio adapter.
+        internal sealed class Clip : IWavePlayer
         {
-            public bool IsPlaying { get; private set; }
-            public double DurationSeconds => 1;
+            public string Failure;
+            public IWaveProvider Input;
+            public readonly List<long> PlayPositions = new List<long>();
+            public bool IsPlaying => PlaybackState == PlaybackState.Playing;
+            public PlaybackState PlaybackState { get; private set; }
+            public float Volume { get; set; }
+            public WaveFormat OutputWaveFormat => Input.WaveFormat;
             public int Plays, Stops, Disposals;
-            public event EventHandler Stopped { add { } remove { } }
-            public void Rewind() { }
-            public void Play() { IsPlaying = true; Plays++; }
-            public void Stop() { IsPlaying = false; Stops++; }
-            public void Dispose() { IsPlaying = false; Disposals++; }
+            public event EventHandler<StoppedEventArgs> PlaybackStopped { add { } remove { } }
+            private void Check(string operation) { if (Failure == operation) throw new IOException(operation + " failed"); }
+            public void Init(IWaveProvider input) { Input = input; Check("init"); }
+            public void Play()
+            {
+                Plays++;
+                Check("play");
+                var reader = (AudioFileReader)Input;
+                PlayPositions.Add(reader.Position);
+                // An output consumes samples; a subsequent catch must rewind the
+                // real reader instead of resuming after the consumed prefix.
+                var frame = new byte[Input.WaveFormat.BlockAlign];
+                Input.Read(frame, 0, frame.Length);
+                PlaybackState = PlaybackState.Playing;
+            }
+            public void Stop() { Stops++; Check("stop"); PlaybackState = PlaybackState.Stopped; }
+            public void Pause() => throw new NotSupportedException();
+            public void Dispose() { Disposals++; PlaybackState = PlaybackState.Stopped; Check("dispose"); }
         }
         public readonly Dictionary<string, Clip> Clips = new Dictionary<string, Clip>();
+        public readonly List<Tuple<string, float>> Opens = new List<Tuple<string, float>>();
+        public string Failure;
         public IAudioPlayback Open(string path, float volume)
         {
-            var clip = new Clip();
-            Clips.Add(Path.GetFileName(path), clip);
-            return clip;
+            Opens.Add(Tuple.Create(path, volume));
+            return new NAudioPlaybackFactory(() =>
+            {
+                if (Failure == "create") throw new IOException("output creation failed");
+                var clip = new Clip { Failure = Failure };
+                Clips.Add(Path.GetFileName(path), clip);
+                return clip;
+            }).Open(Failure == "missing" ? path + ".missing" : path, volume);
         }
     }
 
-    internal sealed class AbilityProbe : Thor.IThorAbility
-    {
-        public bool IsAttachedToPed { get; set; }
-        public bool IsHoldingWeapon { get; set; }
-        public string DiagnosticState { get; set; } = "idle";
-        public int WeaponObject { get; set; }
-        public readonly List<string> Calls = new List<string>();
-        public string Failure;
-        private void Call(string name)
-        {
-            Calls.Add(name);
-            if (name == Failure) throw new InvalidOperationException("ability failure: " + name);
-        }
-        public void ApplyOn(int ped) { Call("apply:" + ped); IsAttachedToPed = true; }
-        public void OnTick(bool onlyHandleWeaponHolding) => Call("tick:" + onlyHandleWeaponHolding);
-        public void RemoveAbility() { Call("remove"); IsAttachedToPed = false; }
-        public void ResetWeapon() => Call("reset");
-        public void DisposeSounds() => Call("sounds");
-        public void DisposeWeapon() => Call("weapon");
-    }
 }

@@ -21,63 +21,25 @@ namespace ModUtilsTest
     }
 
     [TestClass]
+    [TestCategory("PureFunction")]
     public class Utilities_Test
     {
-        private System.Random originalRandom;
-
-        [TestInitialize]
-        public void UseDeterministicRandom()
-        {
-            originalRandom = Utilities.Random.SystemRandomInstance;
-            Utilities.Random.SystemRandomInstance = new FixedRandom();
-        }
-
-        [TestCleanup]
-        public void RestoreRandom() => Utilities.Random.SystemRandomInstance = originalRandom;
-
         [TestMethod]
-        public void SelectionUsesWholeInputAndFiltersBeforeChoosing()
+        public void RequiredValuesRejectMissingOrEmptyConfigurationWithTheParameterName()
         {
-            var random = new FixedRandom(2);
-            Utilities.Random.SystemRandomInstance = random;
-            Assert.AreEqual("last", Utilities.Random.PickOne(new[] { "first", "middle", "last" }));
-            Assert.AreEqual("first", Utilities.Random.PickOne(new[] { "first", "last" }, new FixedRandom(0)));
-            CollectionAssert.AreEqual(new[] { 3 }, random.Bounds);
-            var filtered = new FixedRandom(1);
-            Utilities.Random.SystemRandomInstance = filtered;
-            var visited = new List<int>();
-            Assert.AreEqual(8, Utilities.Random.PickOneIf(new[] { 1, 4, 3, 8 }, value => { visited.Add(value); return value % 2 == 0; }));
-            CollectionAssert.AreEqual(new[] { 1, 4, 3, 8 }, visited);
-            CollectionAssert.AreEqual(new[] { 2 }, filtered.Bounds);
+            Assert.AreEqual("clip", Require.NotNull("clip", "path"));
+            Assert.AreEqual("path", Assert.ThrowsExactly<ArgumentNullException>(() => Require.NotNull<string>(null, "path")).ParamName);
+            CollectionAssert.AreEqual(new[] { 3, 7 }, Require.NonEmpty(new[] { 3, 7 }, "choices"));
+            Assert.AreEqual("choices", Assert.ThrowsExactly<ArgumentNullException>(() => Require.NonEmpty<int>(null, "choices")).ParamName);
+            Assert.AreEqual("choices", Assert.ThrowsExactly<ArgumentException>(() => Require.NonEmpty(Array.Empty<int>(), "choices")).ParamName);
         }
 
         [TestMethod]
-        public void EmptySelectionsDoNotReadRandomnessAndInvalidCallbacksAreRejected()
+        public void NonnegativeDurationsAcceptZeroAndRejectNegativeValues()
         {
-            var random = new FixedRandom();
-            Assert.IsNull(Utilities.Random.PickOne<string>(null, random));
-            Assert.AreEqual(0, Utilities.Random.PickOne(Array.Empty<int>(), random));
-            Assert.AreEqual(0, Utilities.Random.PickOneIf<int>(null, value => true, random));
-            Assert.AreEqual(0, Utilities.Random.PickOneIf(Array.Empty<int>(), value => true, random));
-            Assert.IsNull(Utilities.Random.PickOneIf(new[] { "x" }, value => value == "y", random));
-            Assert.HasCount(0, random.Bounds);
-            Assert.AreEqual("random", Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.PickOne(new[] { 1 }, null)).ParamName);
-            Assert.AreEqual("random", Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.PickOne(Array.Empty<int>(), null)).ParamName);
-            Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.PickOneIf(new[] { 1 }, null));
-            Assert.AreEqual("random", Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.RandomNegation(null)).ParamName);
-            Assert.AreEqual("random", Assert.ThrowsExactly<ArgumentNullException>(() => Utilities.Random.NextFloat(null)).ParamName);
-        }
-
-        [TestMethod]
-        public void RandomSignsAndUnsignedMagnitudeFollowRequestedBounds()
-        {
-            Utilities.Random.SystemRandomInstance = new FixedRandom(0, 0.75);
-            Assert.AreEqual(-1, Utilities.Random.RandomNegation());
-            Assert.AreEqual(1, Utilities.Random.RandomNegation(new FixedRandom(1)));
-            Assert.AreEqual(-0.75f, Utilities.Random.NextFloat());
-            var unsigned = new FixedRandom(0, 0.75);
-            Assert.AreEqual(0.75f, Utilities.Random.NextFloat(unsigned, false));
-            Assert.HasCount(0, unsigned.Bounds);
+            Assert.AreEqual(0, Require.NonNegative(0, "interval"));
+            Assert.AreEqual(1000, Require.NonNegative(1000, "interval"));
+            Assert.AreEqual("interval", Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => Require.NonNegative(-1, "interval")).ParamName);
         }
 
         [TestMethod]
@@ -88,7 +50,7 @@ namespace ModUtilsTest
         public void PerpendicularVectorIsOrthogonalAndUnitLength(float x, float y, float z)
         {
             var normal = new Vector3(x, y, z);
-            var result = Utilities.Math.RandomVectorPerpendicularTo(normal);
+            var result = Utilities.Math.PerpendicularTo(normal, 0.5f, 0.5f, 0.5f);
             Assert.AreEqual(0f, Vector3.Dot(normal, result), 0.00001f);
             Assert.AreEqual(1f, result.Length(), 0.00001f);
         }
@@ -101,7 +63,7 @@ namespace ModUtilsTest
         public void ZeroRandomSamplesStillProduceAUsablePerpendicular(float x, float y, float z)
         {
             var normal = new Vector3(x, y, z);
-            var result = Utilities.Math.RandomVectorPerpendicularTo(normal, new FixedRandom(0, 0));
+            var result = Utilities.Math.PerpendicularTo(normal, 0, 0, 0);
             Assert.AreEqual(1f, result.Length(), 0.00001f);
             Assert.AreEqual(0f, Vector3.Dot(normal, result), 0.00001f);
         }
@@ -110,10 +72,10 @@ namespace ModUtilsTest
         public void UnnormalizedPerpendicularPreservesSampleMagnitude()
         {
             // The XZ plane is perpendicular to Y. Two half-unit samples have length sqrt(1/2).
-            var raw = Utilities.Math.RandomVectorPerpendicularTo(Vector3.UnitY, new FixedRandom(1, 0.5), false);
+            var raw = Utilities.Math.PerpendicularTo(Vector3.UnitY, 0.5f, 0.5f, 0.5f, false);
             Assert.AreEqual(0f, Vector3.Dot(Vector3.UnitY, raw), 0.00001f);
             Assert.AreEqual((float)System.Math.Sqrt(0.5), raw.Length(), 0.00001f);
-            var unit = Utilities.Math.RandomVectorPerpendicularTo(Vector3.UnitY, new FixedRandom(1, 0.5));
+            var unit = Utilities.Math.PerpendicularTo(Vector3.UnitY, 0.5f, 0.5f, 0.5f);
             Assert.AreEqual(1f, unit.Length(), 0.00001f);
             Assert.IsTrue((unit - raw.Normalized).Length() < 0.00001f);
         }
@@ -144,27 +106,52 @@ namespace ModUtilsTest
         }
 
         [TestMethod]
-        public void AnglesAndRotationsMatchKnownAxes()
+        public void AngleUnitsConvertKnownQuarterAndHalfTurns()
         {
             Assert.AreEqual(180f, Utilities.Math.RadiansToDegrees((float)System.Math.PI), 0.001f);
             Assert.AreEqual((float)(System.Math.PI / 2), Utilities.Math.DegreesToRadians(90), 0.00001f);
+        }
+
+        [TestMethod]
+        public void SignedPlanarAnglesDistinguishClockwiseAndCounterclockwiseTurns()
+        {
             Assert.AreEqual(90f, Utilities.Math.Angle(new Vector2(1, 0), new Vector2(0, 1)), 0.00001f);
             Assert.AreEqual(-90f, Utilities.Math.Angle(new Vector2(0, 1), new Vector2(1, 0)), 0.00001f);
+        }
+
+        [TestMethod]
+        public void DirectionRotationPreservesRollAndSignsPitchAndHeading()
+        {
             Vector3 rotation = Utilities.Math.DirectionToRotation(Vector3.UnitX, 12);
             Assert.AreEqual(0f, rotation.X);
             Assert.AreEqual(12f, rotation.Y);
             Assert.AreEqual(-90f, rotation.Z, 0.001f);
             Assert.AreEqual(45f, Utilities.Math.DirectionToRotation(new Vector3(0, 1, 1)).X, 0.001f);
             Assert.AreEqual(-45f, Utilities.Math.DirectionToRotation(new Vector3(0, 1, -1)).X, 0.001f);
+        }
+
+        [TestMethod]
+        public void DirectionQuaternionRepresentsAKnownClockwiseQuarterTurn()
+        {
             Quaternion turn = Utilities.Math.DirectionToQuaternion(Vector3.UnitY * 5, Vector3.UnitX * 2);
             Assert.AreEqual(0f, turn.X, 0.00001f);
             Assert.AreEqual(0f, turn.Y, 0.00001f);
             Assert.AreEqual(-(float)System.Math.Sqrt(0.5), turn.Z, 0.00001f);
             Assert.AreEqual((float)System.Math.Sqrt(0.5), turn.W, 0.00001f);
-            Assert.AreEqual(Vector3.Zero, Utilities.Math.QuaternionToEulerAngles(Quaternion.Identity));
             Assert.AreEqual(-90f, Utilities.Math.QuaternionToEulerAngles(turn).Z, 0.001f);
+        }
+
+        [TestMethod]
+        public void EulerConversionHandlesIdentityAndBothPitchLimits()
+        {
+            Assert.AreEqual(Vector3.Zero, Utilities.Math.QuaternionToEulerAngles(Quaternion.Identity));
             Assert.AreEqual(90f, Utilities.Math.QuaternionToEulerAngles(new Quaternion(0, 1, 0, 1)).Y, 0.001f);
             Assert.AreEqual(-90f, Utilities.Math.QuaternionToEulerAngles(new Quaternion(0, -1, 0, 1)).Y, 0.001f);
+        }
+
+        [TestMethod]
+        public void MissingSourceOrTargetDirectionProducesNoRotation()
+        {
             Assert.AreEqual(Quaternion.Identity, Utilities.Math.DirectionToQuaternion(Vector3.Zero, Vector3.UnitY));
             Assert.AreEqual(Quaternion.Identity, Utilities.Math.DirectionToQuaternion(Vector3.UnitY, Vector3.Zero));
         }
@@ -222,41 +209,6 @@ namespace ModUtilsTest
             var second = new Vector3(13, -16, 30);
             Assert.IsTrue(Utilities.Math.CloseTo(first, second, 5), "Translation must not change the five-unit separation.");
             Assert.IsFalse(Utilities.Math.CloseTo(second, first, 4.99f));
-        }
-
-        [TestMethod]
-        public void SwapExchangesBothCallerValues()
-        {
-            string left = "left", right = "right";
-            Utilities.Swap(ref left, ref right);
-            Assert.AreEqual("right", left);
-            Assert.AreEqual("left", right);
-        }
-
-        [TestMethod]
-        public void TimerFiresAtBoundaryWithoutCatchUpBurstsAndSurvivesGameTimeWrap()
-        {
-            int now = int.MaxValue - 50, calls = 0;
-            var timer = new Utilities.Timer(100, () => calls++, () => now);
-            now = unchecked(now + 99); timer.OnTick(); Assert.AreEqual(0, calls);
-            now = unchecked(now + 1); timer.OnTick(); timer.OnTick(); Assert.AreEqual(1, calls);
-            now = unchecked(now + 1000); timer.OnTick(); timer.OnTick(); Assert.AreEqual(2, calls);
-            now = unchecked(now + 100); timer.OnTick(); Assert.AreEqual(3, calls);
-            Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new Utilities.Timer(-1, () => { }, () => 0));
-            Assert.ThrowsExactly<ArgumentNullException>(() => new Utilities.Timer(1, null, () => 0));
-            Assert.ThrowsExactly<ArgumentNullException>(() => new Utilities.Timer(1, () => { }, null));
-        }
-
-        [TestMethod]
-        public void ZeroIntervalTimerFiresOncePerTickIncludingTheSameClockInstant()
-        {
-            int calls = 0;
-            var timer = new Utilities.Timer(0, () => calls++, () => 123);
-            Assert.AreEqual(0, calls, "Constructing a timer does not invoke its callback.");
-            timer.OnTick();
-            Assert.AreEqual(1, calls);
-            timer.OnTick();
-            Assert.AreEqual(2, calls);
         }
 
         [TestMethod]

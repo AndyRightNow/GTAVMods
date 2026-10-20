@@ -14,122 +14,16 @@ using ADModUtils;
 
 namespace ModUtilsTest
 {
-    [TestClass]
+    [TestClass, TestCategory("PlayerIntegration")]
     public class ContractScenarioTests
     {
-        // A scene supplies engine observations and successful allocations, never
-        // ability transitions or simulated motion. All behavior uses the shipped composition.
-        private sealed class Scene
-        {
-            public readonly FakeGame Game = new FakeGame();
-            public readonly RecordingLog Log = new RecordingLog();
-            public readonly SilentAudio Audio = new SilentAudio();
-            public readonly ThorController Controller;
-            public readonly List<int> CreatedWeapons = new List<int>();
-            private readonly bool initiallyHolding;
-            private int nextWeapon = 1000;
-
-            public Scene(int seed = 11, bool holding = true)
-            {
-                initiallyHolding = holding;
-                AddPlayer(10, 200);
-                AddPlayer(11, 250);
-                Game.AddEntity(20);
-                Game.AddEntity(99).Position = new Vector3(90, 80, 70);
-                Game.AddEntity(40);
-                Game.AddEntity(41);
-                Game.World.Vehicles.Enqueue(40);
-                Game.World.Drivers.Enqueue(41);
-                Game.World.ModelResults[(int)VehicleHash.Thruster] = true;
-                Game.Weapons.AssetResults[WeaponHash.Hammer] = true;
-                Game.Weapons.AssetResults[WeaponHash.Grenade] = true;
-                Game.Entities.CreatedBlips.Enqueue(2000);
-                Game.World.Nearby = (position, radius) => Array.Empty<int>();
-                Game.World.RaycastObservation = (from, to, flags, ignore) => new RayHit(false, 0, Vector3.Zero);
-                Game.World.CapsuleObservation = (from, to, radius, flags) => new RayHit(false, 0, Vector3.Zero);
-                Game.Native.Queries[Hash.IS_ENTITY_A_PED] = args => new[] { 10, 11, 60 }.Contains((int)args[0]);
-                Game.Native.Returns(Hash.IS_ENTITY_A_VEHICLE, false);
-                Game.Native.Queries[Hash.GET_ENTITY_COORDS] = args => Game.Entity((int)args[0]).Position;
-                Game.Native.Queries[Hash.GET_ENTITY_SPEED] = args => Game.Entity((int)args[0]).Velocity.Length();
-                Game.Native.Queries[Hash.GET_WEAPON_OBJECT_FROM_PED] = args => Game.Entity((int)args[0]).CurrentWeaponObject;
-                Game.Native.Queries[Hash.CREATE_WEAPON_OBJECT] = args =>
-                {
-                    int handle = nextWeapon++;
-                    Game.AddEntity(handle).Position = new Vector3((float)args[2], (float)args[3], (float)args[4]);
-                    CreatedWeapons.Add(handle);
-                    return handle;
-                };
-                Game.Native.Returns(Hash.IS_ENTITY_PLAYING_ANIM, false);
-                Game.Native.Returns(Hash.HAS_ANIM_DICT_LOADED, true);
-                Game.Native.Returns(Hash.HAS_NAMED_PTFX_ASSET_LOADED, true);
-                Game.Host.OnWait = milliseconds => Game.Host.GameTime = unchecked(Game.Host.GameTime + milliseconds);
-                if (holding) Game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20);
-                Controller = ThorComposition.Create(Game.Services, Audio, Log, new Random(seed),
-                    Thor.Thor.ReadConsoleOpen, Thor.Thor.ReadDroppedRecords, ThorSessionInfo.Capture("scenario.jsonl"));
-                Controller.Start();
-            }
-
-            private void AddPlayer(int handle, int originalHealth)
-            {
-                var player = Game.AddEntity(handle);
-                player.MaxHealth = player.Health = originalHealth;
-                player.Bones[Bone.PHRightHand] = new Vector3(0, 0, 1);
-            }
-
-            public void Frame(int elapsed = 16, Keys key = Keys.None, bool aim = false, bool expectFailure = false)
-            {
-                Game.Input.Keys.Clear();
-                Game.Input.Pressed.Clear();
-                if (key != Keys.None) Game.Input.Keys.Add(key);
-                if (aim) Game.Input.Pressed.Add(Control.Aim);
-                Game.AdvanceFrame(elapsed);
-                Controller.Tick();
-                if (!expectFailure) AssertNoErrors();
-            }
-
-            public void Chord(Keys key)
-            {
-                Game.Input.Keys.Clear();
-                Game.Input.Keys.Add(Keys.A);
-                Controller.KeyDown(new KeyEventArgs(key | Keys.Control));
-            }
-
-            public string State()
-            {
-                Controller.KeyDown(new KeyEventArgs(Keys.F9));
-                return (string)Log.Last("gameplay.snapshot").Data["state"];
-            }
-
-            public void AssertNoErrors()
-            {
-                var errors = Log.Records.Where(record => record.Level == "ERROR" || record.Name == "diagnostics.exception").ToArray();
-                Assert.IsEmpty(errors, string.Join(Environment.NewLine, errors.Select(record =>
-                    record.Name + ": " + string.Join(", ", record.Data.Values))));
-            }
-
-            public void AssertReleased()
-            {
-                Assert.IsFalse(Game.Observations[40].Exists);
-                Assert.IsFalse(Game.Observations[41].Exists);
-                Assert.AreEqual(!initiallyHolding, Game.Observations[20].Exists);
-                Assert.IsTrue(CreatedWeapons.All(handle => !Game.Observations[handle].Exists));
-                Assert.IsEmpty(Game.Ropes.Ropes);
-                Assert.IsEmpty(Game.Cameras.Cameras);
-                Assert.AreEqual(200, Game.Entity(10).MaxHealth);
-                Assert.AreEqual(250, Game.Entity(11).MaxHealth);
-                Assert.AreEqual(new Vector3(90, 80, 70), Game.Entity(99).Position);
-                Assert.IsFalse(Game.Calls.Any(call => call.Name == "entity.delete" && (int)call.Arguments[0] == 99));
-                Assert.IsTrue(Audio.Clips.Values.All(clip => clip.Disposals == 1 && !clip.IsPlaying));
-            }
-        }
-
         [TestMethod]
         [DataRow(16)]
         [DataRow(33)]
         [DataRow(97)]
-        public void ThrowCameraCatchWhirlAndDisablePreserveOwnershipAcrossFrameSchedules(int frameMs)
+        public void CatchCompletesOnlyAfterTheEngineEquipsTheHammerAndReleasesItsFollowCamera(int frameMs)
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Frame(frameMs);
             Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
             s.Frame(frameMs, Keys.T, aim: true);
@@ -159,6 +53,17 @@ namespace ModUtilsTest
             Assert.AreEqual(0, s.Game.Cameras.RenderingCamera);
             Assert.AreEqual(2, s.Audio.Clips["catch-hammer.wav"].Plays);
 
+            s.Controller.Abort();
+            s.AssertNoErrors();
+            s.AssertReleased();
+        }
+
+        [TestMethod]
+        public void DisablingWhirlStopsItsEffectsAndEnablingRetainsTheDroppedHammer()
+        {
+            const int frameMs = 16;
+            var s = new PlayerSessionFixture();
+            s.Frame(frameMs);
             s.Game.Ropes.Creations.Enqueue(70);
             s.Frame(frameMs, Keys.Z);
             Assert.IsTrue(s.Game.Ropes.Ropes.Contains(70));
@@ -185,13 +90,13 @@ namespace ModUtilsTest
         [TestMethod]
         public void AssetAndAnimationDiagnosticsReachSessionLogWithoutPreventingThrow()
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Frame();
             var startup = s.Log.Last("session.start");
-            Assert.AreEqual("scenario.jsonl", startup.Data["logPath"]);
+            Assert.AreEqual(s.Log.Writer.FilePath, startup.Data["logPath"]);
             Assert.AreEqual(File.GetLastWriteTimeUtc(typeof(ThorController).Assembly.Location).ToString("O"), startup.Data["buildUtc"]);
             Assert.AreEqual(typeof(Script).Assembly.GetName().Version.ToString(), startup.Data["apiVersion"]);
-            Assert.AreEqual(Logger.DroppedRecords, s.Log.Last("performance").Data["droppedLogRecords"]);
+            Assert.AreEqual(0, s.Log.Last("performance").Data["droppedLogRecords"]);
             var created = s.Log.Records.Where(record => record.Name == "asset.weapon.created").ToArray();
             CollectionAssert.AreEqual(s.CreatedWeapons.ToArray(),
                 created.Select(record => (int)record.Data["handle"]).ToArray());
@@ -205,7 +110,6 @@ namespace ModUtilsTest
             var dictionary = (string)s.Game.Native.Calls.Last(call => call.Hash == Hash.REQUEST_ANIM_DICT).Arguments[0];
             var warning = s.Log.Last("animation.timeout." + dictionary);
             Assert.AreEqual("WARN", warning.Level);
-            Assert.AreEqual(10000, warning.Interval);
             Assert.AreEqual(dictionary, warning.Data["dictionary"]);
             Assert.IsFalse(string.IsNullOrEmpty((string)warning.Data["animation"]));
             Assert.HasCount(2, s.Game.Calls.Where(call => call.Name == "host.yield").ToArray());
@@ -213,7 +117,7 @@ namespace ModUtilsTest
             Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
             Assert.AreEqual(new Vector3(0, 100, 5), s.Game.Entity(20).Velocity);
             s.Controller.Abort();
-            Assert.AreEqual(Logger.DroppedRecords, s.Log.Last("session.end").Data["droppedLogRecords"]);
+            Assert.AreEqual(0, s.Log.Last("session.end").Data["droppedLogRecords"]);
             s.AssertNoErrors();
             s.AssertReleased();
         }
@@ -221,17 +125,17 @@ namespace ModUtilsTest
         [TestMethod]
         public void OpenConsoleProtectsGameplayFromDisableUntilItClosesOrIsDisposed()
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Frame();
             using (var console = new ConsoleFixture())
             {
-                console.Model.ShowConsole(true);
+                console.Press(Keys.F8);
                 s.Chord(Keys.F);
                 Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
                 Assert.AreEqual(WeaponHash.Hammer, s.Game.Entity(10).CurrentWeapon);
                 Assert.IsFalse(s.Log.Records.Any(record => record.Name == "ability.disabled"));
 
-                console.Model.ShowConsole(false);
+                console.Press(Keys.F8);
                 s.Chord(Keys.F);
                 Assert.AreEqual(200, s.Game.Entity(10).MaxHealth);
                 Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
@@ -241,7 +145,7 @@ namespace ModUtilsTest
                 s.Game.ObserveNextFrame(game => game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20));
                 s.Frame();
                 Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
-                console.Model.ShowConsole(true);
+                console.Press(Keys.F8);
             }
 
             s.Chord(Keys.F);
@@ -261,7 +165,7 @@ namespace ModUtilsTest
         [DataRow(Keys.Z, false)]
         public void FailedDropLeavesHeldHammerOwnedAndRetryableWithoutStartingThrowOrRope(Keys action, bool targeted)
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Frame();
             s.Frame(16, Keys.Y);
             s.Game.ObserveNextFrame(game => game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20));
@@ -305,7 +209,7 @@ namespace ModUtilsTest
         [TestMethod]
         public void CleanupAfterFailedDropRestoresPlayerAndRetainsReleaseForExplicitRetry()
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Frame();
             s.Game.Native.Returns(Hash.GET_WEAPON_OBJECT_FROM_PED, 0);
             s.Chord(Keys.F);
@@ -324,11 +228,13 @@ namespace ModUtilsTest
             Assert.IsFalse(s.Log.Records.Any(record => record.Name == "ability.enabled"));
 
             s.Game.Native.Queries[Hash.GET_WEAPON_OBJECT_FROM_PED] = args => s.Game.Entity((int)args[0]).CurrentWeaponObject;
+            int failuresBeforeRecovery = FailureCount(s);
             s.Chord(Keys.O);
             Assert.IsFalse(s.Game.Observations[20].Exists);
             Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
             s.Game.Entities.CreatedBlips.Enqueue(2001);
             s.Frame(expectFailure: true);
+            Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
             Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.enabled").ToArray());
             Assert.AreEqual(3, s.CreatedWeapons.Count(handle => s.Game.Observations[handle].Exists));
             s.Controller.Abort();
@@ -341,7 +247,7 @@ namespace ModUtilsTest
         [DataRow(8675309)]
         public void SeededLifecycleSequencesRestoreEveryFormerPlayerAndNeverAllocateWhileInactive(int seed)
         {
-            var s = new Scene(seed, holding: false);
+            var s = new PlayerSessionFixture(seed, holding: false);
             var events = new Random(seed);
             bool enabled = true;
             s.Frame();
@@ -380,7 +286,7 @@ namespace ModUtilsTest
         [TestMethod]
         public void CleanupRetriesKeepFailedResourcesOwnedWithoutRecreatingThemOrLosingOtherCleanup()
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Game.Ropes.Creations.Enqueue(70);
             s.Frame(16, Keys.Z);
             s.Frame(16, Keys.Z);
@@ -414,11 +320,13 @@ namespace ModUtilsTest
             Assert.IsFalse(s.Log.Records.Any(record => record.Name == "tick.exception"));
 
             failAnchor = false;
+            int failuresBeforeRecovery = FailureCount(s);
             s.Chord(Keys.O);
             Assert.IsFalse(s.Game.Observations[anchor].Exists);
             Assert.IsFalse(s.Game.Observations[20].Exists);
             s.Game.Entities.CreatedBlips.Enqueue(2001);
             s.Frame(expectFailure: true);
+            Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
             Assert.IsTrue(s.State().Contains("attached=True"));
             Assert.AreEqual(3, s.CreatedWeapons.Count(handle => s.Game.Observations[handle].Exists));
             Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.enabled").ToArray());
@@ -433,7 +341,7 @@ namespace ModUtilsTest
         [TestMethod]
         public void SilentDeletionRefusalKeepsCleanupOwnedWhileOtherResourcesReleaseAndRetryCanRecover()
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Frame();
             int retained = s.CreatedWeapons.First();
             int independent = s.CreatedWeapons.Last();
@@ -453,11 +361,13 @@ namespace ModUtilsTest
             Assert.IsTrue(s.Game.Observations[retained].Exists);
 
             s.Game.Entities.SilentDeletionRefusals.Clear();
+            int failuresBeforeRecovery = FailureCount(s);
             s.Chord(Keys.O);
             Assert.IsFalse(s.Game.Observations[retained].Exists);
             Assert.IsFalse(s.Game.Observations[20].Exists);
             s.Game.Entities.CreatedBlips.Enqueue(2001);
             s.Frame(expectFailure: true);
+            Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
             Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.enabled").ToArray());
             Assert.AreEqual(3, s.CreatedWeapons.Count(handle => s.Game.Observations[handle].Exists));
             s.Controller.Abort();
@@ -472,7 +382,7 @@ namespace ModUtilsTest
         [TestMethod]
         public void ExternalHeldObjectLossPausesUntilAConsistentInventoryObservationAllowsRecovery()
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Frame();
             s.Game.ObserveNextFrame(game => game.Observations[20].Exists = false);
             s.Frame(expectFailure: true);
@@ -486,8 +396,10 @@ namespace ModUtilsTest
 
             s.Game.ObserveNextFrame(game => game.ApplyWeaponObservation(10, WeaponHash.Unarmed, 0));
             s.Frame(expectFailure: true);
+            int failuresBeforeRecovery = FailureCount(s);
             s.Chord(Keys.O);
             s.Frame(expectFailure: true);
+            Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
             Assert.IsTrue(s.State().Contains("attached=True"));
             Assert.AreEqual(3, s.CreatedWeapons.Count(handle => s.Game.Observations[handle].Exists));
             Assert.IsFalse(s.Game.Calls.Any(call => call.Name == "entity.delete" && (int)call.Arguments[0] == 20),
@@ -502,7 +414,7 @@ namespace ModUtilsTest
         [DataRow(int.MaxValue - 1024)]
         public void ThrowFlightExpiresAtTwoSecondsIncludingSignedClockWrap(int startTime)
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Game.Host.GameTime = startTime;
             s.Frame(0, Keys.U, aim: true);
             StringAssert.Contains(s.State(), "holding=True");
@@ -533,7 +445,7 @@ namespace ModUtilsTest
         [DataRow(-1)]
         public void DroppedHammerPowerAndHealingExpireAfterTenSecondsAcrossClockBoundaries(int lossTime)
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Game.Host.GameTime = unchecked(lossTime - 201);
             s.Frame(0);
             s.Game.Entity(10).Health = 10;
@@ -566,7 +478,7 @@ namespace ModUtilsTest
         [DataRow(int.MaxValue - 500)]
         public void LosingAStoredHammerFadesFromHalfPowerWithoutIncreasingOrKeepingItForever(int lossTime)
         {
-            var s = new Scene(holding: false);
+            var s = new PlayerSessionFixture(holding: false);
             s.Game.Entity(10).Weapons.Add(WeaponHash.Hammer);
             s.Game.Host.GameTime = unchecked(lossTime - 1);
             s.Frame(0);
@@ -595,7 +507,7 @@ namespace ModUtilsTest
         [DataRow(int.MaxValue - 1024)]
         public void TargetReturnWaitsTheFullSevenHundredMilliseconds(int startTime)
         {
-            var s = new Scene();
+            var s = new PlayerSessionFixture();
             s.Game.AddEntity(60).Position = new Vector3(0, .4f, 0);
             s.Game.Host.GameTime = startTime;
             s.Frame(0);
@@ -635,5 +547,8 @@ namespace ModUtilsTest
             s.AssertNoErrors();
             s.AssertReleased();
         }
+
+        private static int FailureCount(PlayerSessionFixture session) =>
+            session.Log.Records.Count(record => record.Level == "ERROR" || record.Name == "diagnostics.exception");
     }
 }

@@ -18,8 +18,8 @@ namespace Thor
         public override string DiagnosticState => base.DiagnosticState + ";rope=" + isHoldingWeaponRope + ";hoverWhirl=" + isHoverWhirling;
 
         public MjolnirWorthyAbility(GameServices game, NativeHelper effects, System.Random random,
-            Mjolnir weapon, Thunder thunder, IAudioPlaybackFactory audio, IEventLog log)
-            : base(game, effects, random, weapon, thunder, audio, log)
+            Mjolnir weapon, IAudioPlaybackFactory audio, IEventLog log)
+            : base(game, effects, random, weapon, audio, log)
         {
             isHoldingWeaponRope = false;
             isHoverWhirling = false;
@@ -120,7 +120,7 @@ namespace Thor
         {
             base.PlayThunderFx();
 
-            if (IsHoldingWeapon && weaponUsedForHoveringWhirlingShown != 0)
+            if (IsHoldingWeapon)
             {
                 effects.PlayThunderFx(weaponUsedForHoveringWhirlingShown, 0.5f);
             }
@@ -194,17 +194,13 @@ namespace Thor
             {
                 game.Entities.SetOpacity(game.Weapons.CurrentObject(attachedPed), 0);
             }
-            if (weaponUsedForHoveringWhirlingShown != 0)
+            if (toggle)
             {
-                if (toggle)
-                {
-                    game.Entities.SetOpacity(weaponUsedForHoveringWhirlingShown, 0);
-
-                }
-                else
-                {
-                    game.Entities.ResetOpacity(weaponUsedForHoveringWhirlingShown);
-                }
+                game.Entities.SetOpacity(weaponUsedForHoveringWhirlingShown, 0);
+            }
+            else
+            {
+                game.Entities.ResetOpacity(weaponUsedForHoveringWhirlingShown);
             }
         }
 

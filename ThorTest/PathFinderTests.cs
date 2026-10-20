@@ -1,291 +1,185 @@
 using System;
 using System.Linq;
+using System.Windows.Forms;
 using GTA;
 using GTA.Math;
+using GTAVMods.Game;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Finder = Thor.PathFinder.PathFinder;
 
-namespace ModUtilsTest {
-    [TestClass]
-    public class PathFinderTests {
-        private static FakeGame CreateWorld() {
-            var game = new FakeGame();
-            game.AddEntity(10);
-            game.AddEntity(20);
-            game.AddEntity(30).Velocity = new Vector3(2, 4, 6);
-            game.AddEntity(40);
-            game.World.ModelResults[(int)VehicleHash.Thruster] = true;
-            game.World.Vehicles.Enqueue(30);
-            game.World.Drivers.Enqueue(40);
-            return game;
-        }
-
+namespace ModUtilsTest
+{
+    [TestClass, TestCategory("PlayerIntegration")]
+    public class PlayerRecallNavigationTests
+    {
         [TestMethod]
-        public void InitialTickCreatesHiddenProtectedHelpersAndMaintainsVelocityCollisionAndDriver() {
-            var game = CreateWorld();
-            var log = new RecordingLog();
-            var finder = new Finder(game.Services, log);
-            Assert.IsNull(finder.Position);
-            Assert.AreEqual(Vector3.Zero, finder.GetTargetVelocity(Vector3.One));
-            Assert.IsFalse(finder.IsRelatedEntity(0), "Zero is never an owned engine entity.");
-            Assert.IsFalse(finder.IsRelatedEntity(20));
-            finder.SetNoCollision(20);
-            finder.Dispose();
-            Assert.AreEqual(0, game.Calls.Count);
-            Assert.IsEmpty(log.Records, "No lifecycle event is emitted before resources exist.");
-            finder.OnTick(20);
-            Assert.AreEqual("INFO", log.Last("pathfinder.created").Level);
-            Assert.AreEqual(40, log.Last("pathfinder.created").Data["driver"]);
-            Assert.AreEqual(30, log.Last("pathfinder.created").Data["vehicle"]);
-            Assert.AreEqual(new Vector3(500, 500, 500), finder.Position);
-            Assert.IsTrue(finder.IsRelatedEntity(30));
-            Assert.IsTrue(finder.IsRelatedEntity(40));
-            Assert.IsFalse(finder.IsRelatedEntity(20));
-            Assert.AreEqual(1, game.Calls.Count(c => c.Name == "world.requestModel"));
-            CollectionAssert.AreEqual(new object[] { (int)VehicleHash.Thruster, 3000 },
-                game.Calls.First(c => c.Name == "world.requestModel").Arguments);
-            CollectionAssert.AreEqual(new[] { "world.requestModel", "world.createVehicle", "world.createDriver", "world.releaseModel" },
-                game.Calls.Take(4).Select(c => c.Name).ToArray());
-            foreach (var entity in new[] { 30, 40 }) {
-                Assert.IsFalse(game.Entity(entity).Visible);
-                Assert.IsTrue(game.Entity(entity).Invincible);
-                Assert.AreEqual(100, game.Entity(entity).Health);
+        public void BlockedRecallUsesInvisibleHelpersWithoutHurtingThePlayerOrNearbyBystanders()
+        {
+            var s = new PlayerSessionFixture();
+            s.DropHammer(new Vector3(0, 20, 0));
+            s.Game.Entity(40).Velocity = new Vector3(2, 4, 6);
+            s.Game.Entity(40).Driver = 0;
+            s.Game.World.CapsuleObservation = (from, to, radius, flags) =>
+                new RayHit(true, 0, from + Vector3.UnitY);
+            s.Recall();
+            foreach (int helper in new[] { 40, 41 })
+            {
+                Assert.IsFalse(s.Game.Entity(helper).Visible);
+                Assert.IsTrue(s.Game.Entity(helper).Invincible);
+                Assert.AreEqual(100, s.Game.Entity(helper).Health);
             }
-            Assert.AreEqual(2.1, game.Entity(30).Velocity.X, .00001);
-            Assert.AreEqual(4.2, game.Entity(30).Velocity.Y, .00001);
-            Assert.AreEqual(6.3, game.Entity(30).Velocity.Z, .00001);
-            var velocity = finder.GetTargetVelocity(new Vector3(1, 2, 3));
-            Assert.AreEqual(251.6, velocity.X, .0001);
-            Assert.AreEqual(253.2, velocity.Y, .0001);
-            Assert.AreEqual(254.8, velocity.Z, .0001);
-            var collision = game.Calls.Where(c => c.Name == "entity.noCollision").Select(c => c.Arguments).ToArray();
-            Assert.AreEqual(4, collision.Length);
-            CollectionAssert.AreEqual(new object[] { 30, 20, true }, collision[0]);
-            CollectionAssert.AreEqual(new object[] { 30, 10, true }, collision[1]);
-            CollectionAssert.AreEqual(new object[] { 40, 20, true }, collision[2]);
-            CollectionAssert.AreEqual(new object[] { 40, 10, true }, collision[3]);
-            game.Calls.Clear();
-            finder.SetNoCollision(0);
-            Assert.AreEqual(0, game.Calls.Count);
-            game.Entity(30).Driver = 0;
-            finder.OnTick(20);
-            Assert.AreEqual(0, game.Calls.Count(c => c.Name == "world.requestModel"), "Existing helpers must be reused.");
-            CollectionAssert.AreEqual(new object[] { 40, 30, VehicleSeat.Driver },
-                game.Calls.Single(c => c.Name == "ped.intoVehicle").Arguments);
-            finder.UpdateStartPosition(new Vector3(1, 2, 3));
-            Assert.AreEqual(new Vector3(1, 2, 3), finder.Position);
-            finder.Dispose();
-            Assert.IsFalse(game.Observations[30].Exists);
-            Assert.IsFalse(game.Observations[40].Exists);
-            Assert.IsNull(finder.Position);
-            Assert.IsFalse(finder.IsRelatedEntity(30));
-            var deletes = game.Calls.Count(c => c.Name == "entity.delete");
-            finder.Dispose();
-            Assert.AreEqual(deletes, game.Calls.Count(c => c.Name == "entity.delete"));
-            CollectionAssert.AreEqual(new[] { "pathfinder.created", "pathfinder.dispose" },
-                log.Records.Select(record => record.Name).ToArray());
-            Assert.AreEqual("INFO", log.Last("pathfinder.dispose").Level);
-            Assert.AreEqual(40, log.Last("pathfinder.dispose").Data["driver"]);
-            Assert.AreEqual(30, log.Last("pathfinder.dispose").Data["vehicle"]);
+            CollectionAssert.AreEqual(new object[] { 41, 40, VehicleSeat.Driver },
+                s.Game.Calls.Last(call => call.Name == "ped.intoVehicle").Arguments);
+            var mission = s.Game.Calls.Last(call => call.Name == "ped.missionPosition");
+            CollectionAssert.AreEqual(new object[] { 41, 40, new Vector3(0, 0, 1), VehicleMissionType.GoTo,
+                100000f, 1f, -1, 5, -1, -1f, HeliMissionFlags.StartEngineImmediately }, mission.Arguments);
+            Assert.AreEqual(new Vector3(2, 4, 6), s.Game.Entity(20).Velocity,
+                "Recall uses the observed guide velocity before this frame's guide acceleration request.");
+            Assert.IsTrue(s.Game.Calls.Any(call => call.Name == "entity.noCollision" &&
+                (int)call.Arguments[0] == 40 && (int)call.Arguments[1] == 20));
+            Assert.AreEqual(new Vector3(90, 80, 70), s.Game.Entity(99).Position);
+            int missions = s.Game.Calls.Count(call => call.Name == "ped.missionPosition");
+            s.Player.Bones[Bone.PHRightHand] = new Vector3(15, 0, 1);
+            s.Recall();
+            Assert.AreEqual(missions, s.Game.Calls.Count(call => call.Name == "ped.missionPosition"));
+            s.Player.Bones[Bone.PHRightHand] = new Vector3(16, 0, 1);
+            s.Recall();
+            Assert.AreEqual(missions + 1, s.Game.Calls.Count(call => call.Name == "ped.missionPosition"),
+                "Moving beyond fifteen metres must update the route during the same held recall.");
+            s.Controller.Abort();
+            Assert.IsFalse(s.Game.Observations[40].Exists);
+            Assert.IsFalse(s.Game.Observations[41].Exists);
+            Assert.IsTrue(s.Game.Entity(99).Exists);
         }
 
         [TestMethod]
-        public void PositionTargetsUseFifteenMeterThresholdAndTransitionToAndFromPedTargets() {
-            var game = CreateWorld();
-            game.AddEntity(50);
-            game.AddEntity(51);
-            var finder = new Finder(game.Services);
-            finder.OnTick(20);
-            game.Calls.Clear();
-            var originNeighbor = new Vector3(3, 4, 0);
-            finder.UpdateCurrentTarget(originNeighbor);
-            CollectionAssert.AreEqual(new[] { "ped.clearTasks", "ped.missionPosition" }, game.Calls.Select(c => c.Name).ToArray());
-            CollectionAssert.AreEqual(new object[] { 40, 30, originNeighbor, VehicleMissionType.GoTo, 100000f,
-                1f, -1, 5, -1, -1f, HeliMissionFlags.StartEngineImmediately }, game.Calls.Last().Arguments);
-            game.Calls.Clear();
-            finder.UpdateCurrentTarget(originNeighbor);
-            finder.UpdateCurrentTarget(new Vector3(18, 4, 0));
-            Assert.AreEqual(0, game.Calls.Count, "Identical and exactly fifteen meters remain the same target.");
-            finder.UpdateCurrentTarget(new Vector3(19, 4, 0));
-            Assert.AreEqual(1, game.Calls.Count(c => c.Name == "ped.missionPosition"));
-            game.Calls.Clear();
-            finder.UpdateCurrentTarget(0);
-            Assert.AreEqual(0, game.Calls.Count);
-            finder.UpdateCurrentTarget(50);
-            CollectionAssert.AreEqual(new object[] { 40, 30, 50, VehicleMissionType.Follow, 100000f,
-                1f, -1, 5, -1, -1f, HeliMissionFlags.StartEngineImmediately }, game.Calls.Last().Arguments);
-            game.Calls.Clear();
-            finder.UpdateCurrentTarget(50);
-            Assert.AreEqual(0, game.Calls.Count);
-            finder.UpdateCurrentTarget(0);
-            finder.UpdateCurrentTarget(50);
-            Assert.AreEqual(0, game.Calls.Count, "A missing target must preserve the currently followed ped.");
-            finder.UpdateCurrentTarget(51);
-            Assert.AreEqual(1, game.Calls.Count(c => c.Name == "ped.clearTasks"));
-            game.Calls.Clear();
-            finder.UpdateCurrentTarget(originNeighbor);
-            Assert.AreEqual(1, game.Calls.Count(c => c.Name == "ped.missionPosition"),
-                "Switching away from a ped must allow a position close to the world origin.");
-            finder.Dispose();
-        }
-
-        [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void MissingVehicleOrDriverIsCleanedUpAndRecreatedOnNextTick(bool missingDriver) {
-            var game = CreateWorld();
-            var finder = new Finder(game.Services);
-            finder.OnTick(20);
-            game.Observations[missingDriver ? 40 : 30].Exists = false;
-            game.AddEntity(31);
-            game.AddEntity(41);
-            game.World.Vehicles.Enqueue(31);
-            game.World.Drivers.Enqueue(41);
-            game.Calls.Clear();
-            finder.OnTick(20);
-            Assert.IsFalse(game.Observations[30].Exists);
-            Assert.IsFalse(game.Observations[40].Exists);
-            CollectionAssert.AreEqual(new object[] { missingDriver ? 30 : 40 },
-                game.Calls.Single(c => c.Name == "entity.delete").Arguments);
-            Assert.IsTrue(finder.IsRelatedEntity(31));
-            Assert.IsTrue(finder.IsRelatedEntity(41));
-            Assert.AreEqual(1, game.Calls.Count(c => c.Name == "world.createVehicle"));
-            finder.Dispose();
-        }
-
-        [TestMethod]
-        public void ModelFailureLeavesNoResourcesAndCanRetry() {
-            var game = CreateWorld();
-            var finder = new Finder(game.Services);
-            game.World.ModelResults[(int)VehicleHash.Thruster] = false;
-            StringAssert.Contains(Assert.ThrowsExactly<InvalidOperationException>(() => finder.OnTick(20)).Message, "model");
-            Assert.AreEqual(1, game.Calls.Count);
-            Assert.IsNull(finder.Position);
-            game.World.ModelResults[(int)VehicleHash.Thruster] = true;
-            finder.OnTick(20);
-            Assert.IsTrue(finder.IsRelatedEntity(30));
-            finder.Dispose();
-        }
-
-        [TestMethod]
-        public void MissingCollisionPartnerIsIgnoredWithoutTouchingLiveHelpers() {
-            var game = CreateWorld();
-            var finder = new Finder(game.Services);
-            finder.OnTick(20);
-            game.Observations[20].Exists = false;
-            game.Calls.Clear();
-            finder.SetNoCollision(20);
-            Assert.AreEqual(0, game.Calls.Count);
-            Assert.IsTrue(game.Entity(30).Exists);
-            Assert.IsTrue(game.Entity(40).Exists);
-            finder.Dispose();
-        }
-
-        [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void PartialCreationFailureReleasesModelAndDeletesAnyCreatedVehicle(bool driverFailure) {
-            var game = CreateWorld();
-            game.World.Vehicles.Clear();
-            game.World.Vehicles.Enqueue(driverFailure ? 30 : 0);
-            game.World.Drivers.Clear();
-            game.World.Drivers.Enqueue(0);
-            var finder = new Finder(game.Services);
-            var failure = Assert.ThrowsExactly<InvalidOperationException>(() => finder.OnTick(20));
-            StringAssert.Contains(failure.Message, driverFailure ? "driver" : "vehicle");
-            Assert.AreEqual("world.releaseModel", game.Calls.Last().Name);
-            CollectionAssert.AreEqual(driverFailure ? new[] { 30 } : Array.Empty<int>(),
-                game.Calls.Where(c => c.Name == "entity.delete").Select(c => (int)c.Arguments[0]).ToArray(),
-                "Partial rollback must delete only the vehicle acquired by this creation attempt.");
-            Assert.IsNull(finder.Position);
-            Assert.IsFalse(finder.IsRelatedEntity(0));
-            finder.Dispose();
-        }
-
-        [TestMethod]
-        [DataRow(30)]
         [DataRow(40)]
-        [DataRow(0)]
-        public void FailedHelperDeletionsRetireRemainingOwnershipBeforeRecreation(int failedHandle) {
-            var game = CreateWorld();
-            var failedHandles = failedHandle == 0 ? new[] { 40, 30 } : new[] { failedHandle };
-            var log = new RecordingLog();
-            var finder = new Finder(game.Services, log);
-            finder.OnTick(20);
-            game.Calls.Clear();
-            var failure = new InvalidOperationException("helper deletion failure");
-            game.BeforeCall = call => {
-                if (call.Name == "entity.delete" && failedHandles.Contains((int)call.Arguments[0])) throw failure;
-            };
-
-            var error = Assert.ThrowsExactly<AggregateException>(() => finder.Dispose());
-
-            Assert.HasCount(failedHandles.Length, error.Flatten().InnerExceptions);
-            foreach (var actual in error.Flatten().InnerExceptions) Assert.AreSame(failure, actual);
-            CollectionAssert.AreEqual(new[] { 40, 30 },
-                game.Calls.Where(call => call.Name == "entity.delete").Select(call => (int)call.Arguments[0]).ToArray());
-            foreach (int handle in new[] { 40, 30 }) {
-                Assert.AreEqual(failedHandles.Contains(handle), finder.IsRelatedEntity(handle));
-                Assert.AreEqual(failedHandles.Contains(handle), game.Observations[handle].Exists);
-            }
-            game.BeforeCall = null;
-            game.Calls.Clear();
-            log.Records.Clear();
-            game.AddEntity(31);
-            game.AddEntity(41);
-            game.World.Vehicles.Enqueue(31);
-            game.World.Drivers.Enqueue(41);
-            finder.OnTick(20);
-            foreach (int handle in new[] { 40, 30 }) {
-                Assert.IsFalse(game.Observations[handle].Exists);
-                Assert.IsFalse(finder.IsRelatedEntity(handle));
-            }
-            CollectionAssert.AreEqual(failedHandles,
-                game.Calls.Where(call => call.Name == "entity.delete").Select(call => (int)call.Arguments[0]).ToArray());
-            Assert.AreEqual("entity.delete", game.Calls.First().Name,
-                "A retained helper must be retired before new resources overwrite its handle.");
-            Assert.AreEqual(failedHandles.Contains(40) ? 40 : 0, log.Last("pathfinder.dispose").Data["driver"]);
-            Assert.AreEqual(failedHandles.Contains(30) ? 30 : 0, log.Last("pathfinder.dispose").Data["vehicle"]);
-            Assert.IsTrue(finder.IsRelatedEntity(31));
-            Assert.IsTrue(finder.IsRelatedEntity(41));
-            finder.Dispose();
-            game.Calls.Clear();
-            log.Records.Clear();
-            finder.Dispose();
-            Assert.IsEmpty(game.Calls);
-            Assert.IsEmpty(log.Records);
+        [DataRow(41)]
+        public void DespawnedNavigationHelperIsReplacedAndRecallRemainsAvailable(int vanished)
+        {
+            var s = new PlayerSessionFixture();
+            s.DropHammer(new Vector3(0, 20, 0));
+            s.Game.Observations[vanished].Exists = false;
+            s.Game.AddEntity(42);
+            s.Game.AddEntity(43);
+            s.Game.World.Vehicles.Enqueue(42);
+            s.Game.World.Drivers.Enqueue(43);
+            s.Recall();
+            Assert.IsFalse(s.Game.Observations[40].Exists);
+            Assert.IsFalse(s.Game.Observations[41].Exists);
+            Assert.AreEqual(42, s.Log.Last("pathfinder.created").Data["vehicle"]);
+            Assert.AreEqual(43, s.Log.Last("pathfinder.created").Data["driver"]);
+            Assert.IsTrue(s.Game.Entity(20).Velocity.Length() > 0);
+            s.Controller.Abort();
+            Assert.IsFalse(s.Game.Observations[42].Exists);
+            Assert.IsFalse(s.Game.Observations[43].Exists);
         }
 
         [TestMethod]
-        public void FailedPartialCreationCleanupReportsBothFailuresAndReleasesOldVehicleBeforeRetry() {
-            var game = CreateWorld();
-            game.World.Drivers.Clear();
-            game.World.Drivers.Enqueue(0);
-            var finder = new Finder(game.Services);
-            var failure = new InvalidOperationException("vehicle deletion failure");
-            game.BeforeCall = call => { if (call.Name == "entity.delete") throw failure; };
+        [DataRow("model")]
+        [DataRow("vehicle")]
+        [DataRow("driver")]
+        public void NavigationAllocationFailurePausesCleanlyAndEnableRetriesTheAbility(string failure)
+        {
+            var s = new PlayerSessionFixture(configure: game =>
+            {
+                if (failure == "model") game.World.ModelResults[(int)VehicleHash.Thruster] = false;
+                if (failure == "vehicle") { game.World.Vehicles.Clear(); game.World.Vehicles.Enqueue(0); }
+                if (failure == "driver") { game.World.Drivers.Clear(); game.World.Drivers.Enqueue(0); }
+            });
+            s.Frame(0, expectFailure: true);
+            Assert.IsTrue(s.Log.Records.Any(record => record.Level == "ERROR"));
+            if (failure != "model")
+                Assert.IsTrue(s.Game.Calls.Any(call => call.Name == "world.releaseModel"));
+            if (failure == "driver") Assert.IsFalse(s.Game.Observations[40].Exists);
+            s.Game.World.ModelResults[(int)VehicleHash.Thruster] = true;
+            s.Game.World.Vehicles.Clear();
+            s.Game.World.Drivers.Clear();
+            s.Game.AddEntity(42);
+            s.Game.AddEntity(43);
+            s.Game.World.Vehicles.Enqueue(42);
+            s.Game.World.Drivers.Enqueue(43);
+            s.Game.Entities.CreatedBlips.Enqueue(2001);
+            int previousFailures = s.Log.Records.Count(record => record.Level == "ERROR");
+            s.Chord(Keys.O);
+            s.Frame(0, expectFailure: true);
+            Assert.IsTrue(s.Log.Records.Any(record => record.Name == "pathfinder.created"),
+                string.Join(Environment.NewLine, s.Log.Records.Select(record => record.Name + ": " + string.Join(", ", record.Data.Values))));
+            Assert.AreEqual(42, s.Log.Last("pathfinder.created").Data["vehicle"]);
+            Assert.AreEqual(previousFailures, s.Log.Records.Count(record => record.Level == "ERROR"),
+                "Recovery must not hide a second gameplay error.");
+            StringAssert.Contains(s.State(), "attached=True", "The retried ability must be attached to the player again.");
+            s.Controller.Abort();
+            Assert.IsFalse(s.Game.Observations[42].Exists);
+            Assert.IsFalse(s.Game.Observations[43].Exists);
+        }
 
-            var error = Assert.ThrowsExactly<AggregateException>(() => finder.OnTick(20));
+        [TestMethod]
+        [DataRow(40)]
+        [DataRow(41)]
+        [DataRow(0)]
+        public void ReloadRetriesFailedHelperDeletionWithoutLosingEitherOwnedHandle(int failed)
+        {
+            var s = new PlayerSessionFixture();
+            s.Frame(0);
+            int[] failures = failed == 0 ? new[] { 40, 41 } : new[] { failed };
+            s.Game.BeforeCall = call =>
+            {
+                if (call.Name == "entity.delete" && failures.Contains((int)call.Arguments[0]))
+                    throw new InvalidOperationException("helper release unavailable");
+            };
+            s.Controller.Abort();
+            foreach (int handle in new[] { 40, 41 })
+                Assert.AreEqual(failures.Contains(handle), s.Game.Observations[handle].Exists);
+            Assert.AreEqual("ERROR", s.Log.Last("cleanup.exception").Level);
+            Assert.AreEqual(200, s.Player.MaxHealth);
+            s.Game.BeforeCall = null;
+            s.Controller.Abort();
+            Assert.IsFalse(s.Game.Observations[40].Exists);
+            Assert.IsFalse(s.Game.Observations[41].Exists);
+            int deletions = s.Game.Calls.Count(call => call.Name == "entity.delete");
+            s.Controller.Abort();
+            Assert.AreEqual(deletions, s.Game.Calls.Count(call => call.Name == "entity.delete"));
+        }
 
-            var failures = error.Flatten().InnerExceptions;
-            Assert.HasCount(2, failures);
-            StringAssert.Contains(failures[0].Message, "driver");
-            Assert.AreSame(failure, failures[1]);
-            Assert.AreEqual("world.releaseModel", game.Calls.Last().Name);
-            Assert.IsTrue(finder.IsRelatedEntity(30));
-            game.BeforeCall = null;
-            game.Calls.Clear();
-            game.AddEntity(31);
-            game.AddEntity(41);
-            game.World.Vehicles.Enqueue(31);
-            game.World.Drivers.Enqueue(41);
-            finder.OnTick(20);
-            Assert.AreEqual("entity.delete", game.Calls.First().Name);
-            Assert.AreEqual(30, game.Calls.First().Arguments[0]);
-            Assert.IsFalse(game.Observations[30].Exists);
-            Assert.IsTrue(finder.IsRelatedEntity(31));
-            Assert.IsTrue(finder.IsRelatedEntity(41));
-            finder.Dispose();
+        [TestMethod]
+        public void FailedDriverCreationAndVehicleRollbackPreserveBothErrorsAndRetryTheOwnedVehicleBeforeAllocating()
+        {
+            var s = new PlayerSessionFixture(configure: game =>
+            {
+                game.World.Drivers.Clear();
+                game.World.Drivers.Enqueue(0);
+                game.BeforeCall = call =>
+                {
+                    if (call.Name == "entity.delete" && (int)call.Arguments[0] == 40)
+                        throw new InvalidOperationException("navigation vehicle release unavailable");
+                };
+            });
+            s.Frame(0, expectFailure: true);
+            string diagnostic = (string)s.Log.Last("tick.exception").Data["exception"];
+            StringAssert.Contains(diagnostic, "Could not create the pathfinder driver");
+            StringAssert.Contains(diagnostic, "navigation vehicle release unavailable");
+            Assert.IsTrue(s.Game.Entity(40).Exists);
+            Assert.IsTrue(s.Game.Calls.Any(call => call.Name == "world.releaseModel"));
+            int errors = s.Log.Records.Count(record => record.Level == "ERROR");
+
+            s.Game.BeforeCall = null;
+            s.Game.AddEntity(42);
+            s.Game.AddEntity(43);
+            s.Game.World.Vehicles.Enqueue(42);
+            s.Game.World.Drivers.Enqueue(43);
+            s.Game.Entities.CreatedBlips.Enqueue(2001);
+            s.Game.Calls.Clear();
+            s.Chord(Keys.O);
+            s.Frame(0, expectFailure: true);
+            Assert.IsFalse(s.Game.Observations[40].Exists);
+            Assert.IsTrue(s.Game.Calls.FindIndex(call => call.Name == "entity.delete" && (int)call.Arguments[0] == 40) <
+                s.Game.Calls.FindIndex(call => call.Name == "world.createVehicle"),
+                "An old owned helper must be retired before its replacement is allocated.");
+            Assert.AreEqual(errors, s.Log.Records.Count(record => record.Level == "ERROR"));
+            Assert.AreEqual(42, s.Log.Last("pathfinder.created").Data["vehicle"]);
+            s.Controller.Abort();
+            Assert.IsFalse(s.Game.Observations[42].Exists);
+            Assert.IsFalse(s.Game.Observations[43].Exists);
         }
     }
 }

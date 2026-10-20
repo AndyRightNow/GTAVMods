@@ -5,6 +5,30 @@ the same behavior and the real native argument-mapping adapters, with scripted
 engine observations at the lowest boundary. They do not implement a second
 recall algorithm, move objects according to velocity, or predict GTA physics.
 
+The suite has two test categories. `PureFunction` covers deterministic utility
+calculations, parsing and formatting with explicit inputs and no side effects.
+`PlayerIntegration` drives player controls, console commands, frames, character
+changes and reloads through the real mod composition. There are no isolated
+stateful module tests, fake ability/logger probes, or standalone adapter tests.
+
+```mermaid
+flowchart LR
+    P["Player input and lifecycle events"] --> C["Real Thor controller or F8 console"]
+    C --> M["Real abilities, hammer, camera and navigation"]
+    C --> D["Real diagnostics and audio management"]
+    M --> A["Real game adapters and lifetime checks"]
+    A --> E["Scripted external engine observations"]
+    D --> X["External storage, clock and audio device"]
+    E --> M
+    U["Pure utility functions"] --> M
+```
+
+The test harness assembles the same `ThorComposition` and `GtaRuntime` factories
+as the shipped entry points. The script entry points select live primitive
+bindings; tests select explicit external observations. Native argument mapping,
+output assembly and confirmed deletion remain production code in both paths.
+Tests assert these contracts inside the player behavior that relies on them.
+
 `GameBridge/Contracts.cs`, `GameplayContracts.cs` and `ConsoleContracts.cs` define
 the callable API. This document defines its semantic obligations. The SHVDNE API
 XML in `.deps/shvdne/ScriptHookVDotNet3.xml` is local upstream evidence from the
@@ -16,7 +40,7 @@ when restoring it; the XML is not independently hash-checked on cached restores.
 | Contract | Caller obligation | Adapter guarantee and permitted outcome |
 | --- | --- | --- |
 | Identity | Keep entity, player, camera, rope, particle and model identifiers distinct. Never treat a player index as a ped handle. | Zero means no returned object. An existence observation is not a lifetime lease; objects may disappear after a yield or later frame. |
-| Units | Use finite world vectors in metres, velocity in metres/second, rotations in degrees, and named millisecond durations. | Preserve axes, signs, order and units. Drawing uses RGBA bytes; looped particle RGB is normalized to 0..1. |
+| Units | Use finite world vectors in metres, velocity in metres/second, rotations in degrees, and named millisecond durations. | Preserve axes, signs, order and units. Drawing uses RGBA bytes. |
 | Time | Compare bounded elapsed durations with wrapping integer subtraction. Do not reserve a valid clock value such as `-1` as an inactive marker. | `GameTime` is a signed 32-bit millisecond observation; `LastFrameTime` is seconds. No constant frame rate is promised. Wait/yield may allow observations to change and do not promise an exact elapsed duration. |
 | Submission | Distinguish a submitted command from observation of its effect. | A void native command does not certify completed animation, movement, collision, transfer or model loading. Exceptions retain their original identity. |
 | Failure | Handle the documented zero/false result before using a resource. Preserve ownership needed for cleanup after exceptions. | Adapters preserve explicit failures instead of replacing them with fabricated success or defaults. A failed native call is not generally a transaction: earlier commands may have taken effect. |
@@ -79,13 +103,13 @@ or rely on an immediate forward-vector read reflecting a preceding write.
 | Capability | Contract |
 | --- | --- |
 | World ray/capsule | `DidHit` determines whether the hit position is meaningful. A hit with entity zero can be terrain. An entity hit does not certify that the entity is still alive when a later command runs. Query flags, ignored handle and radius are part of the request. |
+| Nearby entities | A missing entry is represented by zero and must be ignored before entity operations. Returned handles may include the player, held hammer and navigation helpers; the calling ability decides which are eligible for its effect. |
 | Ground query | A false result leaves the height unusable. A caller must not treat an unavailable height as ground at zero. |
 | Model/weapon asset | Request acceptance and loaded state are different. Creation requires confirmed availability. Timeouts terminate the workflow; model ownership is released on success and failure as appropriate. |
 | Object/vehicle/driver creation | Zero creates no ownership. Record a nonzero result before subsequent configuration can throw. Never delete unrelated entities to simplify cleanup. |
 | Camera/rope | The creator owns the returned resource. Stop only rendering owned by this mod; a different active camera is not ours to disable. Release independent resources even if one cleanup fails. |
 | Hammer rope attachment | A zero rope result stops before anchor allocation. A zero anchor result stops before entity configuration while retaining the rope for confirmed cleanup. Failed cleanup blocks replacement allocation. |
 | Blip | A zero result means no HUD marker is available. The marker is optional: skip its configuration and continue hammer initialization, effects and ownership. |
-| Looped particle | Zero creates no ownership. Release the old effect before replacing it. A successful stop clears ownership; a failed stop retains the handle for retry and prevents losing it through replacement. |
 | Animation/non-looped effect | Commands request presentation; no rendered or audible outcome is inferred. Asset readiness is observed separately. Asset selection applies to the next effect start on the script thread. |
 | Audio/storage | Resource lifetimes and error handling are tested using device substitutes and real temporary files/WAV decoding. Device output and GTA presentation are separate integration obligations. |
 
@@ -100,7 +124,9 @@ floats, not rounded integer readings. Temporary control changes capture prior
 state before mutation, restore independently, and retain failed restoration work
 for retry. Successfully restored controls leave mod ownership immediately;
 retrying another control must preserve subsequent changes by other scripts.
-Console close/disposal must not silently abandon pending ownership.
+Console close/disposal must not silently abandon pending ownership. It restores
+only controls it captured; it does not force-enable all controls owned by other
+scripts.
 
 Model spawning and network-control helpers use explicit millisecond timeouts.
 A request result is not proof of readiness or ownership; the corresponding
@@ -116,8 +142,8 @@ original exceptions preserved when both fail. Disposal attempts independent
 control and model cleanup even if one fails.
 
 The console's automatic evaluation aliases use its injected environment.
-Convenience geometry constructors use the current console's drawing environment,
-with the existing live-runtime fallback when no console exists. Command help
+Convenience geometry constructors use the current console's drawing environment.
+Command help
 shows nonblank argument descriptions alongside the argument signature.
 User-entered C# remains intentionally unrestricted developer code; its arbitrary
 native calls are not shipped mod logic and are not covered by these guarantees.
@@ -128,12 +154,14 @@ native calls are not shipped mod logic and are not covered by these guarantees.
   invoker calls from measured behavior outside GameBridge. Only exact reviewed
   primitive bindings may cross the engine boundary directly. GTA math values are
   allowed; there is no general gameplay escape through `GameServices.Native`.
-- Typed-adapter tests check literal native hashes, argument order, units,
-  constants, return values, zero results and exception identity. They exercise
-  production mapping code rather than an alternative adapter used only in tests.
-- Fake contract tests separate command submission from queued frame observations.
-  Unknown queries fail instead of silently returning a convenient default.
-  World-query scripts describe observations, not ability state transitions.
+- Player scenarios check literal native hashes, argument order, units and
+  constants together with the expected gameplay outcome. Failures, zero results
+  and delayed observations are supplied at external boundaries, not by replacing
+  mod collaborators.
+- Command submission is separate from queued frame observations. Unknown queries
+  fail instead of silently returning a convenient default. World-query scripts
+  describe observations, not ability state transitions; the fakes themselves are
+  not the subject of standalone tests.
 - Behavior scenarios exercise the real production controller, abilities and
   resources through player actions and explicit engine observations. Frame
   duration, clock wrap, delayed completion, external disappearance and partial
@@ -141,7 +169,7 @@ native calls are not shipped mod logic and are not covered by these guarantees.
   assertions cover restoration, ownership, timeout boundaries and preservation
   of unrelated objects. Construction and wiring are exercised by these outcomes;
   a standalone type-identity or construction check is not a behavior scenario.
-- Coverage remains exactly 100% of inventoried behavior lines and branches in
+- The gate requires exactly 100% of inventoried behavior lines and branches in
   every shipped assembly, with only the exact reviewed primitive bindings
   excluded. Mutation testing evaluates whether assertions detect changed
   behavior; reaching coverage alone is not sufficient.
@@ -178,5 +206,3 @@ Native declaration references used for mapping corrections:
 - [Drop weapon object](https://github.com/citizenfx/natives/blob/master/WEAPON/GetWeaponObjectFromPed.md)
 - [Create weapon object](https://github.com/citizenfx/natives/blob/master/WEAPON/CreateWeaponObject.md)
 - [Object physics parameters](https://github.com/citizenfx/natives/blob/master/OBJECT/SetObjectPhysicsParams.md)
-- [Animation exit speed](https://github.com/citizenfx/natives/blob/master/TASK/StopAnimTask.md)
-- [Looped particle colour](https://github.com/citizenfx/natives/blob/master/GRAPHICS/SetParticleFxLoopedColour.md)

@@ -61,7 +61,7 @@ namespace Thor
 
         }
 
-        public void PointAt(Vector3 direction, bool shouldLerp = true)
+        private void PointAt(Vector3 direction)
         {
             var prevQua = game.Entities.Quaternion(weaponObject);
             // Aim from the model's identity basis; no temporary engine pose or
@@ -71,14 +71,7 @@ namespace Thor
                 Utilities.Math.DirectionToQuaternion(Vector3.UnitZ, LocalForwardVector)
             );
 
-            if (shouldLerp)
-            {
-                game.Entities.SetQuaternion(weaponObject, Quaternion.Lerp(prevQua, targetQua, HAMMER_ROTATION_UPWARD_LERP_RATIO));
-            }
-            else
-            {
-                game.Entities.SetQuaternion(weaponObject, targetQua);
-            }
+            game.Entities.SetQuaternion(weaponObject, Quaternion.Lerp(prevQua, targetQua, HAMMER_ROTATION_UPWARD_LERP_RATIO));
         }
 
         private void HandleWeaponInAirRotation()
@@ -96,38 +89,12 @@ namespace Thor
             }
         }
 
-        public override Vector3 Velocity
-        {
-            set
-            {
-                if (hammerRopeAttachedPed != 0)
-                {
-                    game.Entities.SetVelocity(hammerRopeAttachedIntermediateEnt, value);
-                }
-                else if (weaponObject != 0)
-                {
-                    base.Velocity = value;
-                }
-            }
-            get
-            {
-                if (hammerRopeAttachedPed != 0)
-                {
-                    return game.Entities.Velocity(hammerRopeAttachedIntermediateEnt);
-                }
-                else
-                {
-                    return base.Velocity;
-                }
-            }
-        }
-
         protected Vector3 GetHammerRopeAttachPosition(int weaponObject)
         {
             return game.Entities.Position(weaponObject) + new Vector3(0.0f, 0.0f, -0.15f);
         }
 
-        public void Whirl(ADModUtils.Plane hammerWhirlingPlane, bool physically = true, int weaponObj = 0, bool lerp = false)
+        public void Whirl(ADModUtils.Plane hammerWhirlingPlane, bool physically = true, int weaponObj = 0)
         {
             isWhirling = true;
             if (weaponObj == 0)
@@ -150,15 +117,7 @@ namespace Thor
 
                 velocity += ((perpHammerPosProjOnPlaneWorldPoint - planeCenter) * 1500.0f);
                 velocity += ((game.Entities.Position(weaponObj) - planeCenter) * 500.0f);
-                if (lerp)
-                {
-                    var currentVelocity = game.Entities.Velocity(weaponObj);
-                    game.Entities.SetVelocity(weaponObj, Vector3.Lerp(currentVelocity, velocity, 0.25f));
-                }
-                else
-                {
-                    game.Entities.SetVelocity(weaponObj, velocity);
-                }
+                game.Entities.SetVelocity(weaponObj, velocity);
 
                 RotateToDirection(weaponObj, (game.Entities.Position(weaponObj) - planeCenter).Normalized);
 
@@ -173,21 +132,9 @@ namespace Thor
             }
         }
 
-        public Vector3 ConvertToHammerHeadDirection(Vector3 dir)
-        {
-            var right = Vector3.Cross(dir, Vector3.WorldUp);
-
-            return Vector3.Cross(dir, right).Normalized;
-        }
-
         public void AttachHammerRopeTo(int ped, Bone boneId)
         {
             log.Event("INFO", "rope.attach", "ped", ped, "bone", boneId.ToString());
-            if (weaponObject == 0)
-            {
-                return;
-            }
-
             DetachRope();
             var planeCenter = game.Peds.BonePosition(ped, boneId);
 

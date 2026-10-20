@@ -42,9 +42,5 @@ namespace Thor
             return rot;
         }
 
-        public override string ToString()
-        {
-            return string.Format("{0} Start: {1}, End: {2}", base.ToString(), start, end);
-        }
     }
 }

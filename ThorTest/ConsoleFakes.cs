@@ -1,8 +1,8 @@
 using System;
-using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Reflection;
+using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using DeveloperConsole;
@@ -11,19 +11,34 @@ using GTA.Math;
 using GTA.Native;
 using GTAVMods.Game;
 using Font = GTA.UI.Font;
+using Control = GTA.Control;
 using ConsoleModel = DeveloperConsole.DeveloperConsole;
 
 namespace ModUtilsTest {
-    internal sealed class ConsoleNative : INativeInvoker {
+    internal sealed class ConsoleNative : INativeInvoker, IRawNative, IArgumentMarshaller {
         internal readonly List<(Hash Hash, object[] Arguments)> Calls = new List<(Hash, object[])>();
         internal readonly Dictionary<Hash, Func<object[], object>> Queries = new Dictionary<Hash, Func<object[], object>>();
-        public void Call(Hash hash, params object[] arguments) { Calls.Add((hash, arguments)); }
+        internal Action<Hash, object[]> Before;
+        internal Action<Hash, object[]> Command;
+        public void Call(Hash hash, params object[] arguments) {
+            Calls.Add((hash, arguments));
+            Before?.Invoke(hash, arguments);
+            Command?.Invoke(hash, arguments);
+        }
         public T Call<T>(Hash hash, params object[] arguments) {
             Calls.Add((hash, arguments));
+            Before?.Invoke(hash, arguments);
             if (!Queries.TryGetValue(hash, out var query)) throw new InvalidOperationException("Unscripted query: " + hash);
             return (T)query(arguments);
         }
         internal void Returns(Hash hash, object value) { Queries[hash] = arguments => value; }
+        private readonly Dictionary<InputArgument, object> marshalled = new Dictionary<InputArgument, object>();
+        InputArgument IArgumentMarshaller.Convert(object value) {
+            var token = new InputArgument((ulong)marshalled.Count + 1);
+            marshalled.Add(token, value); return token;
+        }
+        void IRawNative.Call(Hash hash, InputArgument[] values) => Call(hash, values.Select(value => marshalled[value]).ToArray());
+        T IRawNative.Call<T>(Hash hash, InputArgument[] values) => Call<T>(hash, values.Select(value => marshalled[value]).ToArray());
     }
     internal sealed class ConsoleHost : IGameHost {
         public int GameTime { get; set; }
@@ -79,65 +94,56 @@ namespace ModUtilsTest {
         public void SetHeadingLimits(float minimum, float maximum) { throw new NotSupportedException(); }
         public void SetPitchLimits(float minimum, float maximum) { throw new NotSupportedException(); }
     }
-    internal sealed class ConsoleOutputs : INativeOutputs {
+    internal sealed class ConsoleOutputs : IRawNativeOutputs {
         internal Quaternion Rotation = new Quaternion(0, 0, 1, 0);
         internal int QuaternionEntity;
         internal Vector3 Projection;
-        public Quaternion EntityQuaternion(int entity) { QuaternionEntity = entity; return Rotation; }
-        public bool WorldToScreen(Vector3 position, out float x, out float y) {
-            Projection = position; x = .25f; y = .5f; return true;
+        public void EntityQuaternion(int entity, out float x, out float y, out float z, out float w) {
+            QuaternionEntity = entity; x = Rotation.X; y = Rotation.Y; z = Rotation.Z; w = Rotation.W;
+        }
+        public bool WorldToScreen(float worldX, float worldY, float worldZ, out float x, out float y) {
+            Projection = new Vector3(worldX, worldY, worldZ); x = .25f; y = .5f; return true;
         }
         public bool LastDamageBone(int entity, out int bone) { throw new NotSupportedException(); }
     }
-    internal sealed class ConsolePlatform : IConsolePlatform {
-        public float Width { get; set; } = 1200;
-        public float Height { get; set; } = 900;
-        public int GameTime { get; set; }
-        public DateTime Now { get; set; } = new DateTime(2026, 10, 20, 12, 34, 56);
-        public short CapsLockState { get; set; }
-        public bool IsForeground { get; set; } = true;
-        internal string Clipboard = "";
-        internal string Translation = "a";
-        internal (Keys Key, bool Shift, bool Alt) LastTranslation;
+    internal sealed class ConsolePlatform : LiveConsolePlatform {
+        internal readonly ConsoleKeyboard Keyboard;
+        internal readonly ConsoleClipboard ClipboardDevice;
+        internal ConsolePlatform() : this(new ConsoleKeyboard(), new ConsoleClipboard()) { }
+        private ConsolePlatform(ConsoleKeyboard keyboard, ConsoleClipboard clipboard)
+            : base(new NativeMethods(keyboard), clipboard) { Keyboard = keyboard; ClipboardDevice = clipboard; }
+        public override float Width => 1200;
+        public override float Height => 900;
+        public override int GameTime => Time;
+        internal int Time;
+        internal bool UseSystemClock;
+        public override DateTime Now => UseSystemClock ? base.Now : new DateTime(2026, 10, 20, 12, 34, 56);
+        internal string Clipboard { get => ClipboardDevice.Text; set => ClipboardDevice.Text = value; }
+        internal string Translation { get => Keyboard.Text; set { Keyboard.Text = value ?? ""; Keyboard.Characters = value == null ? -1 : value.Length; } }
         internal readonly List<(string Text, Point Position, float Scale, Color Color, Font Font)> Text =
+            new List<(string, Point, float, Color, Font)>();
+        internal readonly List<(string Text, Point Position, float Scale, Color Color, Font Font)> DrawHistory =
             new List<(string, Point, float, Color, Font)>();
         internal readonly List<(Point Position, Size Size, Color Color)> Rectangles =
             new List<(Point, Size, Color)>();
-        public string ReadClipboard() { return Clipboard; }
-        public void WriteClipboard(string text) { Clipboard = text; }
-        public string TranslateKey(Keys key, bool shift, bool alt) {
-            LastTranslation = (key, shift, alt);
-            return Translation;
-        }
-        public void DrawRectangle(Point position, Size size, Color color) { Rectangles.Add((position, size, color)); }
-        public void DrawText(string text, Point position, float scale, Color color, Font font) { Text.Add((text, position, scale, color, font)); }
+        public override void DrawRectangle(Point position, Size size, Color color) { Rectangles.Add((position, size, color)); }
+        public override void DrawText(string text, Point position, float scale, Color color, Font font) { Text.Add((text, position, scale, color, font)); DrawHistory.Add((text, position, scale, color, font)); }
         internal void ClearDrawing() { Text.Clear(); Rectangles.Clear(); }
     }
-    internal sealed class ConsoleEnvironment : ICommandEnvironment {
-        public object Player { get; set; } = new object();
-        public object Character { get; set; } = new object();
-        public bool IsInVehicle { get; set; }
-        public object Vehicle { get; set; }
-        public Vector3 Position { get; set; } = new Vector3(1, 2, 3);
-        public string PlayerName => "Franklin";
-        public int PlayerHandle => 7;
-        public int NetworkPlayerIndex { get; set; } = 37;
-        internal int Compilations;
-        internal CompilerParameters Parameters;
-        internal string Source;
-        internal Func<CompilerResults> Compiler = () => new CompilerResults(new TempFileCollection()) {
-            CompiledAssembly = typeof(ConsoleEnvironment).Assembly
-        };
-        public CompilerResults Compile(CompilerParameters parameters, string source) {
-            Compilations++; Parameters = parameters; Source = source;
-            return Compiler();
-        }
-    }
-    internal sealed class ConsoleMessages : IDeveloperConsole {
-        internal readonly List<string> Errors = new List<string>();
-        internal readonly List<string> Debug = new List<string>();
-        public void PrintError(string text) { Errors.Add(text); }
-        public void PrintDebug(string text) { Debug.Add(text); }
+    internal sealed class ConsoleEnvironment : LiveCommandEnvironment {
+        internal ConsoleEnvironment(GameServices game) : base(game) { }
+        internal bool InVehicle;
+        // The game constructs these handle-only SHVDNE wrappers internally. Calling the
+        // nonpublic constructors supplies the same external observation without a native lookup.
+        private static object Wrapper(Type type, int handle) => Activator.CreateInstance(type,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new object[] { handle }, null);
+        public override object Player => Wrapper(typeof(Player), 7);
+        public override object Character => Wrapper(typeof(Ped), 11);
+        public override bool IsInVehicle => InVehicle;
+        public override object Vehicle => InVehicle ? Wrapper(typeof(Vehicle), 22) : null;
+        public override Vector3 Position => new Vector3(1, 2, 3);
+        public override string PlayerName => "Franklin";
+        public override int PlayerHandle => 7;
     }
     internal sealed class ConsoleKeyboard : IKeyboardNative {
         internal int Characters = 1;
@@ -148,7 +154,7 @@ namespace ModUtilsTest {
         internal int ForegroundProcess = 42;
         internal int ProcessQueries;
         internal int StateKey;
-        internal short Caps = 1;
+        internal short Caps;
         public int CurrentProcess => 42;
         public int ToUnicode(uint key, byte[] state, StringBuilder result) {
             Key = key; State = state; result.Append(Text); return Characters;
@@ -161,9 +167,11 @@ namespace ModUtilsTest {
         public short KeyState(int key) { StateKey = key; return Caps; }
     }
     internal sealed class ConsoleClipboard : IClipboardNative {
-        internal string Text;
-        public string Read() { return Text; }
-        public void Write(string text) { Text = text; }
+        internal string Text = "";
+        internal Exception Failure;
+        internal System.Threading.ApartmentState Apartment;
+        public string Read() { Apartment = System.Threading.Thread.CurrentThread.GetApartmentState(); if (Failure != null) throw Failure; return Text; }
+        public void Write(string text) { Apartment = System.Threading.Thread.CurrentThread.GetApartmentState(); if (Failure != null) throw Failure; Text = text; }
     }
     internal sealed class ConsoleFixture : IDisposable {
         internal readonly ConsoleNative Native = new ConsoleNative();
@@ -172,31 +180,63 @@ namespace ModUtilsTest {
         internal readonly ConsoleCamera Camera = new ConsoleCamera();
         internal readonly ConsoleOutputs Outputs = new ConsoleOutputs();
         internal readonly ConsolePlatform Platform = new ConsolePlatform();
-        internal readonly ConsoleEnvironment Environment = new ConsoleEnvironment();
+        internal readonly ConsoleEnvironment Environment;
+        internal readonly HashSet<Control> Enabled = new HashSet<Control>();
+        internal readonly HashSet<int> RequestedModels = new HashSet<int>();
+        internal readonly Dictionary<Control, float> Analog = new Dictionary<Control, float>();
+        internal bool ModelLoaded = true;
+        internal int CreatedVehicle = 23;
         internal readonly GTAFuncs Functions;
         internal readonly GameServices Game;
         internal ConsoleModel Model;
-        internal ConsoleFixture(bool createConsole = true) {
-            Native.Returns(Hash.IS_CONTROL_ENABLED, false);
+        internal ConsoleFixture(bool createConsole = true, bool? debug = false) {
+            Native.Queries[Hash.IS_CONTROL_ENABLED] = a => Enabled.Contains((Control)(int)a[1]);
+            Native.Queries[Hash.GET_CONTROL_NORMAL] = a => {
+                var control = (Control)(int)a[1];
+                return Enabled.Contains(control) && Analog.TryGetValue(control, out var value) ? value : 0f;
+            };
             Native.Returns(Hash.END_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, .01f);
             Native.Returns(Hash.NETWORK_REQUEST_CONTROL_OF_ENTITY, true);
             Native.Returns(Hash.NETWORK_REQUEST_CONTROL_OF_NETWORK_ID, true);
-            Game = new GameServices(Host, null, null, null, null, World, Camera, null, Native, Outputs);
+            Native.Returns(Hash.NETWORK_GET_PLAYER_INDEX, 37);
+            Native.Queries[Hash.HAS_MODEL_LOADED] = a => ModelLoaded;
+            Native.Queries[Hash.CREATE_VEHICLE] = a => CreatedVehicle;
+            Native.Command = (hash, a) => {
+                if (hash == Hash.ENABLE_CONTROL_ACTION) {
+                    if ((bool)a[2]) Enabled.Add((Control)(int)a[1]); else Enabled.Remove((Control)(int)a[1]);
+                } else if (hash == Hash.DISABLE_CONTROL_ACTION) {
+                    if ((bool)a[2]) Enabled.Remove((Control)(int)a[1]); else Enabled.Add((Control)(int)a[1]);
+                } else if (hash == Hash.DISABLE_ALL_CONTROL_ACTIONS) Enabled.Clear();
+                else if (hash == Hash.REQUEST_MODEL) RequestedModels.Add((int)a[0]);
+                else if (hash == Hash.SET_MODEL_AS_NO_LONGER_NEEDED) RequestedModels.Remove((int)a[0]);
+            };
+            Game = GtaRuntime.Create(Host, null, null, null, null, World, Camera, null, Native, Native, Outputs);
+            Environment = new ConsoleEnvironment(Game);
             Functions = new GTAFuncs(Game, Platform);
-            if (createConsole) Model = new ConsoleModel(Platform, Environment, Functions) { Debug = false };
+            if (createConsole) {
+                Model = new ConsoleModel(Platform, Environment, Functions);
+                if (debug.HasValue) Model.Debug = debug.Value;
+            }
         }
         internal void Press(Keys key) { Model.KeyDown(new KeyEventArgs(key)); }
         internal void Type(Keys key, string text) { Platform.Translation = text; Press(key); Model.KeyUp(new KeyEventArgs(key)); }
         internal void Draw() { Platform.ClearDrawing(); Model.Tick(); }
+        internal void Enter(string command) {
+            if (!Model.IsOpen) Press(Keys.F8);
+            int length = Model.Input.Length;
+            for (int i = 0; i < length; i++) Press(Keys.Right);
+            for (int i = 0; i < length; i++) Press(Keys.Back);
+            Platform.Clipboard = command;
+            Press(Keys.Control | Keys.V);
+            Press(Keys.Enter);
+        }
+        internal void Submit(string command) {
+            Enter(command);
+            Draw();
+        }
+        internal void Evaluate(string code) { Submit("eval { " + code + " }"); }
+        internal bool Shows(string text) => Platform.Text.Any(line => line.Text.Contains(text));
+        internal bool ShowsOutput(string text) => Platform.Text.Any(line => line.Text == "12:34:56: " + text);
         public void Dispose() { Model?.Dispose(); }
-    }
-}
-
-namespace DeveloperConsoleCodeEval {
-    // Fake compiler result: real reflection executes this independently of GTA.
-    public class DeveloperConsoleCodeEval {
-        public static object Result;
-        public static int Evaluations;
-        public object EvalCode(ICommandEnvironment environment) { Evaluations++; return Result; }
     }
 }

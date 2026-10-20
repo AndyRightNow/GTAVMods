@@ -49,8 +49,8 @@ covered.
 
 `NativeOutputs` assembles quaternion components and maps world/screen coordinates
 outside the raw pointer bindings. `GtaWorld` similarly assembles ray and capsule
-observations outside `GtaWorldQueries`. Contract tests check distinct components,
-terrain hits with no entity handle, misses and unsuccessful projection results;
+observations outside `GtaWorldQueries`. Player integration scenarios check distinct
+components, terrain hits with no entity handle, misses and unsuccessful projection results;
 the binding manifest covers only the corresponding host calls and output copying.
 
 Measured behavior outside GameBridge cannot invoke GTA operations or raw native,
@@ -59,6 +59,13 @@ check this rule. The typed contracts and ownership guarantees are documented in
 [engine-contracts.md](engine-contracts.md); the independent assertion audit is
 documented in [mutation-review.md](mutation-review.md), with reproduction steps
 in [mutation-testing.md](mutation-testing.md).
+
+Only pure utility/helper functions have unit tests. Other mod tests use real
+cooperating production components and replace external boundaries only. A player
+scenario must protect an observable outcome; executing wiring or adapter calls
+alone does not qualify. The required review rules are in `AGENTS.md`. The
+standalone HTML catalogue contains mod tests only, grouped by player behavior
+and pure calculation; it excludes the script fixtures described below.
 
 The standalone checks in `scripts/tests/` exercise gate rejection paths and
 compile real portable-PDB fixtures. They run before the production build and do

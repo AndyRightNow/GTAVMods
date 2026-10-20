@@ -79,12 +79,6 @@ namespace Thor
                 idleOutOfRange = false;
         }
 
-        public virtual Vector3 Velocity
-        {
-            get => weaponObject == 0 ? Vector3.Zero : game.Entities.Velocity(weaponObject);
-            set => game.Entities.SetVelocity(weaponObject, value);
-        }
-
         public void RotateToDirection(int weapon, Vector3 direction)
             => game.Entities.SetRotation(weapon, Utilities.Math.DirectionToRotation(direction) + new Vector3(-90, 0, 0));
 
@@ -161,12 +155,11 @@ namespace Thor
 
         public void ShowParticleFx()
         {
-            if (!IsMoving) return;
             effects.Operations.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
             Vector3 direction = -game.Entities.Velocity(weaponObject).Normalized;
             float speed = game.Gameplay.Speed(weaponObject);
             Vector3 position = game.Entities.Position(weaponObject);
-            thunder.Shoot(position, position + direction * speed * 0.08f, -1, -1, false);
+            thunder.RenderTrail(position, position + direction * speed * 0.08f);
         }
 
         protected abstract bool ShouldApplyForcesToNearbyEntities();
@@ -176,7 +169,7 @@ namespace Thor
             if (weaponObject == 0 || !game.Entities.Exists(weaponObject) || !IsMoving || !ShouldApplyForcesToNearbyEntities()) return;
             foreach (int entity in game.World.NearbyEntities(game.Entities.Position(weaponObject), 1))
             {
-                if (entity == game.Host.PlayerPed || entity == weaponObject || pathfinder.IsRelatedEntity(entity)) continue;
+                if (entity == 0 || entity == game.Host.PlayerPed || entity == weaponObject || pathfinder.IsRelatedEntity(entity)) continue;
                 game.Entities.ApplyForce(entity, game.Entities.Velocity(weaponObject));
                 if (effects.Operations.IsPed(entity)) game.Peds.ApplyDamage(entity, 100);
             }
@@ -186,12 +179,12 @@ namespace Thor
         public void RenderWeaponTrackCam() => camera.RenderCamera(weaponObject);
         public void CancelRenderWeaponTrackCam() => camera.CancelRenderedCamera();
 
-        public void Init(Vector3? spawnPos, bool forceReplacingOld = false)
+        public void Init()
         {
-            if (!forceReplacingOld && weaponObject != 0) return;
+            if (weaponObject != 0) return;
             try
             {
-                WeaponObject = effects.Operations.CreateWeaponObject(weaponHash, 1, spawnPos ?? spawnPosition);
+                WeaponObject = effects.Operations.CreateWeaponObject(weaponHash, 1, spawnPosition);
                 if (WeaponObject == 0) throw new InvalidOperationException("The hammer weapon asset could not be created.");
             }
             catch (Exception error)
@@ -202,19 +195,13 @@ namespace Thor
             }
         }
 
-        public bool MoveToTargets(HashSet<int> targets)
+        public void MoveToTargets(HashSet<int> targets)
         {
-            if (weaponObject == 0) return false;
-            if (targets.Count == 0)
-            {
-                game.Entities.SetVelocity(weaponObject, Vector3.Zero);
-                return false;
-            }
             int target = targets.First();
             if (!game.Entities.Exists(target))
             {
                 targets.Remove(target);
-                return true;
+                return;
             }
             float distance = (game.Entities.Position(target) - Position).Length();
             if (game.Entities.Position(target) != Vector3.Zero &&
@@ -225,7 +212,6 @@ namespace Thor
                 log.Event("INFO", "hammer.targetReached", "target", target, "remaining", targets.Count);
             }
             else FindWaysToMoveToCoord(game.Entities.Position(target), false);
-            return true;
         }
 
         public bool IsMoving => weaponObject != 0 && game.Entities.Exists(weaponObject) && game.Entities.Velocity(weaponObject).Length() > 0;
@@ -245,7 +231,6 @@ namespace Thor
                 log.Throttled("INFO", "hammer.pathObstruction", 500, "blocked", blocked, "target", position.ToString());
             if (blocked && !IsInOpenAir())
             {
-                if (!pathfinder.Position.HasValue) return;
                 if (!previouslyObstructed) pathfinder.UpdateStartPosition(game.Entities.Position(weaponObject));
                 previouslyObstructed = blocked;
                 pathfinder.UpdateCurrentTarget(position);

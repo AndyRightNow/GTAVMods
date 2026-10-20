@@ -31,24 +31,6 @@ namespace ADModUtils
             string[] particleEffectSetNames,
             string[] particleEffectNames,
             int meleeHitPedDamage,
-            float meleeHitForce
-        )
-            : this(game, animationDictNames, animationNames, animationWaitTime, animationWithAngles,
-                animationWithAnglesAndIncompletePlusOrMinusSign, particleEffectSetNames, particleEffectNames,
-                meleeHitPedDamage, meleeHitForce, Logger.Default)
-        {
-        }
-
-        public NativeHelper(
-            GameServices game,
-            string[] animationDictNames,
-            string[] animationNames,
-            AnimationWaitTimeDict animationWaitTime,
-            bool[] animationWithAngles,
-            bool[] animationWithAnglesAndIncompletePlusOrMinusSign,
-            string[] particleEffectSetNames,
-            string[] particleEffectNames,
-            int meleeHitPedDamage,
             float meleeHitForce,
             IEventLog log)
         {
@@ -66,16 +48,7 @@ namespace ADModUtils
         }
 
         public int GetAnimationWaitTimeByDictNameAndAnimName(string dictName, string animName)
-        {
-            if (AnimationWaitTime.ContainsKey(dictName) &&
-                AnimationWaitTime[dictName].ContainsKey(animName))
-            {
-                return AnimationWaitTime[dictName][animName];
-            }
-
-            return 0;
-
-        }
+            => AnimationTiming.GetDelay(AnimationWaitTime, dictName, animName);
 
         public string GetAnimationDictNameByAction(uint action)
         {
@@ -119,16 +92,6 @@ namespace ADModUtils
             game.Gameplay.ClearLastDamage(ent);
         }
 
-        public void ClearPlayerAnimation(int ped, string dictName, string animName)
-        {
-            game.Animations.Stop(ped, dictName, animName, 3f);
-        }
-
-        public Bone GetLastDamagedBone(int ped)
-        {
-            return game.Outputs.LastDamageBone(ped, out int bone) ? (Bone)bone : Bone.IKRoot;
-        }
-
         public void PlayPlayerAnimation(int ped, string dictName, string animName, AnimationFlags flag, int duration = -1, bool checkIsPlaying = true)
         {
             if (checkIsPlaying && IsEntityPlayingAnim(ped, dictName, animName))
@@ -155,11 +118,6 @@ namespace ADModUtils
             return game.Animations.IsPlaying(ent, dictName, animName);
         }
 
-        public void SetEntityVelocity(int entity, Vector3 velocity)
-        {
-            game.Gameplay.SetVelocity(entity, velocity);
-        }
-
         public int CreateWeaponObject(WeaponHash weaponHash, int amountCount, Vector3 position, bool showWorldModel = true, float scale = 1.0f)
         {
             log.Event("INFO", "asset.weapon.request", "weapon", weaponHash.ToString(), "position", position.ToString(), "scale", scale);
@@ -170,11 +128,6 @@ namespace ADModUtils
             return prop;
         }
 
-        public void DrawLine(Vector3 start, Vector3 end, Color color)
-        {
-            game.Drawing.DrawLine(start, end, color);
-        }
-
         public bool IsPed(int entity)
         {
             return game.Gameplay.IsPed(entity);
@@ -183,11 +136,6 @@ namespace ADModUtils
         public bool IsVehicle(int entity)
         {
             return game.Gameplay.IsVehicle(entity);
-        }
-
-        public void SetPedWeaponVisible(int ped, bool visible)
-        {
-            game.Gameplay.SetWeaponVisible(ped, visible);
         }
 
         private bool BeforePlayingParticleFx(string effectSetName)
@@ -204,12 +152,6 @@ namespace ADModUtils
             game.Particles.PlayOnEntity(effect, entity, Vector3.Zero, Vector3.Zero, scale);
         }
 
-        public void PlayParticleFx(string effectSetName, string effect, int entity, Vector3 pos, float scale = 1.0f)
-        {
-            if (!BeforePlayingParticleFx(effectSetName)) return;
-            game.Particles.PlayOnEntity(effect, entity, pos, Vector3.Zero, scale);
-        }
-
         public void PlayParticleFx(string effectSetName, string effect, int ped, Bone boneId, float scale = 1.0f)
         {
             if (!BeforePlayingParticleFx(effectSetName)) return;
@@ -220,18 +162,6 @@ namespace ADModUtils
         {
             if (!BeforePlayingParticleFx(effectSetName)) return;
             game.Particles.PlayAt(effect, pos, rot, scale);
-        }
-
-        public int PlayParticleFxLooped(string effectSetName, string effect, int ped, Bone boneId, float scale = 1.0f)
-        {
-            if (!BeforePlayingParticleFx(effectSetName)) return 0;
-            return game.Particles.StartLoopedOnPedBone(effect, ped, boneId, Vector3.Zero, Vector3.Zero, scale);
-        }
-
-        public int PlayParticleFxLooped(string effectSetName, string effect, Vector3 pos, Vector3 rot, float scale = 1.0f)
-        {
-            if (!BeforePlayingParticleFx(effectSetName)) return 0;
-            return game.Particles.StartLoopedAt(effect, pos, rot, scale);
         }
 
         public void SetObjectPhysicsParams(
@@ -256,19 +186,6 @@ namespace ADModUtils
             game.Gameplay.SetRagdoll(ped, (GTA.RagdollType)ragdollType, timeToStayInRagdoll, timeToStandUp);
         }
 
-        public void DrawLines(ref List<Line> lines)
-        {
-            foreach (var line in lines)
-            {
-                line.Draw(game.Drawing);
-            }
-        }
-
-        public void DrawBox(Vector3 a, Vector3 b, Color col)
-        {
-            game.Drawing.DrawBox(a, b, col);
-        }
-
         public static IntersectFlags IntersectAllObjects
         {
             get
@@ -286,5 +203,14 @@ namespace ADModUtils
         public string[] ParticleEffectNames { get; private set; }
         public float MeleeHitForce { get; private set; }
         public int MeleeHitPedDamage { get; private set; }
+    }
+
+    public static class AnimationTiming
+    {
+        public static int GetDelay(Dictionary<string, Dictionary<string, int>> timings, string dictionary, string animation)
+        {
+            return timings.TryGetValue(dictionary, out var clips) && clips.TryGetValue(animation, out int milliseconds)
+                ? milliseconds : 0;
+        }
     }
 }

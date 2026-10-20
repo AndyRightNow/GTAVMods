@@ -25,29 +25,28 @@ namespace DeveloperConsole {
     }
 
     /// <summary>Only primitive UI, operating-system and clock bindings live here.</summary>
-    internal sealed class LiveConsolePlatform : IConsolePlatform {
+    internal class LiveConsolePlatform : IConsolePlatform {
         private readonly NativeMethods _keyboard;
         private readonly IClipboardNative _clipboard;
-        internal LiveConsolePlatform() : this(new NativeMethods(new WindowsKeyboardNative()), new WindowsClipboardNative()) { }
         internal LiveConsolePlatform(NativeMethods keyboard, IClipboardNative clipboard) {
             _keyboard = keyboard;
             _clipboard = clipboard;
         }
-        public float Width { [GamePrimitive] get { return GTA.UI.Screen.Width; } }
-        public float Height { [GamePrimitive] get { return GTA.UI.Screen.Height; } }
-        public int GameTime { [GamePrimitive] get { return GTA.Game.GameTime; } }
-        public DateTime Now { get { return DateTime.Now; } }
+        public virtual float Width { [GamePrimitive] get { return GTA.UI.Screen.Width; } }
+        public virtual float Height { [GamePrimitive] get { return GTA.UI.Screen.Height; } }
+        public virtual int GameTime { [GamePrimitive] get { return GTA.Game.GameTime; } }
+        public virtual DateTime Now { get { return DateTime.Now; } }
         public short CapsLockState { get { return _keyboard.GetKeyState(0x14); } }
         public bool IsForeground { get { return _keyboard.ApplicationIsActivated(); } }
         public string TranslateKey(Keys key, bool shift, bool alt) {
             return _keyboard.GetCharsFromKeys(key, shift, alt);
         }
         [GamePrimitive]
-        public void DrawRectangle(Point position, Size size, Color color) {
+        public virtual void DrawRectangle(Point position, Size size, Color color) {
             new ContainerElement(position, size, color).Draw();
         }
         [GamePrimitive]
-        public void DrawText(string text, Point position, float scale, Color color, Font font) {
+        public virtual void DrawText(string text, Point position, float scale, Color color, Font font) {
             new TextElement(text, position, scale, color, font, Alignment.Left).Draw();
         }
         public string ReadClipboard() {

@@ -14,7 +14,7 @@ namespace Thor
         string DiagnosticState { get; }
         int WeaponObject { get; }
         void ApplyOn(int ped);
-        void OnTick(bool onlyHandleWeaponHolding);
+        void OnTick();
         void RemoveAbility();
         void ResetWeapon();
         void DisposeSounds();

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using GTA;
 using GTA.Math;
@@ -79,12 +80,14 @@ namespace ModUtilsTest
         private readonly Queue<Action<FakeGame>> nextFrameObservations = new Queue<Action<FakeGame>>();
         // A failed primitive is still recorded, but its immediate assignment has not happened.
         public Action<GameCall> BeforeCall { get; set; }
+        public Action<string, int> BeforeObservation { get; set; }
         public FakeGame()
         {
             Host = new FakeHost(this); Entities = new FakeEntities(this); Peds = new FakePeds(this);
             Weapons = new FakeWeapons(this); World = new FakeWorld(this); Cameras = new FakeCameras(this);
             Ropes = new FakeRopes(this); Native = new FakeNative(this); Outputs = new FakeOutputs(this);
-            Services = new GameServices(Host, Input, Entities, Peds, Weapons, World, Cameras, Ropes, Native, Outputs);
+            Services = GtaRuntime.Create(Host, Input, Entities, Peds, Weapons, World, Cameras, Ropes,
+                Native, Native, Outputs);
         }
         public EntityObservation AddEntity(int handle)
         {
@@ -161,20 +164,21 @@ namespace ModUtilsTest
     internal sealed class FakeEntities : IEntityAccess, IEntityLifetimeBindings
     {
         private readonly FakeGame game;
-        private readonly HandleLifetime lifetime;
+        private readonly GtaEntities lifetime;
         public readonly Queue<int> CreatedBlips = new Queue<int>();
         public readonly HashSet<int> SilentDeletionRefusals = new HashSet<int>();
-        public FakeEntities(FakeGame game) { this.game = game; lifetime = new HandleLifetime(this, "Entity"); }
+        public FakeEntities(FakeGame game) { this.game = game; lifetime = new GtaEntities(this); }
         public bool Exists(int entity) => lifetime.Exists(entity);
         bool IHandleLifetimeBindings.Exists(int entity)
         {
+            game.BeforeObservation?.Invoke("entity.exists", entity);
             if (entity == 0) return false;
             if (!game.Observations.TryGetValue(entity, out var observation)) throw new InvalidOperationException("Unregistered entity: " + entity);
             return observation.Exists;
         }
         public bool IsDead(int entity) => game.Entity(entity).Dead;
         public bool IsInAir(int entity) => game.Entity(entity).InAir;
-        public Vector3 Position(int entity) => game.Entity(entity).Position;
+        public Vector3 Position(int entity) { game.BeforeObservation?.Invoke("entity.position", entity); return game.Entity(entity).Position; }
         public Vector3 Velocity(int entity) => game.Entity(entity).Velocity;
         public Vector3 Rotation(int entity) => game.Entity(entity).Rotation;
         public Quaternion Quaternion(int entity) => game.Entity(entity).Quaternion;
@@ -200,7 +204,11 @@ namespace ModUtilsTest
         public void SetOpacity(int entity, int value) { game.Record("entity.opacity", entity, value); game.Entity(entity).Opacity = value; }
         public void ResetOpacity(int entity) { game.Record("entity.resetOpacity", entity); game.Entity(entity).Opacity = 255; }
         public bool HasBeenDamagedBy(int entity, int other) => game.Entity(entity).DamagedBy.Contains(other);
-        public bool IsTouching(int entity, int other) => game.Entity(entity).Touching.Contains(other);
+        public bool IsTouching(int entity, int other)
+        {
+            game.Entity(other);
+            return game.Entity(entity).Touching.Contains(other);
+        }
         public void ApplyForce(int entity, Vector3 force) { game.Record("entity.force", entity, force); game.Entity(entity); }
         public void AttachToBone(int entity, int ped, Bone bone) { game.Record("entity.attach", entity, ped, bone); game.Entity(ped); var state = game.Entity(entity); state.AttachedTo = ped; state.AttachedBone = bone; }
         public void Detach(int entity) { game.Record("entity.detach", entity); game.Entity(entity).AttachedTo = 0; }
@@ -274,7 +282,7 @@ namespace ModUtilsTest
         public bool RequestAsset(WeaponHash weapon, int timeoutMs) { game.Record("weapon.request", weapon, timeoutMs); return AssetResults[weapon]; }
     }
 
-    internal sealed class FakeWorld : IWorldAccess
+    internal sealed class FakeWorld : IWorldAccess, IWorldQueryBindings
     {
         private readonly FakeGame game;
         public readonly Queue<RayHit> Rays = new Queue<RayHit>(), Capsules = new Queue<RayHit>();
@@ -287,18 +295,24 @@ namespace ModUtilsTest
         public FakeWorld(FakeGame game) { this.game = game; }
         public int[] NearbyEntities(Vector3 position, float radius) { game.Record("world.nearby", position, radius); if (Nearby == null) throw new InvalidOperationException("Unscripted nearby query."); return Nearby(position, radius); }
         public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0)
+            => new GtaWorld(this).Raycast(from, to, flags, ignoreEntity);
+        public RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags)
+            => new GtaWorld(this).Capsule(from, to, radius, flags);
+        void IWorldQueryBindings.Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity,
+            out bool hit, out int entity, out Vector3 position)
         {
             game.Record("world.raycast", from, to, flags, ignoreEntity);
-            if (Rays.Count != 0) return Rays.Dequeue();
-            if (RaycastObservation == null) throw new InvalidOperationException("Unscripted raycast observation.");
-            return RaycastObservation(from, to, flags, ignoreEntity);
+            var observation = Rays.Count != 0 ? Rays.Dequeue() :
+                (RaycastObservation ?? throw new InvalidOperationException("Unscripted raycast observation."))(from, to, flags, ignoreEntity);
+            hit = observation.DidHit; entity = observation.Entity; position = observation.Position;
         }
-        public RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags)
+        void IWorldQueryBindings.Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags,
+            out bool hit, out int entity, out Vector3 position)
         {
             game.Record("world.capsule", from, to, radius, flags);
-            if (Capsules.Count != 0) return Capsules.Dequeue();
-            if (CapsuleObservation == null) throw new InvalidOperationException("Unscripted capsule observation.");
-            return CapsuleObservation(from, to, radius, flags);
+            var observation = Capsules.Count != 0 ? Capsules.Dequeue() :
+                (CapsuleObservation ?? throw new InvalidOperationException("Unscripted capsule observation."))(from, to, radius, flags);
+            hit = observation.DidHit; entity = observation.Entity; position = observation.Position;
         }
         public void DrawMarker(MarkerType type, Vector3 position, Vector3 direction, Vector3 rotation, Vector3 scale, Color color) => game.Record("world.marker", type, position, direction, rotation, scale, color);
         public bool GetGroundHeight(Vector3 position, out float height) { if (Ground == null) throw new InvalidOperationException("Unscripted ground query."); var result = Ground(position); height = result.Item2; return result.Item1; }
@@ -317,8 +331,8 @@ namespace ModUtilsTest
     internal sealed class FakeCameras : ICameraAccess, ICameraLifetimeBindings
     {
         private readonly FakeGame game;
-        private readonly HandleLifetime lifetime;
-        public FakeCameras(FakeGame game) { this.game = game; lifetime = new HandleLifetime(this, "Camera"); }
+        private readonly GtaCameras lifetime;
+        public FakeCameras(FakeGame game) { this.game = game; lifetime = new GtaCameras(this); }
         public readonly Dictionary<int, CameraObservation> Cameras = new Dictionary<int, CameraObservation>();
         public readonly Queue<int> Creations = new Queue<int>();
         public readonly HashSet<int> SilentDeletionRefusals = new HashSet<int>();
@@ -347,8 +361,8 @@ namespace ModUtilsTest
     internal sealed class FakeRopes : IRopeAccess, IRopeLifetimeBindings
     {
         private readonly FakeGame game;
-        private readonly HandleLifetime lifetime;
-        public FakeRopes(FakeGame game) { this.game = game; lifetime = new HandleLifetime(this, "Rope"); }
+        private readonly GtaRopes lifetime;
+        public FakeRopes(FakeGame game) { this.game = game; lifetime = new GtaRopes(this); }
         public readonly HashSet<int> Ropes = new HashSet<int>();
         public readonly Queue<int> Creations = new Queue<int>();
         public readonly HashSet<int> SilentDeletionRefusals = new HashSet<int>();
@@ -365,7 +379,7 @@ namespace ModUtilsTest
         }
     }
 
-    internal sealed class FakeNative : INativeInvoker
+    internal sealed class FakeNative : INativeInvoker, IRawNative, IArgumentMarshaller
     {
         private readonly FakeGame game;
         public FakeNative(FakeGame game) { this.game = game; }
@@ -374,9 +388,20 @@ namespace ModUtilsTest
         public void Returns(Hash hash, object result) => Queries[hash] = arguments => result;
         public void Call(Hash hash, params object[] arguments) { Calls.Add((hash, arguments)); game.Record("native." + hash, arguments); }
         public T Call<T>(Hash hash, params object[] arguments) { Call(hash, arguments); if (!Queries.TryGetValue(hash, out var query)) throw new InvalidOperationException("Unscripted native query: " + hash); return (T)query(arguments); }
+        // Only SHVDNE's runtime-dependent scalar marshalling is substituted. The
+        // shipped invoker still assembles and submits each complete native call.
+        private readonly Dictionary<InputArgument, object> arguments = new Dictionary<InputArgument, object>();
+        InputArgument IArgumentMarshaller.Convert(object value)
+        {
+            var token = new InputArgument((ulong)arguments.Count + 1);
+            arguments.Add(token, value);
+            return token;
+        }
+        void IRawNative.Call(Hash hash, InputArgument[] values) => Call(hash, values.Select(value => arguments[value]).ToArray());
+        T IRawNative.Call<T>(Hash hash, InputArgument[] values) => Call<T>(hash, values.Select(value => arguments[value]).ToArray());
     }
 
-    internal sealed class FakeOutputs : INativeOutputs
+    internal sealed class FakeOutputs : INativeOutputs, IRawNativeOutputs
     {
         private readonly FakeGame game;
         public FakeOutputs(FakeGame game) { this.game = game; }
@@ -385,5 +410,9 @@ namespace ModUtilsTest
         public bool LastDamageBone(int ped, out int bone) { game.Entity(ped); var result = DamageBones[ped]; bone = result.Item2; return result.Item1; }
         public Quaternion EntityQuaternion(int entity) => game.Entity(entity).Quaternion;
         public bool WorldToScreen(Vector3 position, out float x, out float y) { if (Projection == null) throw new InvalidOperationException("Unscripted projection."); var result = Projection(position); x = result.Item2; y = result.Item3; return result.Item1; }
+        public void EntityQuaternion(int entity, out float x, out float y, out float z, out float w)
+        { var value = EntityQuaternion(entity); x = value.X; y = value.Y; z = value.Z; w = value.W; }
+        public bool WorldToScreen(float worldX, float worldY, float worldZ, out float x, out float y)
+            => WorldToScreen(new Vector3(worldX, worldY, worldZ), out x, out y);
     }
 }

@@ -171,7 +171,7 @@ incorrect test-helper overload. Both were corrected before validation. Console
 geometry now uses the active console's rendering context, and help displays
 nonblank argument descriptions, so tests exercise the corresponding real output.
 
-The revised suite has 234 test methods and 383 executed cases. A hash-verified
+At commit `600a104`, that revision had 234 test methods and 383 executed cases. A hash-verified
 temporary source copy passed the complete Windows PowerShell Release build,
 strict coverage gate and packaging with zero skips, warnings or errors. All four
 assemblies remain at 100% executable line and branch coverage, with the same 146
@@ -181,3 +181,44 @@ remain historical evidence for their recorded source snapshots.
 Changes discovered by these tests require a failing regression before a fix
 where practicable. A mock's convenience is not evidence of an engine guarantee.
 Unverified native assumptions remain explicit and localized to the adapter.
+
+## Player integration and pure function boundary
+
+This revision replaces the remaining isolated module and adapter tests.
+Only pure utility functions retain unit tests. All other mod cases enter through
+player controls, F8 commands, frames or lifecycle events and use real cooperating
+components, including logging, audio management and game adapters. External
+observations remain deterministic; they never simulate successful gameplay.
+
+The shared player fixture replaces `HammerFixture`, `AbilityProbe` and the fake
+event logger. It observes JSON emitted by real diagnostics and uses the production
+native marshaller orchestration, output mapping and deletion confirmation.
+Real filesystem and WAV decoding scenarios substitute only external storage
+failures and the physical audio device.
+
+The audit also removes unused legacy branches and APIs instead of manufacturing
+player actions to execute them. These include uncalled looped-particle and
+one-shot audio wrappers, standalone drawing wrappers, alternate internal gameplay
+modes, and Online-only console helpers outside this Story Mode mod's support
+scope. Supported console expressions use actual `help`, `clear` and `eval`
+commands; previously the shipped console advertised help without registering it.
+Expression compilation now disambiguates GTA controls from Windows Forms controls.
+
+The 100% thresholds, coverage inventory checks and primitive-boundary policy
+remain unchanged. The earlier mutation results above describe their original
+source snapshots, not this replacement suite.
+
+The replacement suite has 158 test methods and 310 executed cases: 239 player
+integration cases and 71 pure function cases. The complete Windows PowerShell
+Release build, inventory checks, strict coverage gate and packaging pass in a
+hash-verified temporary source copy, with no skips, warnings or errors. All four
+production assemblies have 100% measured line and branch coverage, retaining the
+same 146 audited primitive bindings.
+
+Independent xhigh reviews corrected console assertions that could match echoed
+commands, state changes that bypassed player input, and recovery assertions that
+could hide a new failure. The integration scenarios also found two mod defects:
+missing nearby entities could pause an attack, and partially failed navigation
+creation could address a missing driver before retrying cleanup. Both are fixed.
+Two targeted mutation checks removed those fixes in a temporary copy; each
+corresponding player scenario failed, and the restored full suite passed.

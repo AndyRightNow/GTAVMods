@@ -24,17 +24,16 @@ namespace DeveloperConsole {
         CompilerResults Compile(CompilerParameters parameters, string source);
     }
 
-    internal sealed class LiveCommandEnvironment : ICommandEnvironment {
+    internal class LiveCommandEnvironment : ICommandEnvironment {
         private readonly GameServices _game;
-        public LiveCommandEnvironment() : this(GtaRuntime.Create()) { }
         internal LiveCommandEnvironment(GameServices game) { _game = game; }
-        public object Player { [GamePrimitive] get { return Game.Player; } }
-        public object Character { [GamePrimitive] get { return Game.Player.Character; } }
-        public bool IsInVehicle { [GamePrimitive] get { return Game.Player.Character.IsInVehicle(); } }
-        public object Vehicle { [GamePrimitive] get { return Game.Player.Character.CurrentVehicle; } }
-        public Vector3 Position { [GamePrimitive] get { return Game.Player.Character.Position; } }
-        public string PlayerName { [GamePrimitive] get { return Game.Player.Name; } }
-        public int PlayerHandle { [GamePrimitive] get { return Game.Player.Handle; } }
+        public virtual object Player { [GamePrimitive] get { return Game.Player; } }
+        public virtual object Character { [GamePrimitive] get { return Game.Player.Character; } }
+        public virtual bool IsInVehicle { [GamePrimitive] get { return Game.Player.Character.IsInVehicle(); } }
+        public virtual object Vehicle { [GamePrimitive] get { return Game.Player.Character.CurrentVehicle; } }
+        public virtual Vector3 Position { [GamePrimitive] get { return Game.Player.Character.Position; } }
+        public virtual string PlayerName { [GamePrimitive] get { return Game.Player.Name; } }
+        public virtual int PlayerHandle { [GamePrimitive] get { return Game.Player.Handle; } }
         public int NetworkPlayerIndex { get { return _game.ConsolePlayers.Index(_game.Host.PlayerPed); } }
 
         public CompilerResults Compile(CompilerParameters parameters, string source) {
@@ -46,10 +45,16 @@ namespace DeveloperConsole {
     internal sealed class CommandParser {
         public List<CommandToken> Tokens { get; } = new List<CommandToken>();
 
-        public CommandParser(string data, IDeveloperConsole console)
-            : this(data, console, new LiveCommandEnvironment()) { }
-
         public CommandParser(string data, IDeveloperConsole console, ICommandEnvironment environment) {
+            foreach (var token in Tokenize(data)) {
+                // Parsing and diagnostics must never execute expressions.
+                console.PrintDebug("Found token -> " + token.Key + " : " + token.Value);
+                Tokens.Add(new CommandToken(token.Key, token.Value, console, environment));
+            }
+        }
+
+        internal static List<KeyValuePair<CommandTokenKind, string>> Tokenize(string data) {
+            var tokens = new List<KeyValuePair<CommandTokenKind, string>>();
             var position = 0;
             while (position < data.Length) {
                 if (char.IsWhiteSpace(data[position])) {
@@ -110,10 +115,9 @@ namespace DeveloperConsole {
                 if (kind == CommandTokenKind.Word &&
                     double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out number))
                     kind = CommandTokenKind.Number;
-                // Parsing and diagnostics must never execute expressions.
-                console.PrintDebug("Found token -> " + kind + " : " + text);
-                Tokens.Add(new CommandToken(kind, text, console, environment));
+                tokens.Add(new KeyValuePair<CommandTokenKind, string>(kind, text));
             }
+            return tokens;
         }
     }
 
@@ -124,9 +128,6 @@ namespace DeveloperConsole {
         private readonly ICommandEnvironment _environment;
         private bool _evaluated;
         private object _value;
-
-        public CommandToken(CommandTokenKind kind, string data, IDeveloperConsole console)
-            : this(kind, data, console, new LiveCommandEnvironment()) { }
 
         public CommandToken(CommandTokenKind kind, string data, IDeveloperConsole console,
             ICommandEnvironment environment) {
@@ -170,7 +171,7 @@ namespace DeveloperConsole {
                     try {
                         return CSharpEval(String);
                     } catch (Exception error) {
-                        _console.PrintError("C# evaluation failed: " + error.Message);
+                        _console.PrintError("C# evaluation failed: " + error.GetBaseException().Message);
                         return null;
                     }
                 case CommandTokenKind.Number:
@@ -185,12 +186,12 @@ namespace DeveloperConsole {
         internal object CSharpEval(string source) {
             var parameters = new CompilerParameters { CompilerOptions = "/t:library", GenerateInMemory = true };
             AddReferences(parameters, AppDomain.CurrentDomain.GetAssemblies());
-            foreach (var script in DeveloperConsole.RegisteredScripts)
-                parameters.ReferencedAssemblies.Add(script.Key.GetType().Assembly.Location);
             var code = "using System;\nusing System.Drawing;\nusing System.Windows.Forms;\n" +
-                "using GTA;\nusing GTA.Math;\nusing GTA.Native;\nusing DeveloperConsole;\n" +
+                "using GTA;\nusing GTA.Math;\nusing GTA.Native;\nusing DeveloperConsole;\nusing Control = GTA.Control;\n" +
                 "namespace DeveloperConsoleCodeEval { public class DeveloperConsoleCodeEval { " +
                 "private ICommandEnvironment context; " +
+                "public global::DeveloperConsole.DeveloperConsole CONSOLE { get { return global::DeveloperConsole.DeveloperConsole.Instance; } } " +
+                "public GTAFuncs FUNCTIONS { get { return CONSOLE.GameFunctions; } } " +
                 "public Player PLAYER { get { return (Player)context.Player; } } " +
                 "public Ped PED { get { return (Ped)context.Character; } } " +
                 "public int MP_ID { get { return context.NetworkPlayerIndex; } } " +
@@ -204,7 +205,6 @@ namespace DeveloperConsole {
                 return null;
             }
             var instance = result.CompiledAssembly.CreateInstance("DeveloperConsoleCodeEval.DeveloperConsoleCodeEval");
-            if (instance == null) return null;
             return instance.GetType().GetMethod("EvalCode").Invoke(instance, new object[] { _environment });
         }
 

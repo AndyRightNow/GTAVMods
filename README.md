@@ -177,6 +177,27 @@ Thor starts enabled. The old experimental test-object key bindings are excluded
 from production builds. On an exception Thor pauses, logs the error, and allows
 Ctrl+A+O to retry. Missing audio is logged once per clip and does not stop gameplay.
 
+## F8 developer console
+
+`help` lists the built-in commands, `help eval` explains expression input, and
+`clear` clears the output. `eval` displays a value such as `eval self.pos` or
+executes C# statements inside braces. For example:
+
+```text
+eval { return POS; }
+eval { return FUNCTIONS.SpawnVehicleProper((int)VehicleHash.Adder, POS + new Vector3(5, 0, 0)); }
+eval { new Rectangle3D(POS, new Vector3(-1,-1,-1), new Vector3(1,1,1)).DrawWireFrame(Color.Yellow); }
+```
+
+Expressions expose `PLAYER`, `PED`, `POS`, `MP_ID`, the current `CONSOLE`, and its
+`FUNCTIONS` game helpers. C# runs locally on the game script thread; only enter
+code you intend to run. Geometry drawing lasts for the current frame. Vehicle
+spawning waits for model readiness and reports the created handle, or zero when
+loading or creation fails. A returned handle does not certify later physics.
+
+This console supports Story Mode development. The inherited Online-only kick,
+spectator, anti-ban and multiplayer stat-writing helpers have been removed.
+
 ## Broader gameplay checks
 
 The controlled high-speed throw travelled below the map before recall recovered
@@ -201,6 +222,9 @@ Gameplay runs against focused engine interfaces in tests. Scripted observations
 and recorded primitive commands exercise the real recall, catch, throw, flight,
 targeting, ropes, cameras, health, input interpretation and cleanup logic.
 Console, audio ownership, numerical helpers and diagnostics are also covered.
+Only pure utility functions have unit tests. All other cases are player
+integration scenarios using the real cooperating mod components and adapters,
+with controlled observations at the external game, device and storage boundaries.
 The same production assemblies ship in the package, including `GameBridge.dll`.
 The [engine contracts](docs/engine-contracts.md) define units, timing, failure
 results and resource ownership. Tests distinguish requests from observed

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using GTA;
 using GTA.Math;
 using GTAVMods.Game;
@@ -10,62 +11,29 @@ namespace ADModUtils
     {
         public static class Random
         {
-            public static T PickOne<T>(T[] arr)
-                => PickOne(arr, SystemRandomInstance);
-
             public static T PickOne<T>(T[] arr, System.Random random)
             {
-                if (random == null) throw new ArgumentNullException(nameof(random));
-                if (arr == null || arr.Length == 0)
-                {
-                    return default(T);
-                }
-
+                Require.NotNull(random, nameof(random));
+                Require.NonEmpty(arr, nameof(arr));
                 lock (random)
                     return arr[random.Next(arr.Length)];
             }
 
-            public static T PickOneIf<T>(T[] arr, Func<T, bool> predicate)
-                => PickOneIf(arr, predicate, SystemRandomInstance);
-
             public static T PickOneIf<T>(T[] arr, Func<T, bool> predicate, System.Random random)
             {
-                if (predicate == null) throw new ArgumentNullException(nameof(predicate));
-                if (arr == null || arr.Length == 0)
-                {
-                    return default(T);
-                }
-
-                List<T> arrThatMeetPredicate = new List<T>();
-                foreach (var el in arr)
-                {
-                    if (predicate(el))
-                    {
-                        arrThatMeetPredicate.Add(el);
-                    }
-                }
-
-                return PickOne(arrThatMeetPredicate.ToArray(), random);
+                return PickOne(Require.NotNull(arr, nameof(arr)).Where(Require.NotNull(predicate, nameof(predicate))).ToArray(), random);
             }
-
-            public static System.Random SystemRandomInstance = new System.Random();
-
-            public static int RandomNegation()
-                => RandomNegation(SystemRandomInstance);
 
             public static int RandomNegation(System.Random random)
             {
-                if (random == null) throw new ArgumentNullException(nameof(random));
+                Require.NotNull(random, nameof(random));
                 lock (random)
                     return random.Next(0, 2) > 0 ? 1 : -1;
             }
 
-            public static float NextFloat(bool allowNegative = true)
-                => NextFloat(SystemRandomInstance, allowNegative);
-
             public static float NextFloat(System.Random random, bool allowNegative = true)
             {
-                if (random == null) throw new ArgumentNullException(nameof(random));
+                Require.NotNull(random, nameof(random));
                 lock (random)
                     return Convert.ToSingle(random.NextDouble()) * (allowNegative ? RandomNegation(random) : 1.0f);
             }
@@ -73,7 +41,7 @@ namespace ADModUtils
 
         public static class Math
         {
-            public static float DegreePerRadian = 57.2958f;
+            public const float DegreePerRadian = 57.2958f;
 
             public static Vector3 DirectionToRotation(Vector3 dir, float roll = 0.0f)
             {
@@ -154,17 +122,16 @@ namespace ADModUtils
                 return (from - to).Length() <= delta;
             }
 
-            public static Vector3 RandomVectorPerpendicularTo(Vector3 target, bool normalized = true)
-                => RandomVectorPerpendicularTo(target, Random.SystemRandomInstance, normalized);
-
             public static Vector3 RandomVectorPerpendicularTo(Vector3 target, System.Random random, bool normalized = true)
             {
-                float x = Random.NextFloat(random), y = Random.NextFloat(random), z = 0.0f;
+                return PerpendicularTo(target, Random.NextFloat(random), Random.NextFloat(random),
+                    target.Z == 0 ? Random.NextFloat(random) : 0, normalized);
+            }
 
+            public static Vector3 PerpendicularTo(Vector3 target, float x, float y, float z, bool normalized = true)
+            {
                 if (target.Z == 0.0f)
                 {
-                    z = Random.NextFloat(random);
-
                     if (target.Y != 0.0f)
                     {
                         y = -(target.X * x / target.Y);
@@ -206,10 +173,9 @@ namespace ADModUtils
 
             public Timer(int interval, TimerHandler handler, Func<int> clock)
             {
-                if (interval < 0) throw new ArgumentOutOfRangeException(nameof(interval));
-                this.interval = interval;
-                this.handler = handler ?? throw new ArgumentNullException(nameof(handler));
-                this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+                this.interval = Require.NonNegative(interval, nameof(interval));
+                this.handler = Require.NotNull(handler, nameof(handler));
+                this.clock = Require.NotNull(clock, nameof(clock));
                 previouslyFiredGameTime = clock();
             }
 
@@ -232,10 +198,5 @@ namespace ADModUtils
             rhs = temp;
         }
 
-        public static class Audio
-        {
-            public static void Play(string filename)
-                => OneShotAudio.Play(filename, new NAudioPlaybackFactory());
-        }
     }
 }

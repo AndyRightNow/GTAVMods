@@ -43,7 +43,6 @@ namespace Thor
         protected readonly NativeHelper effects;
         protected readonly Random random;
         private readonly IEventLog log;
-        private readonly Thunder thunder;
         protected int attachedPed;
         protected bool isWeaponAttackingTargets;
         // Keep exact engine milliseconds, including -1; short durations use
@@ -72,13 +71,12 @@ namespace Thor
         protected int currentlyGrabbedEntity = 0;
 
         protected WorthyAbility(GameServices game, NativeHelper effects, Random random,
-            Mjolnir weapon, Thunder thunder, IAudioPlaybackFactory audio, IEventLog log)
+            Mjolnir weapon, IAudioPlaybackFactory audio, IEventLog log)
         {
             this.game = game;
             this.effects = effects;
             this.random = random;
             this.log = log;
-            this.thunder = thunder;
             Weapon = weapon;
             isCollectingTargets = false;
             targets = new HashSet<int>();
@@ -178,11 +176,6 @@ namespace Thor
 
         public void ApplyOn(int ped)
         {
-            if (IsAttachedToPed)
-            {
-                return;
-            }
-
             attachedPed = ped;
             log.Event("INFO", "ability.attach", "ped", ped, "model", game.Entities.ModelHash(ped), "position", game.Entities.Position(ped).ToString());
             originalMaxHealth = game.Peds.MaxHealth(ped);
@@ -196,30 +189,23 @@ namespace Thor
             }
         }
 
-        public virtual void OnTick(bool onlyHandleWeaponHolding)
+        public virtual void OnTick()
         {
-            if (!onlyHandleWeaponHolding)
+            HandlePowerLevel();
+            HandleHealthRecovery();
+            SetInvincible(true);
+            if (pedFxTimer != null && hasSummonedThunder)
             {
-                if (attachedPed == 0)
-                {
-                    return;
-                }
-                HandlePowerLevel();
-                HandleHealthRecovery();
-                SetInvincible(true);
-                if (pedFxTimer != null && hasSummonedThunder)
-                {
-                    pedFxTimer.OnTick();
-                }
-                HandleMovement();
-                if (IsHoldingWeapon ||
-                    game.Weapons.CurrentObject(attachedPed) == 0)
-                {
-                    HandleMeleeForces();
-                }
-
-                HandlePreOnTick();
+                pedFxTimer.OnTick();
             }
+            HandleMovement();
+            if (IsHoldingWeapon ||
+                game.Weapons.CurrentObject(attachedPed) == 0)
+            {
+                HandleMeleeForces();
+            }
+
+            HandlePreOnTick();
 
             if (IsHoldingWeapon)
             {
@@ -396,7 +382,7 @@ namespace Thor
             {
                 if (targets.Count > 0)
                 {
-                    isWeaponAttackingTargets = Weapon.MoveToTargets(targets);
+                    Weapon.MoveToTargets(targets);
                 }
                 else
                 {
@@ -423,7 +409,7 @@ namespace Thor
         {
             if (!HasWeapon)
             {
-                Weapon.Init(null);
+                Weapon.Init();
             }
         }
 
@@ -454,7 +440,7 @@ namespace Thor
 
             foreach (var ent in closestEntities)
             {
-                if (ent == attachedPed ||
+                if (ent == 0 || ent == attachedPed ||
                     ent == game.Weapons.CurrentObject(attachedPed))
                 {
                     continue;
@@ -565,7 +551,7 @@ namespace Thor
                 var nearbyEntities = game.World.NearbyEntities(game.Entities.Position(attachedPed), 5.0f);
                 foreach (var ent in nearbyEntities)
                 {
-                    if (ent != attachedPed && ent != game.Weapons.CurrentObject(attachedPed) &&
+                    if (ent != 0 && ent != attachedPed && ent != game.Weapons.CurrentObject(attachedPed) &&
                                 (game.Entities.IsTouching(attachedPed, ent) ||
                                 game.Entities.IsTouching(game.Weapons.CurrentObject(attachedPed), ent)))
                     {
@@ -577,14 +563,7 @@ namespace Thor
             {
                 HandlePreNotFlying();
                 isFlying = false;
-                if (powerLevel == FULL_POWER_LEVEL_MAX_RATIO)
-                {
-                    game.Peds.SetCanRagdoll(attachedPed, !game.Entities.IsInAir(attachedPed));
-                }
-                else
-                {
-                    game.Peds.SetCanRagdoll(attachedPed, true);
-                }
+                game.Peds.SetCanRagdoll(attachedPed, !game.Entities.IsInAir(attachedPed));
                 if (!hasJustSetEndOfFlyingInitialVelocity)
                 {
                     game.Entities.SetVelocity(attachedPed, game.Entities.Velocity(attachedPed) + previousPedVelocity);
@@ -640,7 +619,7 @@ namespace Thor
 
                 foreach (var ent in nearbyEnts)
                 {
-                    if (effects.Operations.IsPed(ent) && ent != game.Host.PlayerPed)
+                    if (ent != 0 && effects.Operations.IsPed(ent) && ent != game.Host.PlayerPed)
                     {
                         game.Entities.AttachToBone(ent, game.Host.PlayerPed, Bone.IKLeftHand);
                         game.Peds.ClearTasks(ent);
@@ -757,7 +736,7 @@ namespace Thor
 
         public virtual void SummonWeapon()
         {
-            if (!IsAttachedToPed || HasWeapon) return;
+            if (HasWeapon) return;
             log.Throttled("INFO", "hammer.summon", 2000, "state", DiagnosticState);
             isWeaponAttackingTargets = false;
             targets.Clear();
@@ -853,10 +832,6 @@ namespace Thor
         public void ThrowAndFlyWithWeapon()
         {
             log.Event("INFO", "hammer.throwFlight", "state", DiagnosticState);
-            if (!IsHoldingWeapon)
-            {
-                return;
-            }
             PlayThrowWeaponAnimation(game.Cameras.GameplayDirection);
             SetAttachedPedToRagdoll();
             isFlyingWithThrownWeapon = true;
@@ -867,11 +842,6 @@ namespace Thor
         public void ThrowWeapon(HashSet<int> targets)
         {
             log.Event("INFO", "hammer.throwTargets", "targets", targets.Count, "state", DiagnosticState);
-            if (!IsHoldingWeapon)
-            {
-                return;
-            }
-
             if (targets.Count == 0)
             {
                 isWeaponAttackingTargets = false;
@@ -891,10 +861,6 @@ namespace Thor
         public void ThrowWeapon()
         {
             log.Event("INFO", "hammer.throw", "state", DiagnosticState);
-            if (!IsHoldingWeapon)
-            {
-                return;
-            }
             PlayThrowWeaponAnimation(game.Cameras.GameplayDirection);
             ThrowWeaponOut();
         }

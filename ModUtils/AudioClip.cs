@@ -13,17 +13,12 @@ namespace ADModUtils
         private IAudioPlayback output;
         private bool unavailable;
 
-        public AudioClip(string path, float volume = 1.0f)
-            : this(path, volume, new NAudioPlaybackFactory(), Logger.Default)
-        {
-        }
-
         public AudioClip(string path, float volume, IAudioPlaybackFactory factory, IEventLog log)
         {
             this.path = path;
             this.volume = volume;
-            this.factory = factory ?? throw new ArgumentNullException(nameof(factory));
-            this.log = log ?? throw new ArgumentNullException(nameof(log));
+            this.factory = Require.NotNull(factory, nameof(factory));
+            this.log = Require.NotNull(log, nameof(log));
         }
 
         public static string ResourcePath(string name)

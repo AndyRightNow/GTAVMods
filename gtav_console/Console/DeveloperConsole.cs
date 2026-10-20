@@ -34,9 +34,12 @@ namespace DeveloperConsole {
         private readonly DeveloperConsole _console;
         [GamePrimitive]
         public DeveloperConsoleScript() {
-            var platform = new LiveConsolePlatform();
-            _console = new DeveloperConsole(platform, new LiveCommandEnvironment(),
-                new GTAFuncs(GtaRuntime.Create(), platform));
+            var game = GtaRuntime.Create(new GtaHost(), new GtaInput(),
+                new GtaEntities(new GtaEntityLifetimeBindings()), new GtaPeds(), new GtaWeapons(),
+                new GtaWorld(new GtaWorldQueries()), new GtaCameras(new GtaCameraLifetimeBindings()),
+                new GtaRopes(new GtaRopeLifetimeBindings()), new GtaNative(), new GtaArgumentMarshaller(), new GtaOutputs());
+            var platform = new LiveConsolePlatform(new NativeMethods(new WindowsKeyboardNative()), new WindowsClipboardNative());
+            _console = new DeveloperConsole(platform, new LiveCommandEnvironment(game), new GTAFuncs(game, platform));
             Tick += OnTick;
             KeyDown += OnKeyDown;
             KeyUp += OnKeyUp;
@@ -67,8 +70,8 @@ namespace DeveloperConsole {
         public bool Debug = ConsoleSettings.IsDevBuild;
         public string Input {
             get { return _input; }
-            set {
-                _input = value ?? "";
+            private set {
+                _input = value;
                 _inputOffset = Math.Min(_inputOffset, _input.Length);
             }
         }
@@ -79,15 +82,17 @@ namespace DeveloperConsole {
             _game = game;
             Instance = this;
             CommandDispatcher = new CommandDispatcher();
+            DefaultCommands.OnConsoleAttached(this);
             PrintLine("Developer console: F8 opens/closes. Run 'help' for commands. F4 opens the SHVDN console.");
             foreach (var script in RegisteredScripts.ToArray()) script.Value(this);
         }
 
         public CommandDispatcher CommandDispatcher { get; }
+        /// <summary>Game helpers available to expressions entered in this console.</summary>
+        public GTAFuncs GameFunctions => _game;
         public static DeveloperConsole Instance { get; private set; }
         // Console-created geometry shares the current console's rendering context.
-        internal static GTAFuncs GeometryFunctions =>
-            Instance?._game ?? new GTAFuncs(GtaRuntime.Create(), new LiveConsolePlatform());
+        internal static GTAFuncs GeometryFunctions => Instance._game;
         public bool IsOpen { get { return !_isHidden; } }
         public static List<KeyValuePair<object, OnConsoleAttached>> RegisteredScripts { get; } =
             new List<KeyValuePair<object, OnConsoleAttached>>();
@@ -292,11 +297,10 @@ namespace DeveloperConsole {
             } else command.Callback(new CommandDispatcher.CommandEventArgs(name, tokens, argumentSet));
         }
 
-        public void ShowConsole(bool show) {
+        private void ShowConsole(bool show) {
             _lineOffset = 0;
             _historyCursor = -1;
             if (show) {
-                if (IsOpen) return;
                 RestoreOwnedControls();
                 _disabledControls = _game.CaptureEnabledControls();
                 try {
@@ -327,7 +331,7 @@ namespace DeveloperConsole {
             _game.RestoreControls(controls);
         }
         private void SetConsoleControls() {
-            _game.SetControlActions(false);
+            _game.DisableControls();
             foreach (var control in new[] {
                 Control.MoveLeftRight, Control.MoveUpDown, Control.VehicleAccelerate, Control.VehicleBrake,
                 Control.VehicleDriveLook, Control.VehicleDriveLook2, Control.VehicleMoveLeftRight,

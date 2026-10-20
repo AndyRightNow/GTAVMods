@@ -115,19 +115,22 @@ namespace DeveloperConsole {
             Min = min;
             Max = max;
                 
-            Corners = new Dictionary<string, Vector3> {
-                {"000", center + new Vector3(Min.X,Min.Y,Min.Z)},
-                {"100", center + new Vector3(Max.X,Min.Y,Min.Z)},
-                {"010", center + new Vector3(Min.X,Max.Y,Min.Z)},
-                {"001", center + new Vector3(Min.X,Min.Y,Max.Z)},
-                {"110", center + new Vector3(Max.X,Max.Y,Min.Z)},
-                {"101", center + new Vector3(Max.X,Min.Y,Max.Z)},
-                {"011", center + new Vector3(Min.X,Max.Y,Max.Z)},
-                {"111", center + new Vector3(Max.X,Max.Y,Max.Z)}
-            };
-
+            Corners = CreateCorners(center, min, max);
             GenerateEdges();
             GenerateFaces();
+        }
+
+        internal static Dictionary<string, Vector3> CreateCorners(Vector3 center, Vector3 min, Vector3 max) {
+            return new Dictionary<string, Vector3> {
+                {"000", center + new Vector3(min.X,min.Y,min.Z)},
+                {"100", center + new Vector3(max.X,min.Y,min.Z)},
+                {"010", center + new Vector3(min.X,max.Y,min.Z)},
+                {"001", center + new Vector3(min.X,min.Y,max.Z)},
+                {"110", center + new Vector3(max.X,max.Y,min.Z)},
+                {"101", center + new Vector3(max.X,min.Y,max.Z)},
+                {"011", center + new Vector3(min.X,max.Y,max.Z)},
+                {"111", center + new Vector3(max.X,max.Y,max.Z)}
+            };
         }
 
         /// <summary>
@@ -200,13 +203,20 @@ namespace DeveloperConsole {
         /// <param name="rot">The quaternion to rotate by</param>
         /// <returns>The current rectangle instance</returns>
         public Rectangle3D Rotate(Quaternion rot) {
-            var q = new QuaternionRotation3D(new System.Windows.Media.Media3D.Quaternion(rot.X, rot.Y, rot.Z, rot.W));
-            var r = new RotateTransform3D(q, ToPoint3D(Center));
-            foreach (var k in new List<string>(Corners.Keys))
-                Corners[k] = ToVector3(r.Transform(ToPoint3D(Corners[k])));
+            Corners = RotateCorners(Corners, Center, rot);
             GenerateEdges();
             GenerateFaces();
             return this;
+        }
+
+        internal static Dictionary<string, Vector3> RotateCorners(
+            IDictionary<string, Vector3> corners, Vector3 center, Quaternion rotation) {
+            var q = new QuaternionRotation3D(new System.Windows.Media.Media3D.Quaternion(rotation.X, rotation.Y, rotation.Z, rotation.W));
+            var transform = new RotateTransform3D(q, ToPoint3D(center));
+            var result = new Dictionary<string, Vector3>();
+            foreach (var corner in corners)
+                result.Add(corner.Key, ToVector3(transform.Transform(ToPoint3D(corner.Value))));
+            return result;
         }
 
         /// <summary>
@@ -263,7 +273,7 @@ namespace DeveloperConsole {
         /// </summary>
         /// <param name="p">The Point3D</param>
         /// <returns>The Vector3</returns>
-        private Vector3 ToVector3(Point3D p) {
+        private static Vector3 ToVector3(Point3D p) {
             return new Vector3(Convert.ToSingle(p.X), Convert.ToSingle(p.Y), Convert.ToSingle(p.Z));
         }
 
@@ -272,7 +282,7 @@ namespace DeveloperConsole {
         /// </summary>
         /// <param name="v">The Vector3</param>
         /// <returns>The Point3D</returns>
-        private Point3D ToPoint3D(Vector3 v) {
+        private static Point3D ToPoint3D(Vector3 v) {
             return new Point3D(v.X, v.Y, v.Z);
         }
     }

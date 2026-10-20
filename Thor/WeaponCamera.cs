@@ -22,8 +22,6 @@ namespace Thor
             MjolnirCameraType.StationaryViewFollow, MjolnirCameraType.StationaryViewFollow
         };
 
-        public WeaponCamera(GameServices game, Random random) : this(game, random, Logger.Default) { }
-
         public WeaponCamera(GameServices game, Random random, IEventLog log)
         {
             this.game = game;

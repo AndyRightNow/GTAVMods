@@ -14,8 +14,6 @@ namespace GTAVMods.Game
         public bool IsVehicle(int entity) => native.Call<bool>(Hash.IS_ENTITY_A_VEHICLE, entity);
         public Vector3 Position(int entity) => native.Call<Vector3>(Hash.GET_ENTITY_COORDS, entity, false);
         public float Speed(int entity) => native.Call<float>(Hash.GET_ENTITY_SPEED, entity);
-        public void SetVelocity(int entity, Vector3 metresPerSecond)
-            => native.Call(Hash.SET_ENTITY_VELOCITY, entity, metresPerSecond.X, metresPerSecond.Y, metresPerSecond.Z);
         public void ClearLastDamage(int entity) => native.Call(Hash.CLEAR_ENTITY_LAST_DAMAGE_ENTITY, entity);
         public void SetFreezeWhileWaitingForCollision(int entity, bool freeze)
             => native.Call(Hash.SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION, entity, freeze);
@@ -29,8 +27,6 @@ namespace GTAVMods.Game
         public int CreateWeaponObject(WeaponHash weapon, int ammo, Vector3 position, bool showWorldModel, float scale)
             => native.Call<int>(Hash.CREATE_WEAPON_OBJECT, (int)weapon, ammo,
                 position.X, position.Y, position.Z, showWorldModel, scale, 0, false, false);
-        public void SetWeaponVisible(int ped, bool visible)
-            => native.Call(Hash.SET_PED_CURRENT_WEAPON_VISIBLE, ped, visible, 0, 0, 0);
         public void GiveWeaponObjectToPed(int weaponObject, int ped)
             => native.Call(Hash.GIVE_WEAPON_OBJECT_TO_PED, weaponObject, ped);
         public int DropWeaponObjectFromPed(int ped) => native.Call<int>(Hash.GET_WEAPON_OBJECT_FROM_PED, ped, false);

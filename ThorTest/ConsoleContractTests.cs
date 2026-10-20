@@ -1,561 +1,217 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using DeveloperConsole;
+using System.Windows.Forms;
 using GTA;
-using GTA.Math;
 using GTA.Native;
-using GTAVMods.Game;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using ConsoleModel = DeveloperConsole.DeveloperConsole;
+using Control = GTA.Control;
 
 namespace ModUtilsTest {
-    internal enum ConsoleInputOperation { Enabled, Normal, Value, Pressed, DisabledPressed, Enable, Disable, EnableAll, DisableAll }
-    internal sealed class ConsoleControlState : IConsoleInput {
-        internal readonly HashSet<Control> Enabled = new HashSet<Control>();
-        internal readonly HashSet<Control> Pressed = new HashSet<Control>();
-        internal readonly Dictionary<Control, float> Samples = new Dictionary<Control, float>();
-        internal readonly List<(ConsoleInputOperation Operation, Control Control)> Calls =
-            new List<(ConsoleInputOperation, Control)>();
-        internal Action<ConsoleInputOperation, Control> Before;
-        private void Record(ConsoleInputOperation operation, Control control = default(Control)) {
-            Calls.Add((operation, control));
-            Before?.Invoke(operation, control);
-        }
-        public bool IsEnabled(Control control) { Record(ConsoleInputOperation.Enabled, control); return Enabled.Contains(control); }
-        public float Normal(Control control) { Record(ConsoleInputOperation.Normal, control); return Enabled.Contains(control) ? Samples[control] : 0; }
-        public int Value(Control control) { Record(ConsoleInputOperation.Value, control); return 237; }
-        public bool IsPressed(Control control) { Record(ConsoleInputOperation.Pressed, control); return Enabled.Contains(control) && Pressed.Contains(control); }
-        public bool IsDisabledPressed(Control control) { Record(ConsoleInputOperation.DisabledPressed, control); return Pressed.Contains(control); }
-        public void Enable(Control control, bool enabled) {
-            Record(ConsoleInputOperation.Enable, control);
-            if (enabled) Enabled.Add(control); else Enabled.Remove(control);
-        }
-        public void Disable(Control control, bool disabled) {
-            Record(ConsoleInputOperation.Disable, control);
-            if (disabled) Enabled.Remove(control); else Enabled.Add(control);
-        }
-        public void EnableAll() {
-            Record(ConsoleInputOperation.EnableAll);
-            foreach (Control control in Enum.GetValues(typeof(Control))) Enabled.Add(control);
-        }
-        public void DisableAll() { Record(ConsoleInputOperation.DisableAll); Enabled.Clear(); }
-    }
-
-    // This native-side probe is deliberately separate from ConsoleControlState. It validates
-    // the adapter protocol and stores native integer IDs; behavior tests use the typed fake.
-    internal sealed class ConsoleInputNativeProbe : INativeInvoker {
-        internal readonly Dictionary<int, bool> States = new Dictionary<int, bool>();
-        internal readonly HashSet<int> Pressed = new HashSet<int>();
-        internal readonly Dictionary<int, float> Samples = new Dictionary<int, float>();
-        public void Call(Hash hash, params object[] arguments) {
-            Assert.AreEqual(0, arguments[0], "Console native controls must use input group zero.");
-            if (hash == Hash.ENABLE_ALL_CONTROL_ACTIONS || hash == Hash.DISABLE_ALL_CONTROL_ACTIONS) {
-                foreach (Control control in Enum.GetValues(typeof(Control)))
-                    States[(int)control] = hash == Hash.ENABLE_ALL_CONTROL_ACTIONS;
-                return;
-            }
-            Assert.IsTrue(hash == Hash.ENABLE_CONTROL_ACTION || hash == Hash.DISABLE_CONTROL_ACTION);
-            States[(int)arguments[1]] = hash == Hash.ENABLE_CONTROL_ACTION ? (bool)arguments[2] : !(bool)arguments[2];
-        }
-        public T Call<T>(Hash hash, params object[] arguments) {
-            Assert.AreEqual(0, arguments[0]);
-            int id = (int)arguments[1];
-            bool enabled = States.TryGetValue(id, out var value) && value;
-            object result;
-            switch (hash) {
-                case Hash.IS_CONTROL_ENABLED: result = enabled; break;
-                case Hash.GET_CONTROL_NORMAL: result = enabled ? Samples[id] : 0f; break;
-                case Hash.GET_CONTROL_VALUE: result = 237; break;
-                case Hash.IS_CONTROL_PRESSED: result = enabled && Pressed.Contains(id); break;
-                case Hash.IS_DISABLED_CONTROL_PRESSED: result = Pressed.Contains(id); break;
-                default: throw new InvalidOperationException("Unexpected console native query: " + hash);
-            }
-            return (T)result;
-        }
-    }
-
-    internal sealed class ConsoleStreamingState : IConsoleWorld, IConsoleNetwork {
-        internal readonly List<string> Calls = new List<string>();
-        internal readonly HashSet<int> Requested = new HashSet<int>();
-        internal bool Loaded, HasControl, AcceptRequest = true, AcceptNetworkId = true;
-        internal int CreatedVehicle = 23;
-        internal Exception CreateFailure, ReleaseFailure;
-        public void RequestModel(int model) { Calls.Add("request-model"); Requested.Add(model); }
-        public bool ModelLoaded(int model) {
-            Assert.IsTrue(Requested.Contains(model), "The caller must request its streaming reference before polling.");
-            Calls.Add("model-loaded"); return Loaded;
-        }
-        public void ReleaseModel(int model) {
-            Calls.Add("release-model");
-            if (ReleaseFailure != null) throw ReleaseFailure;
-            Assert.IsTrue(Requested.Remove(model), "Only owned model references may be released.");
-        }
-        public int CreateVehicle(int model, Vector3 position) {
-            Assert.IsTrue(Loaded && Requested.Contains(model), "Never create with an unconfirmed or released model.");
-            Calls.Add("create-vehicle");
-            if (CreateFailure != null) throw CreateFailure;
-            return CreatedVehicle;
-        }
-        public bool RequestEntityControl(int entity) { Calls.Add("request-entity"); return AcceptRequest; }
-        public bool HasEntityControl(int entity) { Calls.Add("has-control"); return HasControl; }
-        public int NetworkId(int entity) { Calls.Add("network-id"); return 73; }
-        public bool RequestNetworkIdControl(int networkId) {
-            Assert.AreEqual(73, networkId);
-            Calls.Add("request-network-id"); return AcceptNetworkId;
-        }
-        public int Hash(string name) => throw new NotSupportedException();
-        public int FirstBlip(int type) => throw new NotSupportedException();
-        public bool WaypointActive() => throw new NotSupportedException();
-        public void ClearObjects(Vector3 position, float radius, bool flag) => throw new NotSupportedException();
-        public void ClearProjectiles(Vector3 position, float radius, bool flag) => throw new NotSupportedException();
-        public void AmbientPickup(int hash, Vector3 position, int value) => throw new NotSupportedException();
-        public int PlayerCount() => throw new NotSupportedException();
-        public void Kick(int player) => throw new NotSupportedException();
-        public void LocalInvincibleTime(int milliseconds) => throw new NotSupportedException();
-        public void MarkScriptSafe() => throw new NotSupportedException();
-        public void RegisterScript() => throw new NotSupportedException();
-        public void TrackDamage(int networkId, bool enabled) => throw new NotSupportedException();
-        public void Spectate(int ped, bool enabled) => throw new NotSupportedException();
-    }
-
     [TestClass]
     public class ConsoleContractTests {
-        private static ConsoleControlState Controls() {
-            var controls = new ConsoleControlState();
-            controls.Enabled.Add(Control.CursorY);
-            controls.Samples[Control.CursorX] = .25f;
-            controls.Samples[Control.CursorY] = -.5f;
-            return controls;
-        }
-        private static GTAFuncs Functions(ConsoleFixture fixture, ConsoleControlState controls,
-            ConsoleStreamingState streaming = null) {
-            streaming = streaming ?? new ConsoleStreamingState();
-            return new GTAFuncs(fixture.Game, fixture.Platform, controls, streaming, streaming);
-        }
-
         [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void TypedFakeAndNativeAdapterObeyTheSameInputValueAndStateContract(bool adapter) {
-            var state = Controls();
-            state.Pressed.Add(Control.CursorX);
-            state.Samples[Control.CursorX] = .75f;
-            var probe = new ConsoleInputNativeProbe();
-            probe.States[(int)Control.CursorY] = true;
-            probe.Samples[(int)Control.CursorX] = .75f;
-            probe.Pressed.Add((int)Control.CursorX);
-            IConsoleInput input = adapter ? (IConsoleInput)new NativeConsoleInput(probe) : state;
-            Assert.IsFalse(input.IsEnabled(Control.CursorX));
-            Assert.IsTrue(input.IsEnabled(Control.CursorY));
-            Assert.AreEqual(0f, input.Normal(Control.CursorX));
-            Assert.IsTrue(input.IsDisabledPressed(Control.CursorX));
-            input.Enable(Control.CursorX, true);
-            Assert.IsTrue(input.IsEnabled(Control.CursorX));
-            Assert.AreEqual(.75f, input.Normal(Control.CursorX));
-            Assert.AreEqual(237, input.Value(Control.CursorX));
-            Assert.IsTrue(input.IsPressed(Control.CursorX));
-            Assert.IsTrue(input.IsDisabledPressed(Control.CursorX), "The disabled variant ignores whether input is enabled.");
-            input.Disable(Control.CursorX, true);
-            Assert.IsFalse(input.IsEnabled(Control.CursorX));
-            Assert.AreEqual(0f, input.Normal(Control.CursorX));
-            input.EnableAll();
-            Assert.IsTrue(input.IsEnabled(Control.Jump));
-            Assert.IsFalse(input.IsPressed(Control.Jump), "Enabling input cannot invent a physical button press.");
-            input.DisableAll();
-            Assert.IsFalse(input.IsEnabled(Control.CursorY));
-        }
-
-        [TestMethod]
-        [DataRow(1)] [DataRow(2)] [DataRow(3)] [DataRow(4)]
-        [DataRow(5)] [DataRow(6)] [DataRow(7)] [DataRow(8)]
-        public void TemporaryInputOwnershipSurvivesAFaultAtEveryCaptureEnableReadAndRestoreStep(int failingStep) {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                var functions = Functions(fixture, state);
-                var failure = new InvalidOperationException("input step " + failingStep);
-                state.Before = (operation, control) => { if (state.Calls.Count == failingStep) throw failure; };
-                Assert.AreSame(failure, Assert.ThrowsExactly<InvalidOperationException>(() => functions.GetMousePos()));
-                if (failingStep <= 2)
-                    Assert.IsTrue(state.Calls.All(call => call.Operation == ConsoleInputOperation.Enabled),
-                        "Capture failure must happen before any state changes.");
-                if (failingStep >= 3)
-                    Assert.AreEqual(Control.CursorY, state.Calls.Last().Control,
-                        "A failure restoring the first control must not skip the second.");
-                state.Before = null;
-                state.Calls.Clear();
-                functions.RestorePendingControls();
-                CollectionAssert.AreEquivalent(new[] { Control.CursorY }, state.Enabled.ToArray());
-                Assert.AreEqual(failingStep >= 7 ? 1 : 0, state.Calls.Count,
-                    "Only a failed restoration remains owned for retry.");
-                functions.RestorePendingControls();
-                Assert.AreEqual(failingStep >= 7 ? 1 : 0, state.Calls.Count);
-            }
-        }
-
-        [TestMethod]
-        public void ReadAndRestoreFailuresAreBothReportedAndNextReadRestoresBeforeCapturingAgain() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                var functions = Functions(fixture, state);
-                var readFailure = new InvalidOperationException("read");
-                var restoreFailure = new InvalidOperationException("restore");
-                state.Before = (operation, control) => {
-                    if (state.Calls.Count == 5) throw readFailure;
-                    if (state.Calls.Count == 6) throw restoreFailure;
+        [TestCategory("PlayerIntegration")]
+        [DataRow(false)] [DataRow(true)]
+        public void FailedConsoleOpeningRestoresControlsAndRetryPreservesOriginalPlayerInput(bool rollbackFails) {
+            using (var scene = new ConsoleFixture()) {
+                scene.Enabled.Add(Control.CursorY); scene.Enabled.Add(Control.Jump);
+                scene.Native.Before = (hash, args) => {
+                    if (hash == Hash.ENABLE_CONTROL_ACTION && (Control)(int)args[1] == Control.MoveUpDown) throw new InvalidOperationException("enable navigation");
+                    if (rollbackFails && hash == Hash.ENABLE_CONTROL_ACTION && (Control)(int)args[1] == Control.Jump) throw new InvalidOperationException("restore jump");
                 };
-                var error = Assert.ThrowsExactly<AggregateException>(() => functions.GetControlPoint(Control.CursorX, Control.CursorY));
-                CollectionAssert.AreEqual(new[] { readFailure, restoreFailure }, error.Flatten().InnerExceptions.ToArray());
-                Assert.AreEqual(Control.CursorY, state.Calls.Last().Control);
-                state.Before = null;
-                state.Calls.Clear();
-                Assert.AreEqual(new Vector2(.25f, -.5f), functions.GetControlPoint(Control.CursorX, Control.CursorY));
-                Assert.AreEqual((ConsoleInputOperation.Disable, Control.CursorX), state.Calls.First());
-                CollectionAssert.AreEquivalent(new[] { Control.CursorY }, state.Enabled.ToArray());
+                if (rollbackFails) Assert.ThrowsExactly<AggregateException>(() => scene.Press(Keys.F8));
+                else Assert.ThrowsExactly<InvalidOperationException>(() => scene.Press(Keys.F8));
+                Assert.IsFalse(scene.Model.IsOpen); Assert.IsTrue(scene.Enabled.Contains(Control.CursorY));
+                Assert.AreEqual(!rollbackFails, scene.Enabled.Contains(Control.Jump));
+                scene.Native.Before = null;
+                scene.Enabled.Add(Control.Attack);
+                scene.Press(Keys.F8); scene.Submit("help"); Assert.IsTrue(scene.Shows("eval:"));
+                scene.Press(Keys.Escape);
+                CollectionAssert.AreEquivalent(new[] { Control.CursorY, Control.Jump, Control.Attack }, scene.Enabled.ToArray());
             }
         }
 
         [TestMethod]
-        public void OpeningFailureWithSuccessfulRollbackPreservesOriginalErrorAndReleasesSnapshotOwnership() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                state.Enabled.Add(Control.Jump);
-                var original = state.Enabled.ToArray();
-                var model = new ConsoleModel(fixture.Platform, fixture.Environment, Functions(fixture, state));
-                var failure = new InvalidOperationException("enable navigation");
-                state.Before = (operation, control) => {
-                    if (operation == ConsoleInputOperation.Enable && control == Control.MoveUpDown) throw failure;
+        [TestCategory("PlayerIntegration")]
+        [DataRow(false)] [DataRow(true)]
+        public void FailedCloseRetainsOnlyFailedControlAndRetryPreservesOtherScriptsChanges(bool reopen) {
+            using (var scene = new ConsoleFixture()) {
+                scene.Enabled.Add(Control.CursorY); scene.Enabled.Add(Control.Jump);
+                scene.Press(Keys.F8);
+                scene.Native.Before = (hash, args) => {
+                    if (hash == Hash.ENABLE_CONTROL_ACTION && (Control)(int)args[1] == Control.Jump) throw new InvalidOperationException("restore jump");
                 };
-                try {
-                    Assert.AreSame(failure, Assert.ThrowsExactly<InvalidOperationException>(() => model.ShowConsole(true)));
-                    Assert.IsFalse(model.IsOpen);
-                    CollectionAssert.AreEquivalent(original, state.Enabled.ToArray());
-                    state.Before = null;
-                    state.Enabled.Add(Control.Attack);
-                    state.Calls.Clear();
-                    model.ShowConsole(true);
-                    Assert.AreEqual(ConsoleInputOperation.Enabled, state.Calls.First().Operation,
-                        "Completed rollback releases the old snapshot; reopening must capture the current state.");
-                    model.ShowConsole(false);
-                    CollectionAssert.AreEquivalent(original.Concat(new[] { Control.Attack }).ToArray(), state.Enabled.ToArray(),
-                        "A control enabled after rollback must survive the next open/close cycle.");
-                } finally { state.Before = null; model.Dispose(); }
+                Assert.ThrowsExactly<InvalidOperationException>(() => scene.Press(Keys.Escape));
+                Assert.IsFalse(scene.Model.IsOpen); Assert.IsTrue(scene.Enabled.Contains(Control.CursorY));
+                scene.Native.Before = null; scene.Enabled.Remove(Control.CursorY); scene.Enabled.Add(Control.Attack);
+                if (reopen) { scene.Press(Keys.F8); scene.Press(Keys.Escape); } else scene.Model.Dispose();
+                CollectionAssert.AreEquivalent(new[] { Control.Jump, Control.Attack }, scene.Enabled.ToArray());
             }
         }
 
         [TestMethod]
-        public void OpeningFailureAndFailedRollbackKeepOriginalSnapshotForRetryAndClosing() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                state.Enabled.Add(Control.Jump);
-                var original = state.Enabled.ToArray();
-                var model = new ConsoleModel(fixture.Platform, fixture.Environment, Functions(fixture, state));
-                var openFailure = new InvalidOperationException("enable navigation");
-                var restoreFailure = new InvalidOperationException("restore jump");
-                state.Before = (operation, control) => {
-                    if (operation == ConsoleInputOperation.Enable && control == Control.MoveUpDown) throw openFailure;
-                    if (operation == ConsoleInputOperation.Enable && control == Control.Jump) throw restoreFailure;
+        [TestCategory("PlayerIntegration")]
+        public void ScriptReloadRetriesFailedRestorationWithoutCapturingTheAlreadyChangedControls() {
+            using (var scene = new ConsoleFixture()) {
+                scene.Enabled.Add(Control.Jump); scene.Press(Keys.F8);
+                scene.Native.Before = (hash, args) => {
+                    if (hash == Hash.ENABLE_CONTROL_ACTION && (Control)(int)args[1] == Control.Jump) throw new InvalidOperationException("restore jump");
                 };
-                try {
-                    var error = Assert.ThrowsExactly<AggregateException>(() => model.ShowConsole(true));
-                    CollectionAssert.AreEquivalent(new[] { openFailure, restoreFailure }, error.Flatten().InnerExceptions.ToArray());
-                    Assert.IsFalse(model.IsOpen);
-                    Assert.IsTrue(state.Enabled.Contains(Control.CursorY), "Another control must restore even if Jump fails.");
-                    Assert.IsFalse(state.Enabled.Contains(Control.Jump));
-                    state.Before = null;
-                    state.Calls.Clear();
-                    model.ShowConsole(true);
-                    Assert.AreNotEqual(ConsoleInputOperation.Enabled, state.Calls.First().Operation,
-                        "A retained original snapshot restores before the next capture.");
-                    Assert.IsTrue(model.IsOpen);
-                    model.ShowConsole(false);
-                    CollectionAssert.AreEquivalent(original, state.Enabled.ToArray());
-                } finally { state.Before = null; model.Dispose(); }
+                Assert.ThrowsExactly<InvalidOperationException>(() => scene.Model.Dispose());
+                Assert.AreSame(scene.Model, DeveloperConsole.DeveloperConsole.Instance);
+                scene.Native.Before = null; scene.Native.Calls.Clear(); scene.Model.Dispose();
+                Assert.IsTrue(scene.Enabled.Contains(Control.Jump));
+                Assert.IsFalse(scene.Native.Calls.Any(c => c.Hash == Hash.IS_CONTROL_ENABLED));
+                Assert.IsNull(DeveloperConsole.DeveloperConsole.Instance);
             }
         }
 
         [TestMethod]
-        public void FailedCloseKeepsOwnershipAndDisposeRetriesWithoutRecapturingMutatedControls() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                state.Enabled.Add(Control.Jump);
-                var model = new ConsoleModel(fixture.Platform, fixture.Environment, Functions(fixture, state));
-                model.ShowConsole(true);
-                var failure = new InvalidOperationException("restore jump");
-                state.Before = (operation, control) => {
-                    if (operation == ConsoleInputOperation.Enable && control == Control.Jump) throw failure;
-                };
-                try {
-                    Assert.AreSame(failure, Assert.ThrowsExactly<InvalidOperationException>(() => model.Dispose()));
-                    Assert.IsFalse(model.IsOpen);
-                    Assert.AreSame(model, ConsoleModel.Instance, "A failed dispose must remain retryable.");
-                    Assert.IsTrue(state.Enabled.Contains(Control.CursorY));
-                    state.Before = null;
-                    state.Calls.Clear();
-                    model.Dispose();
-                    CollectionAssert.AreEquivalent(new[] { Control.CursorY, Control.Jump }, state.Enabled.ToArray());
-                    Assert.IsFalse(state.Calls.Any(call => call.Operation == ConsoleInputOperation.Enabled));
-                    Assert.IsNull(ConsoleModel.Instance);
-                } finally { state.Before = null; model.Dispose(); }
-            }
-        }
-
-        [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void FailedCloseRetryPreservesExternalChangesToControlsAlreadyRestored(bool reopen) {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                state.Enabled.Add(Control.Jump);
-                var model = new ConsoleModel(fixture.Platform, fixture.Environment, Functions(fixture, state));
-                var failure = new InvalidOperationException("restore jump");
-                try {
-                    model.ShowConsole(true);
-                    state.Before = (operation, control) => {
-                        if (operation == ConsoleInputOperation.Enable && control == Control.Jump) throw failure;
-                    };
-                    Assert.AreSame(failure, Assert.ThrowsExactly<InvalidOperationException>(() => model.ShowConsole(false)));
-                    Assert.IsTrue(state.Enabled.Contains(Control.CursorY));
-                    state.Before = null;
-                    state.Enabled.Remove(Control.CursorY);
-                    state.Enabled.Add(Control.Attack);
-                    if (reopen) {
-                        model.ShowConsole(true);
-                        model.ShowConsole(false);
-                    } else model.Dispose();
-                    CollectionAssert.AreEquivalent(new[] { Control.Attack, Control.Jump }, state.Enabled.ToArray(),
-                        "Retry owns only Jump; later external changes to restored controls must survive.");
-                } finally { state.Before = null; model.Dispose(); }
-            }
-        }
-
-        [TestMethod]
-        public void OpenConsoleReappliesItsAllowedControlsOnEachFrame() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                using (var model = new ConsoleModel(fixture.Platform, fixture.Environment, Functions(fixture, state))) {
-                    model.ShowConsole(true);
-                    foreach (var frame in new[] { 0, 1 }) {
-                        if (frame == 1) state.EnableAll(); // A new engine frame does not retain our prior disable commands.
-                        model.Tick();
-                        Assert.IsTrue(state.Enabled.Contains(Control.MoveUpDown));
-                        Assert.IsTrue(state.Enabled.Contains(Control.VehicleAccelerate));
-                        Assert.IsTrue(state.Enabled.Contains(Control.VehicleFlyThrottleUp));
-                        Assert.IsFalse(state.Enabled.Contains(Control.Attack));
-                        Assert.IsFalse(state.Enabled.Contains(Control.Jump));
-                    }
+        [TestCategory("PlayerIntegration")]
+        public void ConsoleBlocksAttackOnEveryFrameEvenWhenTheEngineResetsItsControls() {
+            using (var scene = new ConsoleFixture()) {
+                scene.Press(Keys.F8);
+                for (int frame = 0; frame < 2; frame++) {
+                    scene.Enabled.Add(Control.Attack); scene.Enabled.Add(Control.Jump); scene.Draw();
+                    Assert.IsFalse(scene.Enabled.Contains(Control.Attack)); Assert.IsFalse(scene.Enabled.Contains(Control.Jump));
+                    Assert.IsTrue(scene.Enabled.Contains(Control.MoveUpDown)); Assert.IsTrue(scene.Enabled.Contains(Control.VehicleAccelerate));
+                    Assert.IsTrue(scene.Enabled.Contains(Control.VehicleFlyThrottleUp));
                 }
             }
         }
 
         [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void StandaloneControlCaptureAndClosedConsoleCleanupFlushPendingTemporaryChanges(bool closeConsole) {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                var functions = Functions(fixture, state);
-                var model = new ConsoleModel(fixture.Platform, fixture.Environment, functions);
-                var failure = new InvalidOperationException("restore cursor X");
-                try {
-                    state.Before = (operation, control) => {
-                        if (operation == ConsoleInputOperation.Disable && control == Control.CursorX) throw failure;
-                    };
-                    Assert.AreSame(failure, Assert.ThrowsExactly<InvalidOperationException>(() => functions.GetMousePos()));
-                    Assert.IsTrue(state.Enabled.Contains(Control.CursorX));
-                    state.Before = null;
-                    if (closeConsole) model.ShowConsole(false);
-                    else CollectionAssert.AreEquivalent(new[] { Control.CursorY }, functions.CaptureEnabledControls());
-                    CollectionAssert.AreEquivalent(new[] { Control.CursorY }, state.Enabled.ToArray());
-                } finally { state.Before = null; model.Dispose(); }
-            }
-        }
-
-        [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void LegacyBulkControlHelperRestoresAfterPartialDisableAndStillSupportsExplicitEnableList(bool rollbackFails) {
-            using (var fixture = new ConsoleFixture(false)) {
-                var state = Controls();
-                var functions = Functions(fixture, state);
-                var failure = new InvalidOperationException("disable cursor Y");
-                var restoreFailure = new InvalidOperationException("restore cursor Y");
-                state.Before = (operation, control) => {
-                    if (operation == ConsoleInputOperation.Disable && control == Control.CursorY) throw failure;
-                    if (rollbackFails && operation == ConsoleInputOperation.Enable && control == Control.CursorY) throw restoreFailure;
+        [TestCategory("PlayerIntegration")]
+        [DataRow("capture disabled X", 1)] [DataRow("capture enabled Y", 2)]
+        [DataRow("enable X", 3)] [DataRow("enable Y", 4)]
+        [DataRow("read X", 5)] [DataRow("read Y", 6)]
+        [DataRow("restore disabled X", 7)] [DataRow("restore enabled Y", 8)]
+        public void MouseDiagnosticRecoversFromEachDeviceFailureWithoutLeakingTemporaryInput(string failedOperation, int failedStep) {
+            using (var scene = new ConsoleFixture()) {
+                scene.Press(Keys.F8); scene.Enabled.Add(Control.CursorY);
+                int step = 0;
+                scene.Native.Before = (hash, args) => {
+                    if ((hash == Hash.IS_CONTROL_ENABLED || hash == Hash.ENABLE_CONTROL_ACTION || hash == Hash.DISABLE_CONTROL_ACTION || hash == Hash.GET_CONTROL_NORMAL)
+                        && args.Length > 1 && ((Control)(int)args[1] == Control.CursorX || (Control)(int)args[1] == Control.CursorY)
+                        && ++step == failedStep) throw new InvalidOperationException("mouse unavailable: " + failedOperation);
                 };
-                if (rollbackFails) {
-                    var error = Assert.ThrowsExactly<AggregateException>(() => functions.DisableAllControls());
-                    CollectionAssert.AreEqual(new[] { failure, restoreFailure }, error.Flatten().InnerExceptions.ToArray());
-                } else {
-                    Assert.AreSame(failure, Assert.ThrowsExactly<InvalidOperationException>(() => functions.DisableAllControls()));
-                }
-                CollectionAssert.AreEquivalent(new[] { Control.CursorY }, state.Enabled.ToArray());
-                state.Before = null;
-                CollectionAssert.AreEquivalent(new[] { Control.CursorY }, functions.DisableAllControls());
-                Assert.IsEmpty(state.Enabled);
-                functions.EnableControls(new List<Control> { Control.Jump, Control.Attack });
-                CollectionAssert.AreEquivalent(new[] { Control.Jump, Control.Attack }, state.Enabled.ToArray());
+                scene.Enter("eval { return FUNCTIONS.GetMousePos(); }");
+                Assert.AreEqual(failedStep == 7, scene.Enabled.Contains(Control.CursorX),
+                    "Only a refused X restoration may leave the temporary X enable active.");
+                Assert.IsTrue(scene.Enabled.Contains(Control.CursorY), "The successful cleanup paths preserve originally enabled Y.");
+                scene.Draw();
+                Assert.IsTrue(scene.Shows("C# evaluation failed:"));
+                scene.Native.Before = null;
+                scene.Analog[Control.CursorX] = .25f; scene.Analog[Control.CursorY] = .5f;
+                scene.Evaluate("return FUNCTIONS.GetMousePos()");
+                Assert.IsTrue(scene.ShowsOutput("{X=300,Y=450}"));
+                Assert.IsFalse(scene.Enabled.Contains(Control.CursorX));
+                scene.Press(Keys.Escape);
+                Assert.IsEmpty(scene.Enabled);
             }
         }
 
         [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void ModelDeadlineUsesElapsedMillisecondsAndSignedWrapWithoutCreatingAnUnloadedVehicle(bool atDeadline) {
-            using (var fixture = new ConsoleFixture(false)) {
-                var streaming = new ConsoleStreamingState();
-                var functions = Functions(fixture, Controls(), streaming);
-                fixture.Host.GameTime = int.MaxValue - 24;
-                fixture.Host.FrameMilliseconds = 25;
-                fixture.Host.OnWait = () => streaming.Loaded = atDeadline && fixture.Host.Waits.Count == 2;
-                Assert.AreEqual(atDeadline ? 23 : 0, functions.SpawnVehicleProper(17, new Vector3(1, 2, 3), 50));
-                Assert.AreEqual(2, fixture.Host.Waits.Count);
-                Assert.AreEqual(atDeadline ? 1 : 0, streaming.Calls.Count(call => call == "create-vehicle"));
-                Assert.AreEqual("request-model", streaming.Calls.First());
-                Assert.AreEqual("release-model", streaming.Calls.Last());
-                Assert.IsEmpty(streaming.Requested);
-            }
-        }
-
-        [TestMethod]
-        public void CreationFailureAndZeroHandleStillReleaseTheOwnedModel() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var streaming = new ConsoleStreamingState { Loaded = true };
-                var functions = Functions(fixture, Controls(), streaming);
-                var failure = new InvalidOperationException("create failed");
-                streaming.CreateFailure = failure;
-                Assert.AreSame(failure, Assert.ThrowsExactly<InvalidOperationException>(() => functions.SpawnVehicleProper(17, Vector3.Zero)));
-                Assert.IsEmpty(streaming.Requested);
-                streaming.CreateFailure = null;
-                streaming.CreatedVehicle = 0;
-                Assert.AreEqual(0, functions.SpawnVehicleProper(17, Vector3.Zero));
-                Assert.IsEmpty(streaming.Requested);
-                Assert.AreEqual(0, fixture.Host.Waits.Count);
-            }
-        }
-
-        [TestMethod]
-        public void CreatedVehicleRemainsAccessibleWhenModelReleaseFailsAndNextSpawnMustFlushFirst() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var releaseFailure = new InvalidOperationException("release model");
-                var streaming = new ConsoleStreamingState { Loaded = true, ReleaseFailure = releaseFailure };
-                var functions = Functions(fixture, Controls(), streaming);
-                Assert.AreEqual(23, functions.SpawnVehicleProper(17, Vector3.Zero),
-                    "The caller must receive ownership of a successfully created vehicle.");
-                CollectionAssert.AreEquivalent(new[] { 17 }, streaming.Requested.ToArray());
-                streaming.Calls.Clear();
-                Assert.AreSame(releaseFailure, Assert.ThrowsExactly<InvalidOperationException>(() =>
-                    functions.SpawnVehicleProper(19, Vector3.UnitX)));
-                CollectionAssert.AreEqual(new[] { "release-model" }, streaming.Calls,
-                    "A second spawn cannot acquire another model or create another vehicle until cleanup succeeds.");
-                streaming.ReleaseFailure = null;
-                streaming.Calls.Clear();
-                Assert.AreEqual(23, functions.SpawnVehicleProper(19, Vector3.UnitX));
-                CollectionAssert.AreEqual(new[] { "release-model", "request-model", "model-loaded", "create-vehicle", "release-model" },
-                    streaming.Calls);
-                Assert.IsEmpty(streaming.Requested);
-            }
-        }
-
-        [TestMethod]
-        [DataRow(false)]
-        [DataRow(true)]
-        public void NoCreatedVehicleReportsReleaseFailureAndExplicitFlushCanRetryWithoutAnotherSpawn(bool loaded) {
-            using (var fixture = new ConsoleFixture(false)) {
-                var releaseFailure = new InvalidOperationException("release model");
-                var streaming = new ConsoleStreamingState { Loaded = loaded, CreatedVehicle = 0, ReleaseFailure = releaseFailure };
-                var functions = Functions(fixture, Controls(), streaming);
-                Assert.AreSame(releaseFailure, Assert.ThrowsExactly<InvalidOperationException>(() =>
-                    functions.SpawnVehicleProper(17, Vector3.Zero, 0)));
-                CollectionAssert.AreEquivalent(new[] { 17 }, streaming.Requested.ToArray());
-                streaming.Calls.Clear();
-                Assert.AreSame(releaseFailure, Assert.ThrowsExactly<InvalidOperationException>(functions.ReleasePendingModel));
-                streaming.ReleaseFailure = null;
-                functions.ReleasePendingModel();
-                functions.ReleasePendingModel();
-                CollectionAssert.AreEqual(new[] { "release-model", "release-model" }, streaming.Calls);
-                Assert.IsEmpty(streaming.Requested);
-            }
-        }
-
-        [TestMethod]
-        public void CreationAndReleaseFailuresPreserveBothOriginalExceptionsAndOnlyPendingModelOwnership() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var createFailure = new InvalidOperationException("create vehicle");
-                var releaseFailure = new InvalidOperationException("release model");
-                var streaming = new ConsoleStreamingState {
-                    Loaded = true, CreateFailure = createFailure, ReleaseFailure = releaseFailure
+        [TestCategory("PlayerIntegration")]
+        public void MouseReadAndRestoreFailureAreReportedAndClosingRetriesPendingDeviceState() {
+            using (var scene = new ConsoleFixture()) {
+                scene.Press(Keys.F8);
+                scene.Native.Before = (hash, args) => {
+                    if (hash == Hash.GET_CONTROL_NORMAL) throw new InvalidOperationException("read mouse");
+                    if (hash == Hash.DISABLE_CONTROL_ACTION && (Control)(int)args[1] == Control.CursorX) throw new InvalidOperationException("restore mouse");
                 };
-                var functions = Functions(fixture, Controls(), streaming);
-                var error = Assert.ThrowsExactly<AggregateException>(() => functions.SpawnVehicleProper(17, Vector3.Zero));
-                CollectionAssert.AreEqual(new[] { createFailure, releaseFailure }, error.InnerExceptions.ToArray());
-                CollectionAssert.AreEquivalent(new[] { 17 }, streaming.Requested.ToArray());
-                streaming.ReleaseFailure = null;
-                functions.ReleasePendingModel();
-                Assert.IsEmpty(streaming.Requested);
-                Assert.AreEqual(1, streaming.Calls.Count(call => call == "create-vehicle"));
+                // Submission returns an evaluation error; the open-console draw then independently reasserts its controls.
+                scene.Platform.Clipboard = "eval { return FUNCTIONS.GetMousePos(); }";
+                scene.Press(Keys.Control | Keys.V); scene.Press(Keys.Enter);
+                scene.Native.Before = null; scene.Press(Keys.Escape);
+                Assert.IsFalse(scene.Enabled.Contains(Control.CursorX));
+                scene.Press(Keys.F8); scene.Draw(); Assert.IsTrue(scene.Shows("C# evaluation failed:"));
             }
         }
 
         [TestMethod]
-        public void DisposalAttemptsControlAndModelCleanupIndependentlyAndRetainsOnlyFailedOwnership() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var controls = Controls();
-                var controlFailure = new InvalidOperationException("restore cursor Y");
-                var modelFailure = new InvalidOperationException("release model");
-                var streaming = new ConsoleStreamingState { Loaded = true, ReleaseFailure = modelFailure };
-                var functions = Functions(fixture, controls, streaming);
-                var model = new ConsoleModel(fixture.Platform, fixture.Environment, functions);
-                try {
-                    model.ShowConsole(true);
-                    Assert.AreEqual(23, functions.SpawnVehicleProper(17, Vector3.Zero));
-                    controls.Before = (operation, control) => {
-                        if (operation == ConsoleInputOperation.Enable && control == Control.CursorY) throw controlFailure;
-                    };
-                    var error = Assert.ThrowsExactly<AggregateException>(model.Dispose);
-                    CollectionAssert.AreEqual(new[] { controlFailure, modelFailure }, error.InnerExceptions.ToArray());
-                    Assert.AreEqual(2, streaming.Calls.Count(call => call == "release-model"));
-                    Assert.AreSame(model, ConsoleModel.Instance);
-                    Assert.IsFalse(model.IsOpen);
-                    controls.Before = null;
-                    streaming.ReleaseFailure = null;
-                    model.Dispose();
-                    CollectionAssert.AreEquivalent(new[] { Control.CursorY }, controls.Enabled.ToArray());
-                    Assert.IsEmpty(streaming.Requested);
-                    Assert.IsNull(ConsoleModel.Instance);
-                    model.Dispose();
-                    Assert.AreEqual(3, streaming.Calls.Count(call => call == "release-model"));
-                } finally {
-                    controls.Before = null;
-                    streaming.ReleaseFailure = null;
-                    model.Dispose();
-                }
+        [TestCategory("PlayerIntegration")]
+        [DataRow(false)] [DataRow(true)]
+        public void VehicleLoadingDeadlineUsesElapsedTimeAcrossClockWrap(bool loadedAtDeadline) {
+            using (var scene = new ConsoleFixture()) {
+                scene.ModelLoaded = false; scene.Host.GameTime = int.MaxValue - 24; scene.Host.FrameMilliseconds = 25;
+                scene.Host.OnWait = () => scene.ModelLoaded = loadedAtDeadline && scene.Host.Waits.Count == 2;
+                scene.Evaluate("return FUNCTIONS.SpawnVehicleProper(17, POS, 50)");
+                Assert.IsTrue(scene.ShowsOutput(loadedAtDeadline ? "23" : "0"));
+                Assert.AreEqual(2, scene.Host.Waits.Count); Assert.IsEmpty(scene.RequestedModels);
+                Assert.AreEqual(loadedAtDeadline, scene.Native.Calls.Any(c => c.Hash == Hash.CREATE_VEHICLE));
             }
         }
 
         [TestMethod]
-        public void NetworkRequestsNeverClaimOwnershipOnAcceptanceAloneAndSkipDependentRequestsAfterFailure() {
-            using (var fixture = new ConsoleFixture(false)) {
-                fixture.Native.Returns(Hash.GET_PLAYER_PED, 11);
-                var streaming = new ConsoleStreamingState();
-                var functions = Functions(fixture, Controls(), streaming);
-                fixture.Host.FrameMilliseconds = 10;
-                Assert.AreEqual(0, functions.RequestEntityControl(11, 20));
-                Assert.AreEqual(2, fixture.Host.Waits.Count);
-                Assert.AreEqual(0, functions.RequestEntityControl(0, 20));
-                Assert.AreEqual(0, functions.GetNetworkID(7));
-                Assert.IsFalse(streaming.Calls.Contains("network-id"));
-                Assert.IsFalse(streaming.Calls.Contains("request-network-id"));
-                streaming.AcceptRequest = false;
-                fixture.Host.Waits.Clear();
-                fixture.Host.OnWait = () => streaming.HasControl = fixture.Host.Waits.Count == 2;
-                Assert.AreEqual(11, functions.RequestEntityControl(11, 20),
-                    "Confirmed ownership wins over an earlier rejected request.");
-                streaming.AcceptNetworkId = false;
-                Assert.AreEqual(0, functions.GetNetworkID(7));
-                streaming.AcceptNetworkId = true;
-                Assert.AreEqual(73, functions.GetNetworkID(7));
+        [TestCategory("PlayerIntegration")]
+        [DataRow(false)] [DataRow(true)]
+        public void FailedVehicleCreationReleasesTheModelAndLeavesTheConsoleUsable(bool engineThrows) {
+            using (var scene = new ConsoleFixture()) {
+                scene.CreatedVehicle = 0;
+                if (engineThrows) scene.Native.Before = (hash, args) => { if (hash == Hash.CREATE_VEHICLE) throw new InvalidOperationException("creation unavailable"); };
+                scene.Evaluate("return FUNCTIONS.SpawnVehicleProper(17, POS)");
+                Assert.IsTrue(scene.ShowsOutput(engineThrows ? "[Error] C# evaluation failed: creation unavailable" : "0"));
+                Assert.IsEmpty(scene.RequestedModels);
+                scene.Native.Before = null; scene.CreatedVehicle = 23;
+                scene.Evaluate("return FUNCTIONS.SpawnVehicleProper(17, POS)"); Assert.IsTrue(scene.ShowsOutput("23"));
+            }
+        }
+
+        [TestMethod]
+        [TestCategory("PlayerIntegration")]
+        public void CreatedVehicleIsReportedDespiteModelReleaseFailureAndAnotherSpawnWaitsForCleanup() {
+            using (var scene = new ConsoleFixture()) {
+                scene.Native.Before = (hash, args) => { if (hash == Hash.SET_MODEL_AS_NO_LONGER_NEEDED) throw new InvalidOperationException("release unavailable"); };
+                scene.Evaluate("return FUNCTIONS.SpawnVehicleProper(17, POS)"); Assert.IsTrue(scene.ShowsOutput("23"));
+                CollectionAssert.AreEqual(new[] { 17 }, scene.RequestedModels.ToArray());
+                scene.Submit("clear"); scene.Native.Calls.Clear(); scene.Evaluate("return FUNCTIONS.SpawnVehicleProper(19, POS)");
+                Assert.IsFalse(scene.Native.Calls.Any(c => c.Hash == Hash.REQUEST_MODEL || c.Hash == Hash.CREATE_VEHICLE));
+                Assert.IsTrue(scene.ShowsOutput("[Error] C# evaluation failed: release unavailable"));
+                scene.Submit("clear"); scene.Native.Before = null; scene.Evaluate("return FUNCTIONS.SpawnVehicleProper(19, POS)");
+                Assert.IsEmpty(scene.RequestedModels); Assert.IsTrue(scene.ShowsOutput("23"));
+            }
+        }
+
+        [TestMethod]
+        [TestCategory("PlayerIntegration")]
+        [DataRow(false)] [DataRow(true)]
+        public void FailedSpawnAndFailedReleaseRemainRetryableWhenScriptsReload(bool creationThrows) {
+            using (var scene = new ConsoleFixture()) {
+                scene.CreatedVehicle = 0; scene.Enabled.Add(Control.Jump);
+                scene.Native.Before = (hash, args) => {
+                    if (hash == Hash.SET_MODEL_AS_NO_LONGER_NEEDED || (creationThrows && hash == Hash.CREATE_VEHICLE)) throw new InvalidOperationException("engine unavailable");
+                };
+                scene.Evaluate("return FUNCTIONS.SpawnVehicleProper(17, POS, 0)");
+                Assert.IsTrue(scene.Shows("C# evaluation failed:"));
+                scene.Native.Before = (hash, args) => {
+                    if (hash == Hash.SET_MODEL_AS_NO_LONGER_NEEDED || (hash == Hash.ENABLE_CONTROL_ACTION && (Control)(int)args[1] == Control.Jump)) throw new InvalidOperationException("cleanup unavailable");
+                };
+                Assert.ThrowsExactly<AggregateException>(() => scene.Model.Dispose());
+                Assert.IsTrue(scene.RequestedModels.Contains(17)); Assert.IsFalse(scene.Enabled.Contains(Control.Jump));
+                scene.Native.Before = null; scene.Model.Dispose();
+                Assert.IsEmpty(scene.RequestedModels); Assert.IsTrue(scene.Enabled.Contains(Control.Jump));
+            }
+        }
+
+        [TestMethod]
+        [TestCategory("PlayerIntegration")]
+        public void EntityOwnershipDiagnosticWaitsForEngineConfirmationAndNeverInventsANetworkHandle() {
+            using (var scene = new ConsoleFixture()) {
+                scene.Native.Returns(Hash.GET_PLAYER_PED, 11); scene.Native.Returns(Hash.NETWORK_GET_NETWORK_ID_FROM_ENTITY, 73);
+                scene.Native.Returns(Hash.NETWORK_HAS_CONTROL_OF_ENTITY, false);
+                scene.Evaluate("return FUNCTIONS.RequestEntityControl(11, 2)"); Assert.IsTrue(scene.ShowsOutput("0"));
+                Assert.AreEqual(2, scene.Host.Waits.Count);
+                scene.Submit("clear"); scene.Evaluate("return FUNCTIONS.RequestEntityControl(0, 2)"); Assert.IsTrue(scene.ShowsOutput("0"));
+                Assert.AreEqual(2, scene.Host.Waits.Count, "A missing entity must fail without waiting for engine ownership.");
+                scene.Submit("clear"); scene.Evaluate("return FUNCTIONS.GetNetworkID(PLAYER.Handle)"); Assert.IsTrue(scene.ShowsOutput("0"));
+                Assert.IsFalse(scene.Native.Calls.Any(c => c.Hash == Hash.NETWORK_GET_NETWORK_ID_FROM_ENTITY));
+                scene.Native.Returns(Hash.NETWORK_HAS_CONTROL_OF_ENTITY, true);
+                scene.Native.Returns(Hash.NETWORK_REQUEST_CONTROL_OF_NETWORK_ID, false);
+                scene.Submit("clear"); scene.Evaluate("return FUNCTIONS.GetNetworkID(PLAYER.Handle)"); Assert.IsTrue(scene.ShowsOutput("0"));
+                scene.Native.Returns(Hash.NETWORK_REQUEST_CONTROL_OF_NETWORK_ID, true);
+                scene.Submit("clear"); scene.Evaluate("return FUNCTIONS.GetNetworkID(PLAYER.Handle)"); Assert.IsTrue(scene.ShowsOutput("73"));
+                CollectionAssert.AreEqual(new object[] { 73 }, scene.Native.Calls.Last(c => c.Hash == Hash.NETWORK_REQUEST_CONTROL_OF_NETWORK_ID).Arguments);
             }
         }
     }

@@ -205,10 +205,6 @@ namespace DeveloperConsole {
             _game.ConsoleDrawing.ShowMouse();
         }
 
-        public int GetNumNetworkPlayers() {
-            return _network.PlayerCount();
-        }
-
         public bool GetPlayerInvincible(int p) {
             return _game.ConsolePlayers.Invincible(p);
         }
@@ -250,30 +246,6 @@ namespace DeveloperConsole {
                 return _game.ConsolePlayers.Vehicle(character);
             return character;
         }
-        public void KickPlayer(int p) {
-            _network.Kick(p);
-        }
-
-        public void AntiBan() {
-            var playerGroup = GetPedGroupIndex(_game.Host.PlayerPed);
-            _network.MarkScriptSafe();
-            _network.RegisterScript();
-            StatSetInt("MP" + playerGroup + "_BAD_SPORT_BITSET", 0, true);
-            StatSetInt("MP" + playerGroup + "_CHEAT_BITSET", 0, true);
-            StatSetFloat("MPPLY_OVERALL_BADSPORT", 0, true);
-            StatSetBool("MPPLY_CHAR_IS_BADSPORT", false, true);
-            StatSetInt("MPPLY_BECAME_BADSPORT_NUM", 0, true);
-            StatSetInt("MPPLY_REPORT_STRENGTH", 32, true);
-            StatSetInt("MPPLY_COMMEND_STRENGTH", 100, true);
-            StatSetInt("MPPLY_FRIENDLY", 100, true);
-            StatSetInt("MPPLY_HELPFUL", 100, true);
-            StatSetInt("MPPLY_GRIEFING", 0, true);
-            StatSetInt("MPPLY_OFFENSIVE_LANGUAGE", 0, true);
-            StatSetInt("MPPLY_OFFENSIVE_UGC", 0, true);
-            StatSetInt("MPPLY_VC_HATE", 0, true);
-            StatSetInt("MPPLY_GAME_EXPLOITS", 0, true);
-            StatSetInt("MPPLY_ISPUNISHED", 0, true);
-        }
 
         public void SetEntityInvinc(int e, bool b) {
             _game.ConsoleEntities.Invincible(e, b);
@@ -281,26 +253,6 @@ namespace DeveloperConsole {
 
         public void SetSPInvinc(int p, bool b) {
             _game.ConsolePlayers.SetInvincible(p, b);
-        }
-
-        public void SetInvincTime(int time) {
-            _network.LocalInvincibleTime(time);
-        }
-
-        public int GetPedGroupIndex(int p) {
-            return _game.ConsolePlayers.Group(p);
-        }
-
-        public void StatSetInt(string hashKey, int value, bool b) {
-            _game.ConsoleStats.SetInt(GetHashKey(hashKey), value, b);
-        }
-
-        public void StatSetFloat(string hashKey, float value, bool b) {
-            _game.ConsoleStats.SetFloat(GetHashKey(hashKey), value, b);
-        }
-
-        public void StatSetBool(string hashKey, bool value, bool b) {
-            _game.ConsoleStats.SetBool(GetHashKey(hashKey), value, b);
         }
 
         public void CreateAmbientPickup(string hashKey, Vector3 pos, int value) {
@@ -321,25 +273,6 @@ namespace DeveloperConsole {
             _game.ConsoleDrawing.BeginTextWidth(); //SET_TEXT_ENTRY_FOR_WIDTH
             _game.ConsoleDrawing.AppendText(s);
             return _game.ConsoleDrawing.EndTextWidth(); //_GET_TEXT_SCREEN_WIDTH
-        }
-
-
-        public void EnableControls(List<Control> ctrls) {
-            foreach (var c in ctrls) EnableControlAction(c, true);
-        }
-
-        public List<Control> DisableAllControls() {
-            var enabled = CaptureEnabledControls();
-            try {
-                foreach (Control c in Enum.GetValues(typeof(Control))) DisableControlAction(c, true);
-            } catch (Exception error) {
-                try { RestoreControls(enabled); }
-                catch (Exception restoreError) {
-                    throw new AggregateException("Console operations failed.", error, restoreError);
-                }
-                throw;
-            }
-            return enabled;
         }
 
         public List<Control> CaptureEnabledControls() {
@@ -378,10 +311,7 @@ namespace DeveloperConsole {
             _input.Enable(c, b);
         }
 
-        public void SetControlActions(bool b) {
-            if (b) _input.EnableAll();
-            else _input.DisableAll();
-        }
+        public void DisableControls() => _input.DisableAll();
 
         public void ClearAreaOfObjects(Vector3 v, float radius, bool b = false) {
             _world.ClearObjects(v, radius, b);
@@ -389,14 +319,6 @@ namespace DeveloperConsole {
 
         public void ClearAreaOfProjectiles(Vector3 v, float radius, bool b = false) {
             _world.ClearProjectiles(v, radius, b);
-        }
-
-        public void ActivateDamageTrackerOnNetworkId(int id, bool active) {
-            _network.TrackDamage(id, active);
-        }
-
-        public void SetInSpectatorMode(int p, bool spectating) {
-            _network.Spectate(_game.ConsolePlayers.Ped(p), spectating);
         }
 
         public int GetNetworkID(int p) {

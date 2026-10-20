@@ -10,100 +10,68 @@ namespace ModUtilsTest {
     [TestClass]
     public class ConsoleGeometryTests {
         [TestMethod]
-        public void BoxCornersEdgesAndFacesFormAnAxisAlignedCuboidWithNoDiagonalEdges() {
-            using (var fixture = new ConsoleFixture(false)) {
-                var center = new Vector3(10, 20, 30);
-                var min = new Vector3(-1, -2, -3);
-                var max = new Vector3(1, 2, 3);
-                var rectangle = new Rectangle3D(center, min, max, fixture.Functions);
-                Assert.AreEqual(center, rectangle.Center);
-                Assert.AreEqual(min, rectangle.Min);
-                Assert.AreEqual(max, rectangle.Max);
-                Assert.AreEqual(8, rectangle.Corners.Count);
-                foreach (var corner in rectangle.Corners) {
-                    Assert.AreEqual(center + new Vector3(corner.Key[0] == '0' ? -1 : 1,
-                        corner.Key[1] == '0' ? -2 : 2, corner.Key[2] == '0' ? -3 : 3), corner.Value);
-                }
-                Assert.AreEqual(12, rectangle.Edges.Count);
-                var cornerNames = rectangle.Corners.ToDictionary(corner => corner.Value, corner => corner.Key);
-                var uniqueEdges = new System.Collections.Generic.HashSet<string>();
-                foreach (var edge in rectangle.Edges) {
-                    var delta = edge.Point2 - edge.Point1;
-                    Assert.AreEqual(1, new[] { delta.X, delta.Y, delta.Z }.Count(axis => axis != 0));
-                    var endpoints = new[] { cornerNames[edge.Point1], cornerNames[edge.Point2] };
-                    Array.Sort(endpoints, StringComparer.Ordinal);
-                    Assert.IsTrue(uniqueEdges.Add(string.Join("-", endpoints)), "Each cuboid edge appears exactly once.");
-                }
-                Assert.AreEqual(6, rectangle.Faces.Count);
-                var boundaryPlanes = new System.Collections.Generic.HashSet<string>();
-                foreach (var face in rectangle.Faces) {
-                    Assert.AreEqual(face.BottomLeft + face.TopRight, face.TopLeft + face.BottomRight);
-                    var corners = new[] { face.BottomLeft, face.BottomRight, face.TopLeft, face.TopRight };
-                    Assert.AreEqual(4, corners.Select(corner => cornerNames[corner]).Distinct().Count());
-                    var planes = new[] {
-                        corners.All(corner => corner.X == center.X + min.X) ? "x-min" : null,
-                        corners.All(corner => corner.X == center.X + max.X) ? "x-max" : null,
-                        corners.All(corner => corner.Y == center.Y + min.Y) ? "y-min" : null,
-                        corners.All(corner => corner.Y == center.Y + max.Y) ? "y-max" : null,
-                        corners.All(corner => corner.Z == center.Z + min.Z) ? "z-min" : null,
-                        corners.All(corner => corner.Z == center.Z + max.Z) ? "z-max" : null
-                    }.Where(plane => plane != null).ToArray();
-                    Assert.AreEqual(1, planes.Length, "Each face lies on one boundary plane.");
-                    Assert.IsTrue(boundaryPlanes.Add(planes[0]), "Each cuboid boundary plane appears exactly once.");
-                }
-                CollectionAssert.AreEquivalent(new[] { "x-min", "x-max", "y-min", "y-max", "z-min", "z-max" },
-                    boundaryPlanes.ToArray());
-                Assert.AreSame(rectangle, rectangle.DrawWireFrame(Color.Blue));
-                Assert.AreEqual(12, fixture.Native.Calls.Count(c => c.Hash == Hash.DRAW_LINE));
-                fixture.Native.Calls.Clear();
-                Assert.AreSame(rectangle, rectangle.DrawWireFrame(Color.Red, true));
-                Assert.AreEqual(24, fixture.Native.Calls.Count(c => c.Hash == Hash.DRAW_LINE));
-                fixture.Native.Calls.Clear();
-                Assert.AreSame(rectangle, rectangle.Draw(Color.Purple));
-                Assert.AreEqual(6, fixture.Native.Calls.Count(c => c.Hash == Hash.DRAW_BOX));
-                Assert.AreSame(rectangle, rectangle.DrawDebug(Color.Yellow));
-                CollectionAssert.AreEquivalent(rectangle.Corners.Keys.ToArray(), fixture.Platform.Text.Select(t => t.Text).ToArray());
-                Assert.IsTrue(fixture.Platform.Text.All(t => t.Position == new Point(300, 450) && t.Color == Color.Yellow && t.Scale == .15f));
+        [TestCategory("PureFunction")]
+        public void CuboidCornersUseEveryBoundaryCombinationWithoutDuplicatingVertices() {
+            var center = new Vector3(10, 20, 30);
+            var corners = Rectangle3D.CreateCorners(center, new Vector3(-1,-2,-3), new Vector3(1,2,3));
+            Assert.AreEqual(8, corners.Count);
+            Assert.AreEqual(8, corners.Values.Distinct().Count());
+            foreach (var corner in corners) {
+                Assert.AreEqual(center + new Vector3(corner.Key[0] == '0' ? -1 : 1,
+                    corner.Key[1] == '0' ? -2 : 2, corner.Key[2] == '0' ? -3 : 3), corner.Value);
             }
         }
 
         [TestMethod]
-        public void QuaternionRotationKeepsCenterAndRebuildsEdgesAndFaces() {
-            var center = new Vector3(10, 20, 30);
-            var rectangle = new Rectangle3D(center, new Vector3(-1, -2, -3), new Vector3(1, 2, 3));
-            var original = rectangle.Corners.ToDictionary(c => c.Key, c => c.Value);
-            Assert.AreSame(rectangle, rectangle.Rotate(new Quaternion(0, 0, (float)Math.Sqrt(.5), (float)Math.Sqrt(.5))));
-            foreach (var corner in rectangle.Corners) {
+        [TestCategory("PureFunction")]
+        public void QuaternionRotationReturnsQuarterTurnAroundCenterWithoutMutatingInput() {
+            var center = new Vector3(10,20,30);
+            var corners = Rectangle3D.CreateCorners(center, new Vector3(-1,-2,-3), new Vector3(1,2,3));
+            var original = corners.ToDictionary(c => c.Key, c => c.Value);
+            var rotated = Rectangle3D.RotateCorners(corners, center, new Quaternion(0,0,(float)Math.Sqrt(.5),(float)Math.Sqrt(.5)));
+            foreach (var corner in rotated) {
                 var prior = original[corner.Key] - center;
                 var expected = center + new Vector3(-prior.Y, prior.X, prior.Z);
                 Assert.AreEqual(expected.X, corner.Value.X, .00001);
                 Assert.AreEqual(expected.Y, corner.Value.Y, .00001);
                 Assert.AreEqual(expected.Z, corner.Value.Z, .00001);
+                Assert.AreEqual(original[corner.Key], corners[corner.Key]);
             }
-            Assert.AreEqual(rectangle.Corners["000"], rectangle.Edges[0].Point1);
-            Assert.AreEqual(rectangle.Corners["001"], rectangle.Edges[0].Point2);
-            Assert.AreEqual(rectangle.Corners["000"], rectangle.Faces[0].BottomLeft);
         }
-
         [TestMethod]
-        public void DefaultGeometryDrawsThroughTheCurrentConsoleWithItsCoordinatesAndColor() {
+        [TestCategory("PlayerIntegration")]
+        public void PlayerCanDrawAndLabelARotatedPracticeBoundaryThroughF8Expressions() {
             using (var fixture = new ConsoleFixture()) {
-                var color = Color.FromArgb(67, 13, 29, 41);
-                var line = new Line3D(new Vector3(8, 17, 26), new Vector3(8, 17, 35));
-                var face = new Face3D(new Vector3(4, 5, 6), new Vector3(10, 11, 6),
-                    new Vector3(4, 11, 6), new Vector3(10, 5, 6));
-
-                line.Draw(color);
-                face.Draw(color);
-
-                CollectionAssert.AreEqual(new[] { Hash.DRAW_LINE, Hash.DRAW_BOX },
-                    fixture.Native.Calls.Select(call => call.Hash).ToArray());
+                fixture.Evaluate("new Line3D(new Vector3(8,17,26), new Vector3(8,17,35)).Draw(Color.FromArgb(67,13,29,41)); new Face3D(new Vector3(4,5,6), new Vector3(10,11,6), new Vector3(4,11,6), new Vector3(10,5,6)).Draw(Color.FromArgb(67,13,29,41)); return \"Boundary drawn\"");
+                Assert.IsTrue(fixture.ShowsOutput("Boundary drawn"));
                 CollectionAssert.AreEqual(new object[] {
                     8f, 17f, 26f, 8f, 17f, 35f, (byte)13, (byte)29, (byte)41, (byte)67
-                }, fixture.Native.Calls[0].Arguments);
+                }, fixture.Native.Calls.Single(c => c.Hash == Hash.DRAW_LINE).Arguments);
                 CollectionAssert.AreEqual(new object[] {
                     4f, 5f, 6f, 10f, 11f, 6f, (byte)13, (byte)29, (byte)41, (byte)67
-                }, fixture.Native.Calls[1].Arguments);
+                }, fixture.Native.Calls.Single(c => c.Hash == Hash.DRAW_BOX).Arguments);
+                fixture.Native.Calls.Clear();
+                fixture.Evaluate("var box = new Rectangle3D(new Vector3(10,20,30), new Vector3(-1,-2,-3), new Vector3(1,2,3)); box.Rotate(FUNCTIONS.GetEntityQuaternion(21)); box.DrawWireFrame(Color.Blue); box.DrawWireFrame(Color.Red, true); box.Draw(Color.Purple); box.DrawDebug(Color.Yellow); return \"Eight corners labeled\"");
+                Assert.IsTrue(fixture.ShowsOutput("Eight corners labeled"));
+                Assert.AreEqual(36, fixture.Native.Calls.Count(c => c.Hash == Hash.DRAW_LINE));
+                Assert.AreEqual(6, fixture.Native.Calls.Count(c => c.Hash == Hash.DRAW_BOX));
+                var edges = fixture.Native.Calls.Where(c => c.Hash == Hash.DRAW_LINE).Take(12).ToArray();
+                var distinctEdges = new System.Collections.Generic.HashSet<string>();
+                foreach (var edge in edges) {
+                    var a = edge.Arguments;
+                    Assert.AreEqual(1, new[] { (float)a[0] != (float)a[3], (float)a[1] != (float)a[4], (float)a[2] != (float)a[5] }.Count(changed => changed),
+                        "Each wireframe edge must follow a single cuboid axis.");
+                    var endpoints = new[] { string.Join(",", a.Take(3)), string.Join(",", a.Skip(3).Take(3)) };
+                    Array.Sort(endpoints, StringComparer.Ordinal);
+                    Assert.IsTrue(distinctEdges.Add(string.Join(" / ", endpoints)), "No boundary edge may be drawn twice.");
+                }
+                Assert.AreEqual(21, fixture.Outputs.QuaternionEntity);
+                var labels = fixture.Platform.DrawHistory.Where(t => t.Color == Color.Yellow).ToArray();
+                // Geometry draws during expression execution, before the next console frame.
+                CollectionAssert.AreEquivalent(new[] { "000", "001", "010", "011", "100", "101", "110", "111" },
+                    labels.Select(t => t.Text).ToArray());
+                Assert.IsTrue(labels.All(t => t.Position == new Point(300, 450) && t.Scale == .15f));
+                Assert.AreEqual(new Vector3(9, 18, 33), fixture.Outputs.Projection);
             }
         }
     }
