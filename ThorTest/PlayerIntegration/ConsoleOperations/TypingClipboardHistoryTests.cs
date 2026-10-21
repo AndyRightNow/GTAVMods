@@ -34,7 +34,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ConsoleOperations
                 scene.Press(Keys.Back); scene.Press(Keys.Right); scene.Press(Keys.Back);
                 scene.Type(Keys.E, "e");
                 Assert.AreEqual("eval 15", scene.Model.Input);
-                scene.Press(Keys.Right); scene.Platform.Time = 601; scene.Draw();
+                scene.Press(Keys.Right); scene.Platform.Time = 10000; scene.Draw();
                 Assert.IsTrue(scene.Shows("ev|al 15"));
                 for (int i = 0; i < "eval 15".Length; i++) scene.Press(Keys.Right);
                 for (int i = 0; i < "eval 15".Length; i++) scene.Press(Keys.Back);
@@ -106,9 +106,10 @@ namespace GTAVMods.Tests.PlayerIntegration.ConsoleOperations
                 for (int i = 0; i < 30; i++) scene.Press(Keys.PageDown);
                 scene.Draw(); Assert.IsTrue(scene.Shows(": line19"));
                 Assert.AreEqual(new Size(1200, 300), scene.Platform.Rectangles[0].Size);
-                scene.Platform.Time = 600; scene.Draw(); Assert.IsFalse(scene.Platform.Text.Last().Text.Contains("|"));
-                scene.Platform.Time = 601; scene.Draw(); Assert.IsTrue(scene.Platform.Text.Last().Text.Contains("|"));
-                scene.Platform.Time = 1202; scene.Draw(); Assert.IsFalse(scene.Platform.Text.Last().Text.Contains("|"));
+                Assert.IsFalse(scene.Platform.Text.Last().Text.Contains("|"));
+                scene.Platform.Time += 10000; scene.Draw(); Assert.IsTrue(scene.Platform.Text.Last().Text.Contains("|"));
+                scene.Draw(); Assert.IsTrue(scene.Platform.Text.Last().Text.Contains("|"), "A redraw without elapsed time must not flicker the cursor.");
+                scene.Platform.Time += 10000; scene.Draw(); Assert.IsFalse(scene.Platform.Text.Last().Text.Contains("|"));
                 scene.Submit("clear"); scene.Draw(); Assert.AreEqual(2, scene.Platform.Text.Count);
             }
         }

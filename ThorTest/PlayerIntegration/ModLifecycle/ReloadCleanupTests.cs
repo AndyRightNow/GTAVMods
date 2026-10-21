@@ -63,6 +63,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             s.Game.Ropes.Creations.Enqueue(70);
             s.Frame(16, Keys.Z);
             s.Frame(16, Keys.Z);
+            int activeMaxHealth = s.Player.MaxHealth;
             int anchor = s.CreatedWeapons.Single(handle => s.Game.Entity(handle).AttachedTo == 10);
             var hover = s.CreatedWeapons.Where(handle => handle != anchor).ToArray();
             bool failHealth = true, failAnchor = true;
@@ -82,7 +83,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
 
             s.Chord(Keys.O);
             s.Frame(expectFailure: true);
-            Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
+            Assert.AreEqual(activeMaxHealth, s.Game.Entity(10).MaxHealth);
             failHealth = false;
             s.Chord(Keys.O);
             s.Frame(expectFailure: true);

@@ -10,6 +10,7 @@ using System.Linq;
 using System.Windows.Forms;
 using System;
 using static GTAVMods.Tests.Support.PlayerScenarios;
+using static GTAVMods.Tests.Support.SessionAssertions;
 
 namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
 {
@@ -20,6 +21,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
         public void DisablingWhileWhirlingAndGrabbingRestoresThePlayerAndRetriesIndependentFailures()
         {
             var s = Whirling(grab: true);
+            int activeMaxHealth = s.Player.MaxHealth;
             s.Game.BeforeCall = call =>
             {
                 if (call.Name == "ped.maxHealth" && (int)call.Arguments[1] == 250)
@@ -33,7 +35,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             var failure = (string)s.Log.Last("cleanup.exception").Data["exception"];
             foreach (var message in new[] { "restore health failed", "release pedestrian failed", "release hover hammer failed" })
                 StringAssert.Contains(failure, message);
-            Assert.AreEqual(30000, s.Player.MaxHealth);
+            Assert.AreEqual(activeMaxHealth, s.Player.MaxHealth);
             Assert.AreEqual(250, s.Player.Health);
             Assert.AreEqual(10, s.Game.Entity(60).AttachedTo);
             Assert.IsTrue(s.Game.Entity(21).Exists);
@@ -44,6 +46,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             Assert.IsFalse(s.Audio.Clips["whirling-hammer.wav"].IsPlaying);
 
             s.Game.BeforeCall = null;
+            int failuresBeforeRecovery = FailureCount(s);
             s.Chord(Keys.O);
             Assert.AreEqual(250, s.Player.MaxHealth);
             Assert.AreEqual(0, s.Game.Entity(60).AttachedTo);
@@ -51,18 +54,23 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             Assert.IsFalse(s.Game.Observations[20].Exists);
             Assert.HasCount(2, s.Game.Calls.Where(call => call.Name == "entity.delete" && (int)call.Arguments[0] == 21).ToArray());
             Assert.HasCount(1, s.Game.Calls.Where(call => call.Name == "entity.delete" && (int)call.Arguments[0] == 22).ToArray());
+            Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.enabled").ToArray());
+            Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
         }
 
         [TestMethod]
         public void OnlyTheCompleteDisableChordRestoresHealthAndSuppliesOneUnequippedParachute()
         {
-            var s = new PlayerSessionFixture();
+            var tuning = new Thor.GameplayTuning();
+            tuning.Ability.FullPowerMaxHealth = 9341;
+            tuning.Ability.UnpoweredMaxHealth = 127;
+            var s = new PlayerSessionFixture(tuning: tuning);
             s.Frame();
             s.Controller.KeyDown(new KeyEventArgs(Keys.F));
             s.Controller.KeyDown(new KeyEventArgs(Keys.F | Keys.Control));
             s.Chord(Keys.P);
             s.Chord(Keys.O);
-            Assert.AreEqual(30000, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.FullPowerMaxHealth, s.Player.MaxHealth);
             Assert.IsFalse(s.Log.Records.Any(record => record.Name == "ability.disabled"));
 
             s.Disable();
@@ -74,7 +82,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.disabled").ToArray());
             s.Chord(Keys.O);
             s.Frame();
-            Assert.AreEqual(100, s.Player.MaxHealth, "Enabling does not confirm that the loose hammer was caught.");
+            Assert.AreEqual(tuning.Ability.UnpoweredMaxHealth, s.Player.MaxHealth, "Enabling does not confirm that the loose hammer was caught.");
             Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.enabled").ToArray());
         }
 

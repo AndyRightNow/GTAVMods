@@ -20,6 +20,13 @@ namespace ADModUtils
     {
         private readonly GameServices game;
         private readonly IEventLog log;
+        private readonly int meleeRagdollMinMs;
+        private readonly int meleeRagdollMaxMs;
+        private readonly float animationBlendInSpeed;
+        private readonly float animationBlendOutSpeed;
+        private readonly float animationPlaybackRate;
+        private readonly int animationLoadTimeoutMs;
+        private readonly int weaponAssetLoadTimeoutMs;
 
         public NativeHelper(
             GameServices game,
@@ -32,6 +39,13 @@ namespace ADModUtils
             string[] particleEffectNames,
             int meleeHitPedDamage,
             float meleeHitForce,
+            int meleeRagdollMinMs,
+            int meleeRagdollMaxMs,
+            float animationBlendInSpeed,
+            float animationBlendOutSpeed,
+            float animationPlaybackRate,
+            int animationLoadTimeoutMs,
+            int weaponAssetLoadTimeoutMs,
             IEventLog log)
         {
             this.game = game;
@@ -45,6 +59,13 @@ namespace ADModUtils
             ParticleEffectNames = particleEffectNames;
             MeleeHitPedDamage = meleeHitPedDamage;
             MeleeHitForce = meleeHitForce;
+            this.meleeRagdollMinMs = meleeRagdollMinMs;
+            this.meleeRagdollMaxMs = meleeRagdollMaxMs;
+            this.animationBlendInSpeed = animationBlendInSpeed;
+            this.animationBlendOutSpeed = animationBlendOutSpeed;
+            this.animationPlaybackRate = animationPlaybackRate;
+            this.animationLoadTimeoutMs = animationLoadTimeoutMs;
+            this.weaponAssetLoadTimeoutMs = weaponAssetLoadTimeoutMs;
         }
 
         public int GetAnimationWaitTimeByDictNameAndAnimName(string dictName, string animName)
@@ -85,7 +106,7 @@ namespace ADModUtils
             if (IsPed(ent) && ent != game.Host.PlayerPed)
             {
                 var ped = ent;
-                SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
+                SetPedToRagdoll(ped, RagdollType.Normal, meleeRagdollMinMs, meleeRagdollMaxMs);
                 game.Peds.ApplyDamage(ped, (int)(MeleeHitPedDamage * powerLevel / 100.0f));
             }
             game.Entities.ApplyForce(ent, direction * MeleeHitForce * powerLevel / 100.0f);
@@ -102,7 +123,7 @@ namespace ADModUtils
             int started = game.Host.GameTime;
             while (!game.Animations.IsDictionaryLoaded(dictName))
             {
-                if (unchecked(game.Host.GameTime - started) >= 1000)
+                if (unchecked(game.Host.GameTime - started) >= animationLoadTimeoutMs)
                 {
                     log.Throttled("WARN", "animation.timeout." + dictName, 10000, "dictionary", dictName, "animation", animName);
                     return;
@@ -110,7 +131,8 @@ namespace ADModUtils
                 game.Host.Yield();
             }
 
-            game.Animations.Play(ped, dictName, animName, flag, duration, 8f, 1f, -8f);
+            game.Animations.Play(ped, dictName, animName, flag, duration,
+                animationBlendInSpeed, animationBlendOutSpeed, animationPlaybackRate);
         }
 
         public bool IsEntityPlayingAnim(int ent, string dictName, string animName)
@@ -121,7 +143,7 @@ namespace ADModUtils
         public int CreateWeaponObject(WeaponHash weaponHash, int amountCount, Vector3 position, bool showWorldModel = true, float scale = 1.0f)
         {
             log.Event("INFO", "asset.weapon.request", "weapon", weaponHash.ToString(), "position", position.ToString(), "scale", scale);
-            if (!game.Weapons.RequestAsset(weaponHash, 3000))
+            if (!game.Weapons.RequestAsset(weaponHash, weaponAssetLoadTimeoutMs))
                 throw new System.InvalidOperationException("Could not load weapon asset " + weaponHash);
             var prop = game.Gameplay.CreateWeaponObject(weaponHash, amountCount, position, showWorldModel, scale);
             log.Event(prop == 0 ? "ERROR" : "INFO", "asset.weapon.created", "weapon", weaponHash.ToString(), "handle", prop);

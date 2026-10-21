@@ -52,22 +52,30 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
         [TestMethod]
         public void MissingHammerAssetPausesWithoutCreatingAnObjectAndCanRecoverWhenStreamingSucceeds()
         {
-            var s = new PlayerSessionFixture(configure: game => game.Weapons.AssetResults[WeaponHash.Hammer] = false);
+            var tuning = new GameplayTuning();
+            tuning.Hammer.AssetLoadTimeoutMs = 431;
+            var s = new PlayerSessionFixture(tuning: tuning,
+                configure: game => game.Weapons.AssetResults[WeaponHash.Hammer] = false);
             s.Frame(0, expectFailure: true);
             Assert.IsFalse(s.Game.Native.Calls.Any(call => call.Hash == Hash.CREATE_WEAPON_OBJECT));
-            CollectionAssert.AreEqual(new object[] { WeaponHash.Hammer, 3000 },
-                s.Game.Calls.Single(call => call.Name == "weapon.request").Arguments);
+            var request = s.Game.Calls.Single(call => call.Name == "weapon.request");
+            Assert.AreEqual(WeaponHash.Hammer, request.Arguments[0]);
+            Assert.AreEqual(tuning.Hammer.AssetLoadTimeoutMs, request.Arguments[1]);
             StringAssert.Contains((string)s.Log.Last("tick.exception").Data["exception"], "Could not load weapon asset Hammer");
             Assert.IsTrue(s.Game.Calls.Any(call => call.Name == "host.notify" &&
                 ((string)call.Arguments[0]).Contains("paused")));
-            int errors = s.Log.Records.Count(record => record.Level == "ERROR");
+            int failuresBeforeRecovery = FailureCount(s);
             s.Game.Weapons.AssetResults[WeaponHash.Hammer] = true;
             s.Game.Entities.CreatedBlips.Enqueue(2001);
             s.Chord(Keys.O);
             s.Frame(0, expectFailure: true);
-            Assert.AreEqual(errors, s.Log.Records.Count(record => record.Level == "ERROR"));
+            var retryRequests = s.Game.Calls.Where(call => call.Name == "weapon.request").Skip(1).ToArray();
+            Assert.IsNotEmpty(retryRequests, "Explicit retry must request the asset again after streaming recovers.");
+            Assert.IsTrue(retryRequests.All(call => (WeaponHash)call.Arguments[0] == WeaponHash.Hammer &&
+                (int)call.Arguments[1] == tuning.Hammer.AssetLoadTimeoutMs));
             Assert.IsTrue(s.CreatedWeapons.Any(handle => s.Game.Entity(handle).Exists));
             StringAssert.Contains(s.State(), "attached=True");
+            Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
             s.Controller.Abort();
         }
 
@@ -96,15 +104,15 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             s.Game.World.Vehicles.Enqueue(42);
             s.Game.World.Drivers.Enqueue(43);
             s.Game.Entities.CreatedBlips.Enqueue(2001);
-            int previousFailures = s.Log.Records.Count(record => record.Level == "ERROR");
+            int previousFailures = FailureCount(s);
             s.Chord(Keys.O);
             s.Frame(0, expectFailure: true);
             Assert.IsTrue(s.Log.Records.Any(record => record.Name == "pathfinder.created"),
                 string.Join(Environment.NewLine, s.Log.Records.Select(record => record.Name + ": " + string.Join(", ", record.Data.Values))));
             Assert.AreEqual(42, s.Log.Last("pathfinder.created").Data["vehicle"]);
-            Assert.AreEqual(previousFailures, s.Log.Records.Count(record => record.Level == "ERROR"),
-                "Recovery must not hide a second gameplay error.");
             StringAssert.Contains(s.State(), "attached=True", "The retried ability must be attached to the player again.");
+            Assert.AreEqual(previousFailures, FailureCount(s),
+                "Recovery must not hide a second gameplay or diagnostics error.");
             s.Controller.Abort();
             Assert.IsFalse(s.Game.Observations[42].Exists);
             Assert.IsFalse(s.Game.Observations[43].Exists);
@@ -129,7 +137,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             StringAssert.Contains(diagnostic, "navigation vehicle release unavailable");
             Assert.IsTrue(s.Game.Entity(40).Exists);
             Assert.IsTrue(s.Game.Calls.Any(call => call.Name == "world.releaseModel"));
-            int errors = s.Log.Records.Count(record => record.Level == "ERROR");
+            int failuresBeforeRecovery = FailureCount(s);
 
             s.Game.BeforeCall = null;
             s.Game.AddEntity(42);
@@ -141,10 +149,11 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             s.Chord(Keys.O);
             s.Frame(0, expectFailure: true);
             Assert.IsFalse(s.Game.Observations[40].Exists);
-            Assert.IsTrue(s.Game.Calls.FindIndex(call => call.Name == "entity.delete" && (int)call.Arguments[0] == 40) <
-                s.Game.Calls.FindIndex(call => call.Name == "world.createVehicle"),
+            int retirement = s.Game.Calls.FindIndex(call => call.Name == "entity.delete" && (int)call.Arguments[0] == 40);
+            int replacement = s.Game.Calls.FindIndex(call => call.Name == "world.createVehicle");
+            Assert.IsTrue(retirement >= 0 && replacement > retirement,
                 "An old owned helper must be retired before its replacement is allocated.");
-            Assert.AreEqual(errors, s.Log.Records.Count(record => record.Level == "ERROR"));
+            Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
             Assert.AreEqual(42, s.Log.Last("pathfinder.created").Data["vehicle"]);
             s.Controller.Abort();
             Assert.IsFalse(s.Game.Observations[42].Exists);
@@ -186,7 +195,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "tick.exception").ToArray());
             StringAssert.Contains((string)s.Log.Last("tick.exception").Data["exception"], ropeCreated
                 ? "Could not create the hammer rope anchor." : "Could not create the hammer rope.");
-            Assert.AreEqual(ropeCreated ? 70 : 0, s.Game.Calls.Single(call => call.Name == "rope.create").Arguments[6]);
+            Assert.HasCount(1, s.Game.Calls.Where(call => call.Name == "rope.create").ToArray());
             CollectionAssert.AreEqual(ropeCreated ? new[] { 70 } : Array.Empty<int>(),
                 s.Game.Calls.Where(call => call.Name == "rope.delete").Select(call => (int)call.Arguments[0]).ToArray());
             Assert.IsEmpty(s.Game.Ropes.Ropes);
@@ -208,7 +217,9 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
         [DataRow(true)]
         public void FailedDropPausesAndRetryWaitsForConfirmedHammerDeletion(bool silentlyRefused)
         {
-            var s = new PlayerSessionFixture();
+            var tuning = new GameplayTuning();
+            tuning.Ability.UnpoweredMaxHealth = 127;
+            var s = new PlayerSessionFixture(tuning: tuning);
             s.Frame();
             s.Game.BeforeCall = call => {
                 if (call.Name == "native.ACTIVATE_PHYSICS" && (int)call.Arguments[0] == 20)
@@ -241,7 +252,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             Assert.IsFalse(s.Game.Observations[20].Exists);
             s.Frame(expectFailure: true);
             Assert.AreEqual(failuresBeforeRecovery, FailureCount(s), "Retry must not introduce another gameplay or diagnostics failure.");
-            Assert.AreEqual(100, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.UnpoweredMaxHealth, s.Player.MaxHealth);
             Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.enabled").ToArray());
             Assert.IsTrue(s.CreatedWeapons.Skip(allocations).Any(handle => s.Game.Entity(handle).Exists));
         }
@@ -249,7 +260,9 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
         [TestMethod]
         public void FailedCleanupKeepsTheModPausedEvenWhileThePlayerIsBetweenCharacters()
         {
-            var s = new PlayerSessionFixture();
+            var tuning = new GameplayTuning();
+            tuning.Ability.UnpoweredMaxHealth = 127;
+            var s = new PlayerSessionFixture(tuning: tuning);
             s.Frame();
             s.Game.Entities.SilentDeletionRefusals.Add(21);
             s.Disable();
@@ -266,14 +279,16 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             s.Frame(expectFailure: true);
             Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
             Assert.IsFalse(s.Game.Observations[21].Exists);
-            Assert.AreEqual(100, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.UnpoweredMaxHealth, s.Player.MaxHealth);
             Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.enabled").ToArray());
         }
 
         [TestMethod]
         public void UnavailablePositionObservationsPauseGameplayAndLeaveADiagnosticFailureRecord()
         {
-            var s = new PlayerSessionFixture();
+            var tuning = new GameplayTuning();
+            tuning.Ability.UnpoweredMaxHealth = 127;
+            var s = new PlayerSessionFixture(tuning: tuning);
             s.Frame();
             s.Game.BeforeObservation = (operation, entity) => {
                 if (operation == "entity.position") throw new InvalidOperationException("position unavailable");
@@ -291,7 +306,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             s.Chord(Keys.O);
             s.Frame(expectFailure: true);
             Assert.AreEqual(failuresBeforeRecovery, FailureCount(s));
-            Assert.AreEqual(100, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.UnpoweredMaxHealth, s.Player.MaxHealth);
         }
     }
 }

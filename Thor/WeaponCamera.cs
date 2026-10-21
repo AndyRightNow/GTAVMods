@@ -12,19 +12,16 @@ namespace Thor
         private readonly GameServices game;
         private readonly Random random;
         private readonly IEventLog log;
+        private readonly CameraTuning tuning;
         private int camera;
         private int? lastSetPosition;
         private MjolnirCameraType cameraType;
         private Vector3 sideDirection;
-        private static readonly MjolnirCameraType[] Views = {
-            MjolnirCameraType.SideFollow, MjolnirCameraType.FarSideFollow, MjolnirCameraType.FarSideFollow,
-            MjolnirCameraType.StationaryViewFollow, MjolnirCameraType.StationaryViewFollow,
-            MjolnirCameraType.StationaryViewFollow, MjolnirCameraType.StationaryViewFollow
-        };
 
-        public WeaponCamera(GameServices game, Random random, IEventLog log)
+        public WeaponCamera(GameServices game, Random random, IEventLog log, CameraTuning tuning)
         {
             this.game = game;
+            this.tuning = tuning;
             this.random = random;
             this.log = log;
         }
@@ -33,27 +30,27 @@ namespace Thor
         {
             if (camera == 0)
             {
-                camera = game.Cameras.Create(game.Entities.Position(weapon), Vector3.Zero, 50);
+                camera = game.Cameras.Create(game.Entities.Position(weapon), Vector3.Zero, tuning.FieldOfView);
                 if (camera == 0) return;
                 log.Event("INFO", "camera.created", "weapon", weapon);
             }
             Vector3 direction = game.Entities.Velocity(weapon).Normalized;
             int sign = random.Next(0, 2) > 0 ? 1 : -1;
-            bool reset = !lastSetPosition.HasValue || unchecked(game.Host.GameTime - lastSetPosition.Value) >= 2000;
+            bool reset = !lastSetPosition.HasValue || unchecked(game.Host.GameTime - lastSetPosition.Value) >= tuning.ViewDurationMs;
             if (reset)
             {
-                cameraType = Views[random.Next(Views.Length)];
+                cameraType = tuning.Views[random.Next(tuning.Views.Length)];
                 lastSetPosition = game.Host.GameTime;
                 sideDirection = Utilities.Math.RandomVectorPerpendicularTo(direction, random) * sign;
             }
             if (cameraType == MjolnirCameraType.SideFollow)
             {
-                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + sideDirection * 5);
+                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + sideDirection * tuning.NearDistance);
             }
             else if (cameraType == MjolnirCameraType.FarSideFollow)
-                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + sideDirection * 70);
+                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + sideDirection * tuning.FarDistance);
             else if (reset)
-                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + direction * 50 + sideDirection * 5);
+                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + direction * tuning.StationaryLeadDistance + sideDirection * tuning.NearDistance);
             game.Cameras.PointAt(camera, weapon);
             game.Cameras.SetActive(camera, true);
             game.Cameras.StartRendering();

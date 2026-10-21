@@ -71,6 +71,15 @@ test methods there or move mod decisions into fakes. The assembly remains
 nonparallel because console registration and some culture/clock scenarios use
 process-wide state.
 
+Gameplay scenarios supply their own [tuning profile](../Thor/Tuning/README.md)
+when checking adjustable behavior. For example, a throw must request the selected
+clip's configured delay and keep the hammer until the host resumes; it does not
+need a separate test for every calibrated animation delay. Camera tests protect
+framing relative to the hammer, and power tests protect proportional strength
+and expiry under a supplied duration. Changing a default for game feel should
+not require rewriting an expected-value table. Keep boundary and failure cases
+that represent different behavior.
+
 Run the complete workflow from the repository root:
 
 ```powershell

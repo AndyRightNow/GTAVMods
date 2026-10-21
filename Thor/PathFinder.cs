@@ -10,12 +10,13 @@ namespace Thor.PathFinder
     {
         private readonly GameServices game;
         private readonly IEventLog log;
+        private readonly NavigationTuning tuning;
         private int driver, chasingVehicle;
         private Vector3? currentTargetPosition;
         private bool initialized;
-        private static readonly Vector3 DefaultSpawnPosition = new Vector3(500, 500, 500);
 
-        public PathFinder(GameServices game, IEventLog log) { this.game = game; this.log = log; }
+        public PathFinder(GameServices game, IEventLog log, NavigationTuning tuning)
+        { this.game = game; this.log = log; this.tuning = tuning; }
 
         private void Init()
         {
@@ -25,11 +26,11 @@ namespace Thor.PathFinder
             if (driver != 0 || chasingVehicle != 0) Dispose();
 
             int model = (int)VehicleHash.Thruster;
-            if (!game.World.RequestModel(model, 3000))
+            if (!game.World.RequestModel(model, tuning.ModelLoadTimeoutMs))
                 throw new InvalidOperationException("Could not load the pathfinder vehicle model.");
             try
             {
-                chasingVehicle = game.World.CreateVehicle(model, DefaultSpawnPosition);
+                chasingVehicle = game.World.CreateVehicle(model, tuning.SpawnPosition);
                 if (chasingVehicle == 0)
                     throw new InvalidOperationException("Could not create the pathfinder vehicle.");
                 driver = game.World.CreateDriver(chasingVehicle);
@@ -67,8 +68,8 @@ namespace Thor.PathFinder
         // Collision queries run after OnTick has acquired both nonzero helper handles.
         public bool IsRelatedEntity(int entity) => entity == chasingVehicle || entity == driver;
 
-        public Vector3 GetTargetVelocity(Vector3 userPosition, float scaler = 0.5f)
-            => (game.Entities.Position(chasingVehicle) - userPosition) * scaler + game.Entities.Velocity(chasingVehicle);
+        public Vector3 GetTargetVelocity(Vector3 userPosition)
+            => (game.Entities.Position(chasingVehicle) - userPosition) * tuning.PositionCorrection + game.Entities.Velocity(chasingVehicle);
 
         public void OnTick(int entityToDisableCollision)
         {
@@ -76,12 +77,12 @@ namespace Thor.PathFinder
             if (game.World.VehicleDriver(chasingVehicle) != driver)
                 game.Peds.SetIntoVehicle(driver, chasingVehicle, VehicleSeat.Driver);
             game.Entities.SetInvincible(chasingVehicle, true);
-            game.Entities.SetHealth(chasingVehicle, 100);
+            game.Entities.SetHealth(chasingVehicle, tuning.HelperHealth);
             game.Entities.SetVisible(chasingVehicle, false);
             game.Entities.SetInvincible(driver, true);
-            game.Entities.SetHealth(driver, 100);
+            game.Entities.SetHealth(driver, tuning.HelperHealth);
             game.Entities.SetVisible(driver, false);
-            game.Entities.SetVelocity(chasingVehicle, game.Entities.Velocity(chasingVehicle) * 1.05f);
+            game.Entities.SetVelocity(chasingVehicle, game.Entities.Velocity(chasingVehicle) * tuning.VelocityMultiplier);
             SetNoCollision(entityToDisableCollision);
         }
 
@@ -98,11 +99,12 @@ namespace Thor.PathFinder
 
         public void UpdateCurrentTarget(Vector3 target)
         {
-            if (currentTargetPosition.HasValue && target.DistanceTo(currentTargetPosition.Value) <= 15) return;
+            if (currentTargetPosition.HasValue && target.DistanceTo(currentTargetPosition.Value) <= tuning.RetargetDistance) return;
             ClearAll();
             currentTargetPosition = target;
             game.Peds.StartHeliMissionToPosition(driver, chasingVehicle, target,
-                VehicleMissionType.GoTo, 100000, 1, -1, 5, -1, -1, HeliMissionFlags.StartEngineImmediately);
+                VehicleMissionType.GoTo, tuning.MissionSpeed, tuning.StoppingRange, tuning.Orientation,
+                tuning.FlightHeight, tuning.MinTerrainHeight, tuning.SlowDownDistance, HeliMissionFlags.StartEngineImmediately);
         }
 
         private void ClearAll()

@@ -33,7 +33,7 @@ namespace GTAVMods.Tests.Support
         public PlayerSessionFixture(int seed = 11, bool holding = true, SessionObservationLog log = null,
             IAudioPlaybackFactory audio = null, Random random = null, Action<FakeGame> configure = null,
             Func<long> milliseconds = null, Func<long> timestamp = null, long frequency = 0,
-            bool useProductionDiagnostics = false)
+            bool useProductionDiagnostics = false, GameplayTuning tuning = null)
         {
             Log = log ?? new SessionObservationLog(useDefaultLogger: useProductionDiagnostics);
             Audio = audio as SilentAudio ?? new SilentAudio();
@@ -79,7 +79,7 @@ namespace GTAVMods.Tests.Support
                 Thor.Thor.ReadConsoleOpen,
                 useProductionDiagnostics ? new Func<long>(Thor.Thor.ReadDroppedRecords) : () => Log.Writer.DroppedRecords,
                 ThorSessionInfo.Capture(Log.Writer.FilePath),
-                useProductionDiagnostics ? null : milliseconds ?? (() => Log.Clock.ElapsedMilliseconds), timestamp, frequency);
+                useProductionDiagnostics ? null : milliseconds ?? (() => Log.Clock.ElapsedMilliseconds), timestamp, frequency, tuning);
             Controller.Start();
         }
 

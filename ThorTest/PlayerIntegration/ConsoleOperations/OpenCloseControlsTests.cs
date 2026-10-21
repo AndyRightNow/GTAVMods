@@ -113,25 +113,29 @@ namespace GTAVMods.Tests.PlayerIntegration.ConsoleOperations
         }
 
         [TestMethod]
-        [DataRow("capture disabled X", 1)] [DataRow("capture enabled Y", 2)]
-        [DataRow("enable X", 3)] [DataRow("enable Y", 4)]
-        [DataRow("read X", 5)] [DataRow("read Y", 6)]
-        [DataRow("restore disabled X", 7)] [DataRow("restore enabled Y", 8)]
-        public void MouseDiagnosticRecoversFromEachDeviceFailureWithoutLeakingTemporaryInput(string failedOperation, int failedStep) {
+        [DataRow("capture disabled X", Hash.IS_CONTROL_ENABLED, Control.CursorX, 1)]
+        [DataRow("capture enabled Y", Hash.IS_CONTROL_ENABLED, Control.CursorY, 1)]
+        [DataRow("enable X", Hash.ENABLE_CONTROL_ACTION, Control.CursorX, 1)]
+        [DataRow("enable Y", Hash.ENABLE_CONTROL_ACTION, Control.CursorY, 1)]
+        [DataRow("read X", Hash.GET_CONTROL_NORMAL, Control.CursorX, 1)]
+        [DataRow("read Y", Hash.GET_CONTROL_NORMAL, Control.CursorY, 1)]
+        [DataRow("restore disabled X", Hash.DISABLE_CONTROL_ACTION, Control.CursorX, 1)]
+        [DataRow("restore enabled Y", Hash.ENABLE_CONTROL_ACTION, Control.CursorY, 2)]
+        public void MouseDiagnosticRecoversFromEachDeviceFailureWithoutLeakingTemporaryInput(
+            string failedOperation, Hash failingNative, Control failingControl, int failingOccurrence) {
             using (var scene = new ConsoleFixture()) {
                 scene.Press(Keys.F8); scene.Enabled.Add(Control.CursorY);
-                int step = 0;
+                int matchingCalls = 0;
                 scene.Native.Before = (hash, args) => {
-                    if ((hash == Hash.IS_CONTROL_ENABLED || hash == Hash.ENABLE_CONTROL_ACTION || hash == Hash.DISABLE_CONTROL_ACTION || hash == Hash.GET_CONTROL_NORMAL)
-                        && args.Length > 1 && ((Control)(int)args[1] == Control.CursorX || (Control)(int)args[1] == Control.CursorY)
-                        && ++step == failedStep) throw new InvalidOperationException("mouse unavailable: " + failedOperation);
+                    if (hash == failingNative && (Control)(int)args[1] == failingControl
+                        && ++matchingCalls == failingOccurrence) throw new InvalidOperationException("mouse unavailable: " + failedOperation);
                 };
                 scene.Enter("eval { return FUNCTIONS.GetMousePos(); }");
-                Assert.AreEqual(failedStep == 7, scene.Enabled.Contains(Control.CursorX),
+                Assert.AreEqual(failedOperation == "restore disabled X", scene.Enabled.Contains(Control.CursorX),
                     "Only a refused X restoration may leave the temporary X enable active.");
                 Assert.IsTrue(scene.Enabled.Contains(Control.CursorY), "The successful cleanup paths preserve originally enabled Y.");
                 scene.Draw();
-                Assert.IsTrue(scene.Shows("C# evaluation failed:"));
+                Assert.IsTrue(scene.ShowsOutput("[Error] C# evaluation failed: mouse unavailable: " + failedOperation));
                 scene.Native.Before = null;
                 scene.Analog[Control.CursorX] = .25f; scene.Analog[Control.CursorY] = .5f;
                 scene.Evaluate("return FUNCTIONS.GetMousePos()");
@@ -163,30 +167,32 @@ namespace GTAVMods.Tests.PlayerIntegration.ConsoleOperations
         public void OpenConsoleProtectsGameplayFromDisableUntilItClosesOrIsDisposed()
         {
             var s = new PlayerSessionFixture();
+            var ordinaryMaxHealth = s.Player.MaxHealth;
             s.Frame();
+            var poweredMaxHealth = s.Player.MaxHealth;
             using (var console = new ConsoleFixture())
             {
                 console.Press(Keys.F8);
                 s.Chord(Keys.F);
-                Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
+                Assert.AreEqual(poweredMaxHealth, s.Player.MaxHealth);
                 Assert.AreEqual(WeaponHash.Hammer, s.Game.Entity(10).CurrentWeapon);
                 Assert.IsFalse(s.Log.Records.Any(record => record.Name == "ability.disabled"));
 
                 console.Press(Keys.F8);
                 s.Chord(Keys.F);
-                Assert.AreEqual(200, s.Game.Entity(10).MaxHealth);
+                Assert.AreEqual(ordinaryMaxHealth, s.Player.MaxHealth);
                 Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
                 Assert.HasCount(1, s.Log.Records.Where(record => record.Name == "ability.disabled").ToArray());
 
                 s.Chord(Keys.O);
                 s.Game.ObserveNextFrame(game => game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20));
                 s.Frame();
-                Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
+                Assert.AreEqual(poweredMaxHealth, s.Player.MaxHealth);
                 console.Press(Keys.F8);
             }
 
             s.Chord(Keys.F);
-            Assert.AreEqual(200, s.Game.Entity(10).MaxHealth);
+            Assert.AreEqual(ordinaryMaxHealth, s.Player.MaxHealth);
             Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
             Assert.HasCount(2, s.Log.Records.Where(record => record.Name == "ability.disabled").ToArray(),
                 "Disposing an open console must restore shortcuts instead of leaving a stale input lock.");

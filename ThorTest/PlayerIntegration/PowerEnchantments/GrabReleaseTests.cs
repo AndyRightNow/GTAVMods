@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 using System;
+using Thor;
 
 namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
 {
@@ -18,13 +19,17 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
         [TestMethod]
         public void GrabSkipsSelfAndPropsAndReleasesOnChordOrDeath()
         {
-            var f = new PlayerSessionFixture();
+            var profile = new GameplayTuning();
+            profile.Ability.GrabRange = 4.3f;
+            var f = new PlayerSessionFixture(tuning: profile);
             f.Peds.Remove(60);
             f.Game.AddEntity(60); f.Game.AddEntity(61); f.Peds.Add(61);
             f.Game.AddEntity(62); f.Peds.Add(62);
             f.Game.World.Nearby = (position, radius) => new[] { 0, 10, 60, 61, 62 };
             f.Game.Input.Pressed.Add(Control.ThrowGrenade);
             f.Tick();
+            CollectionAssert.AreEqual(new object[] { f.Player.Position, profile.Ability.GrabRange },
+                f.Game.Calls.Single(call => call.Name == "world.nearby").Arguments);
             Assert.AreEqual(10, f.Game.Entity(61).AttachedTo);
             Assert.AreEqual(Bone.IKLeftHand, f.Game.Entity(61).AttachedBone);
             Assert.IsFalse(f.Game.Native.Calls.Any(call => call.Hash == Hash.IS_ENTITY_A_PED &&

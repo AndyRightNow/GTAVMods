@@ -62,9 +62,11 @@ namespace GTAVMods.Tests.PlayerIntegration.Diagnostics
         public void SessionPerformanceUsesTheHostCounterFrequencyWhenReportingAPlayerFrame()
         {
             var timestamps = new Queue<long>(new[] { 1000000L, 1000050L });
-            var s = new PlayerSessionFixture(timestamp: () => timestamps.Dequeue(), frequency: 2000);
+            var tuning = new Thor.GameplayTuning();
+            tuning.Ability.FullPowerMaxHealth = 8765;
+            var s = new PlayerSessionFixture(timestamp: () => timestamps.Dequeue(), frequency: 2000, tuning: tuning);
             s.Frame();
-            Assert.AreEqual(30000, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.FullPowerMaxHealth, s.Player.MaxHealth);
             Assert.AreEqual(25d, Convert.ToDouble(s.Log.Last("performance").Data["averageTickMs"]));
             Assert.AreEqual(25d, Convert.ToDouble(s.Log.Last("performance").Data["maxTickMs"]));
         }

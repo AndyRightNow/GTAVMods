@@ -68,13 +68,15 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
         [DataRow(false, null, true)]
         public void CompatibilityNoticeAppearsOnceAndDoesNotPreventUsingTheHammer(bool enhanced, string version, bool warn)
         {
-            var s = new PlayerSessionFixture(configure: game => {
+            var tuning = new Thor.GameplayTuning();
+            tuning.Ability.FullPowerMaxHealth = 8429;
+            var s = new PlayerSessionFixture(tuning: tuning, configure: game => {
                 game.Host.IsEnhanced = enhanced;
                 game.Host.FileVersion = version == null ? null : new Version(version);
             });
             s.Frame();
             s.Frame();
-            Assert.AreEqual(30000, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.FullPowerMaxHealth, s.Player.MaxHealth);
             Assert.AreEqual(version, s.Log.Last("session.start").Data["shvdneVersion"]);
             Assert.AreEqual("3.9.0.0", s.Log.Last("session.start").Data["apiVersion"]);
             Assert.HasCount(warn ? 1 : 0, s.Log.Records.Where(record => record.Name == "compatibility.baseline").ToArray());

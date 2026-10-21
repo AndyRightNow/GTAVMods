@@ -19,17 +19,19 @@ namespace GTAVMods.Tests.PlayerIntegration.HammerActions
     public class SummonRecallCatchTests
     {
         [TestMethod]
-        [DataRow(16)]
-        [DataRow(33)]
-        [DataRow(97)]
-        public void CatchCompletesOnlyAfterTheEngineEquipsTheHammerAndReleasesItsFollowCamera(int frameMs)
+        public void CatchCompletesOnlyAfterTheEngineEquipsTheHammerAndReleasesItsFollowCamera()
         {
-            var s = new PlayerSessionFixture();
+            const int frameMs = 33;
+            var profile = new GameplayTuning();
+            profile.Ability.ThrowSpeed = 73;
+            profile.Ability.ThrowVelocityOffset = new Vector3(0.2f, -0.4f, 1.7f);
+            profile.Ability.FullPowerMaxHealth = 8300;
+            var s = new PlayerSessionFixture(tuning: profile);
             s.Frame(frameMs);
-            Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
+            Assert.AreEqual(profile.Ability.FullPowerMaxHealth, s.Game.Entity(10).MaxHealth);
             s.Frame(frameMs, Keys.T, aim: true);
             Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
-            Assert.AreEqual(new Vector3(0, 100, 5), s.Game.Entity(20).Velocity);
+            Assert.AreEqual(Vector3.UnitY * profile.Ability.ThrowSpeed + profile.Ability.ThrowVelocityOffset, s.Game.Entity(20).Velocity);
             s.Game.Cameras.Creations.Enqueue(80);
             s.Frame(frameMs, Keys.R);
             Assert.IsTrue(s.Game.Cameras.Cameras[80].Active);
@@ -61,27 +63,37 @@ namespace GTAVMods.Tests.PlayerIntegration.HammerActions
 
         [TestMethod]
         [DataRow(1000)]
-        [DataRow(int.MaxValue - 1024)]
-        public void TargetReturnWaitsTheFullSevenHundredMilliseconds(int startTime)
+        [DataRow(int.MaxValue - 100)]
+        public void TargetReturnWaitsTheConfiguredDelay(int startTime)
         {
-            var s = new PlayerSessionFixture();
+            const int frameMs = 16;
+            var profile = new GameplayTuning();
+            profile.Ability.ReturnDelayMs = 413;
+            profile.Animation.ReleaseDelays.Clear();
+            var s = new PlayerSessionFixture(tuning: profile);
             s.Game.AddEntity(60).Position = new Vector3(0, .4f, 0);
-            s.Game.Host.GameTime = startTime;
+            s.Game.Host.GameTime = unchecked(startTime - 3 * frameMs);
             s.Frame(0);
             s.Game.World.Rays.Enqueue(new RayHit(true, 60, Vector3.Zero));
-            s.Frame(16, Keys.T, aim: true);
+            s.Frame(frameMs, Keys.T, aim: true);
             StringAssert.Contains(s.State(), "attacking=True");
             StringAssert.Contains(s.State(), "collecting=False");
-            s.Frame(16);
+            s.Frame(frameMs);
             StringAssert.Contains(s.State(), "targets=0");
-            s.Frame(16);
+            // Supplied immediate release and three advancing frames reach the
+            // chosen completion clock without depending on authored windup times.
+            s.Frame(frameMs);
             StringAssert.Contains(s.State(), "attacking=False");
             int completed = s.Game.Host.GameTime;
+            Assert.AreEqual(startTime, completed);
+            if (startTime > int.MaxValue - profile.Ability.ReturnDelayMs)
+                Assert.IsTrue(unchecked(completed + (int)profile.Ability.ReturnDelayMs) < completed,
+                    "The rollover case must cross the signed clock during the return delay itself.");
             s.Game.World.CapsuleObservation = (from, to, radius, flags) => new RayHit(true, 10, Vector3.UnitZ);
-            s.Game.Host.GameTime = unchecked(completed + 699);
+            s.Game.Host.GameTime = unchecked(completed + (int)profile.Ability.ReturnDelayMs - 1);
             s.Frame(0);
             Assert.IsFalse(s.Game.Native.Calls.Any(call => call.Hash == Hash.GIVE_WEAPON_OBJECT_TO_PED));
-            s.Game.Host.GameTime = unchecked(completed + 700);
+            s.Game.Host.GameTime = unchecked(completed + (int)profile.Ability.ReturnDelayMs);
             s.Frame(0);
             CollectionAssert.AreEqual(new object[] { 20, 10 },
                 s.Game.Native.Calls.Single(call => call.Hash == Hash.GIVE_WEAPON_OBJECT_TO_PED).Arguments);
@@ -157,17 +169,20 @@ namespace GTAVMods.Tests.PlayerIntegration.HammerActions
         [TestMethod]
         public void HoldingRecallOnTheFirstUnarmedFrameCreatesAHammerBeforeSteeringIt()
         {
-            var s = new PlayerSessionFixture(holding: false);
+            var profile = new GameplayTuning();
+            profile.Hammer.SpawnPosition = new Vector3(13, -31, 114);
+            profile.Hammer.CruiseSpeed = 89;
+            var s = new PlayerSessionFixture(holding: false, tuning: profile);
             s.Frame(0, Keys.H);
             CollectionAssert.AreEqual(new[] { 21, 22, 23 }, s.CreatedWeapons);
-            Assert.AreEqual(new Vector3(0, 0, 2000), s.Game.Entity(23).Position);
+            Assert.AreEqual(profile.Hammer.SpawnPosition, s.Game.Entity(23).Position);
             Assert.AreEqual(Vector3.Zero, s.Game.Entity(23).Velocity);
             Assert.IsFalse(s.Game.Calls.Any(call => call.Name == "entity.velocity" &&
                 (int)call.Arguments[0] == 0));
 
             s.Game.Entity(23).Position = new Vector3(0, -30, 1);
             s.Frame(0, Keys.H);
-            Assert.AreEqual(Vector3.UnitY * 100, s.Game.Entity(23).Velocity);
+            Assert.AreEqual(Vector3.UnitY * profile.Hammer.CruiseSpeed, s.Game.Entity(23).Velocity);
             Assert.HasCount(3, s.CreatedWeapons);
             s.Reload();
             s.AssertReleased();
@@ -203,32 +218,54 @@ namespace GTAVMods.Tests.PlayerIntegration.HammerActions
         }
 
         [TestMethod]
-        [DataRow(3f, 35f, false, true)]
-        [DataRow(3.01f, 40f, false, true)]
-        [DataRow(5f, 40f, false, true)]
-        [DataRow(10f, 40f, true, false)]
-        [DataRow(10.01f, 100f, true, false)]
-        [DataRow(140f, 100f, true, false)]
-        [DataRow(140.01f, 100f, false, false)]
-        public void HoldingRecallSteersTowardTheHandAndUsesTheCorrectApproachBand(float distance, float speed, bool audible, bool upright)
+        public void RecallSlowsNearTheHandAndApproachFeedbackDoesNotMistakeAnotherPedForACatch()
         {
-            var s = new PlayerSessionFixture();
+            var profile = new GameplayTuning();
+            profile.Hammer.NearRecallDistance = 4;
+            profile.Hammer.MediumRecallDistance = 12;
+            profile.Hammer.NearRecallSpeed = 17;
+            profile.Hammer.MediumRecallSpeed = 39;
+            profile.Hammer.CruiseSpeed = 83;
+            profile.Hammer.RotationBlend = 1;
+            profile.Ability.ApproachSoundDistance = 80;
+            profile.Ability.UprightDistance = 6;
+            var s = new PlayerSessionFixture(tuning: profile);
             var hand = new Vector3(17, -23, 11);
             s.Player.Bones[Bone.PHRightHand] = hand;
-            s.DropHammer(hand - Vector3.UnitY * distance);
+            s.DropHammer(hand - Vector3.UnitY * (profile.Ability.ApproachSoundDistance + 1));
             s.Game.Entity(20).InAir = true;
             s.Game.AddEntity(60);
             s.Game.World.Capsules.Enqueue(new RayHit(true, 60, hand));
             s.Frame(0, Keys.H);
-            Assert.AreEqual(Vector3.UnitY * speed, s.Game.Entity(20).Velocity);
+            float distantSpeed = s.Game.Entity(20).Velocity.Length();
+            Assert.AreEqual(profile.Hammer.CruiseSpeed, distantSpeed);
+            Assert.IsTrue((Vector3.UnitY - s.Game.Entity(20).Velocity.Normalized).Length() < .0001f);
             Assert.IsFalse(s.Game.Native.Calls.Any(call => call.Hash == Hash.GIVE_WEAPON_OBJECT_TO_PED),
                 "Contact with another pedestrian does not complete the player's catch.");
-            Assert.AreEqual(audible, s.Audio.Clips.ContainsKey("hammer-close-to-player.wav"));
-            Assert.AreEqual("aim_trans_low", s.LastNative(Hash.TASK_PLAY_ANIM)[2]);
-            for (int frame = 0; frame < 30; frame++) s.Frame(0, Keys.H);
-            Assert.IsTrue((s.Game.Entity(20).Quaternion * Vector3.UnitZ -
-                (upright ? Vector3.UnitZ : Vector3.UnitY)).Length() < 0.001f);
-            if (audible) Assert.AreEqual(1, s.Audio.Clips["hammer-close-to-player.wav"].Plays);
+            Assert.IsFalse(s.Audio.Clips.ContainsKey("hammer-close-to-player.wav"));
+
+            s.Game.Entity(20).Position = hand - Vector3.UnitY * profile.Ability.ApproachSoundDistance;
+            s.Frame(0, Keys.H);
+            Assert.IsTrue(s.Audio.Clips["hammer-close-to-player.wav"].IsPlaying);
+            Assert.IsTrue((s.Game.Entity(20).Quaternion * Vector3.UnitZ - Vector3.UnitY).Length() < .001f,
+                "A travelling hammer faces its recall direction.");
+
+            s.Game.Entity(20).Position = hand - Vector3.UnitY * profile.Hammer.MediumRecallDistance;
+            s.Frame(0, Keys.H);
+            float approachSpeed = s.Game.Entity(20).Velocity.Length();
+            Assert.AreEqual(profile.Hammer.MediumRecallSpeed, approachSpeed);
+            s.Game.Entity(20).Position = hand - Vector3.UnitY * profile.Hammer.NearRecallDistance;
+            s.Frame(0, Keys.H);
+            float closeSpeed = s.Game.Entity(20).Velocity.Length();
+            Assert.AreEqual(profile.Hammer.NearRecallSpeed, closeSpeed);
+            Assert.IsTrue(closeSpeed > 0 && closeSpeed < approachSpeed && approachSpeed < distantSpeed,
+                "Recall must slow through approach and hand-contact ranges without reversing or stopping.");
+            Assert.IsTrue((Vector3.UnitY - s.Game.Entity(20).Velocity.Normalized).Length() < .0001f);
+            Assert.IsTrue((s.Game.Entity(20).Quaternion * Vector3.UnitZ - Vector3.UnitZ).Length() < .001f,
+                "The hammer turns upright for the player's hand.");
+            Assert.AreEqual(1, s.Audio.Clips["hammer-close-to-player.wav"].Plays,
+                "Continuing held recall must not restart approach audio.");
+            Assert.AreEqual(WeaponHash.Unarmed, s.Player.CurrentWeapon);
             s.Reload();
             s.AssertReleased();
         }

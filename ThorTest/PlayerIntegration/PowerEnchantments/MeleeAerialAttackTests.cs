@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 using System;
+using Thor;
 
 namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
 {
@@ -18,7 +19,12 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
         [TestMethod]
         public void MeleeStrikeDamagesOnlyTheStruckPedAndPushesTheStruckVehicle()
         {
-            var s = new PlayerSessionFixture();
+            var profile = new GameplayTuning();
+            profile.Combat.MeleeForce = 173;
+            profile.Combat.MeleePedDamage = 61;
+            profile.Combat.MeleeRagdollMinMs = 43;
+            profile.Combat.MeleeRagdollMaxMs = 157;
+            var s = new PlayerSessionFixture(tuning: profile);
             s.Frame(0);
             s.Player.InMeleeCombat = true;
             s.Player.Forward = Vector3.UnitY;
@@ -29,11 +35,14 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
             s.Game.AddEntity(62);
             s.Game.World.Nearby = (position, radius) => new[] { 10, 20, 60, 61, 62 };
             s.Frame(0);
-            CollectionAssert.AreEqual(new object[] { 60, 100 },
+            CollectionAssert.AreEqual(new object[] { 60, profile.Combat.MeleePedDamage },
                 s.Game.Calls.Last(call => call.Name == "ped.damage").Arguments);
-            CollectionAssert.AreEqual(new object[] { 61, new Vector3(0, 250, 0) },
+            CollectionAssert.AreEqual(new object[] { 61, Vector3.UnitY * profile.Combat.MeleeForce },
                 s.Game.Calls.Last(call => call.Name == "entity.force").Arguments);
             Assert.IsTrue(s.Game.Entity(60).CanRagdoll);
+            CollectionAssert.AreEqual(new object[] { 60, profile.Combat.MeleeRagdollMinMs,
+                profile.Combat.MeleeRagdollMaxMs, (int)ADModUtils.RagdollType.Normal, 0, 0, 0 },
+                s.LastNative(Hash.SET_PED_TO_RAGDOLL));
             Assert.HasCount(1, s.Game.Calls.Where(call => call.Name == "ped.damage").ToArray());
             Assert.IsFalse(s.Game.Calls.Any(call => call.Name == "entity.force" &&
                 new[] { 10, 20, 62 }.Contains((int)call.Arguments[0])));
@@ -44,7 +53,9 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
         [TestMethod]
         public void CharacterSwitchDuringMeleeObservationProtectsTheNewPlayerFromPedDamage()
         {
-            var s = new PlayerSessionFixture();
+            var profile = new GameplayTuning();
+            profile.Combat.MeleePedDamage = 61;
+            var s = new PlayerSessionFixture(tuning: profile);
             s.Frame(0);
             s.Game.Entity(10).InMeleeCombat = true;
             s.Game.Entity(11).DamagedBy.Add(10);
@@ -57,7 +68,7 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
                 return new[] { 11, 60 };
             };
             s.Frame(0);
-            CollectionAssert.AreEqual(new object[] { 60, 100 },
+            CollectionAssert.AreEqual(new object[] { 60, profile.Combat.MeleePedDamage },
                 s.Game.Calls.Single(call => call.Name == "ped.damage").Arguments);
             Assert.AreEqual(250, s.Game.Entity(11).Health);
             Assert.AreEqual(200, s.Game.Entity(10).Health);
@@ -67,24 +78,29 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
         [TestMethod]
         public void AirDashSlamsDownThenDamagesNearbyEntitiesOnLanding()
         {
-            var f = new PlayerSessionFixture(); f.Tick();
+            var profile = new GameplayTuning();
+            profile.Combat.MeleeForce = 173;
+            profile.Combat.MeleePedDamage = 61;
+            profile.Ability.LandingSpeed = 137;
+            profile.Ability.StoredPowerFraction = 0.4f;
+            var f = new PlayerSessionFixture(tuning: profile); f.Tick();
             f.Player.Position = new Vector3(17, -23, 11);
             f.Player.InAir = true; f.Game.Input.Pressed.Add(Control.Attack);
             f.Tick();
-            Assert.AreEqual(new Vector3(0, 0, -200), f.Player.Velocity);
+            Assert.AreEqual(-Vector3.UnitZ * profile.Ability.LandingSpeed, f.Player.Velocity);
             f.Tick();
-            Assert.AreEqual(new Vector3(0, 0, -200), f.Player.Velocity);
+            Assert.AreEqual(-Vector3.UnitZ * profile.Ability.LandingSpeed, f.Player.Velocity);
             Assert.IsFalse(f.Game.Calls.Any(call => call.Name == "ped.damage"));
             f.Game.AddEntity(60).Position = f.Player.Position + Vector3.UnitX; f.Peds.Add(60);
             f.Game.AddEntity(61).Position = f.Player.Position + Vector3.UnitY;
             f.Game.World.Nearby = (position, radius) => new[] { 0, 10, 20, 60, 61 };
             f.Player.InAir = false; f.Game.Input.Pressed.Clear();
             f.Tick();
-            Assert.AreEqual(100, f.Game.Calls.Single(call => call.Name == "ped.damage").Arguments[1]);
+            Assert.AreEqual(profile.Combat.MeleePedDamage, f.Game.Calls.Single(call => call.Name == "ped.damage").Arguments[1]);
             Assert.HasCount(2, f.Game.Calls.Where(call => call.Name == "entity.force").ToArray());
-            CollectionAssert.AreEqual(new object[] { 60, Vector3.UnitX * 250 },
+            CollectionAssert.AreEqual(new object[] { 60, Vector3.UnitX * profile.Combat.MeleeForce },
                 f.Game.Calls.Single(call => call.Name == "entity.force" && (int)call.Arguments[0] == 60).Arguments);
-            CollectionAssert.AreEqual(new object[] { 61, Vector3.UnitY * 250 },
+            CollectionAssert.AreEqual(new object[] { 61, Vector3.UnitY * profile.Combat.MeleeForce },
                 f.Game.Calls.Single(call => call.Name == "entity.force" && (int)call.Arguments[0] == 61).Arguments);
             CollectionAssert.AreEquivalent(new[] { 60, 61 }, f.Game.Native.Calls
                 .Where(call => call.Hash == Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY)
@@ -99,7 +115,12 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
         [TestMethod]
         public void MeleeDamageRequiresAHitAndIsSuppressedInsideVehicle()
         {
-            var f = new PlayerSessionFixture();
+            var profile = new GameplayTuning();
+            profile.Combat.MeleeForce = 173;
+            profile.Combat.MeleePedDamage = 61;
+            profile.Ability.LandingSpeed = 137;
+            profile.Ability.StoredPowerFraction = 0.4f;
+            var f = new PlayerSessionFixture(tuning: profile);
             f.Game.AddEntity(60).DamagedBy.Add(10); f.Peds.Add(60);
             f.Game.AddEntity(61); f.Peds.Add(61);
             f.Game.World.Nearby = (position, radius) => new[] { 0, 10, 20, 60, 61 };
@@ -111,16 +132,21 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
             f.Player.InVehicle = false;
             f.Tick();
             var force = f.Game.Calls.Single(call => call.Name == "entity.force");
-            CollectionAssert.AreEqual(new object[] { 60, Vector3.UnitY * 250 }, force.Arguments);
-            CollectionAssert.AreEqual(new object[] { 60, 100 },
+            CollectionAssert.AreEqual(new object[] { 60, Vector3.UnitY * profile.Combat.MeleeForce }, force.Arguments);
+            CollectionAssert.AreEqual(new object[] { 60, profile.Combat.MeleePedDamage },
                 f.Game.Calls.Single(call => call.Name == "ped.damage").Arguments,
                 "Only the pedestrian reported hit receives full-power melee damage.");
         }
 
         [TestMethod]
-        public void HalfPowerMeleeDoesNotSpawnLightningAndOtherHeldWeaponSkipsMeleeForce()
+        public void ReducedPowerMeleeScalesConfiguredForceAndDamageAndOtherHeldWeaponSkipsIt()
         {
-            var f = new PlayerSessionFixture();
+            var profile = new GameplayTuning();
+            profile.Combat.MeleeForce = 173;
+            profile.Combat.MeleePedDamage = 61;
+            profile.Ability.LandingSpeed = 137;
+            profile.Ability.StoredPowerFraction = 0.4f;
+            var f = new PlayerSessionFixture(tuning: profile);
             f.Player.CurrentWeapon = WeaponHash.Pistol;
             f.Player.InMeleeCombat = true;
             f.Game.AddEntity(60).DamagedBy.Add(10); f.Peds.Add(60);
@@ -130,8 +156,8 @@ namespace GTAVMods.Tests.PlayerIntegration.PowerEnchantments
             f.Player.CurrentWeaponObject = 0;
             f.Tick();
             var force = f.Game.Calls.Single(call => call.Name == "entity.force");
-            Assert.AreEqual(Vector3.UnitY * 125, force.Arguments[1]);
-            Assert.AreEqual(50, f.Game.Calls.Single(call => call.Name == "ped.damage").Arguments[1]);
+            Assert.IsTrue((Vector3.UnitY * (profile.Combat.MeleeForce * profile.Ability.StoredPowerFraction) - (Vector3)force.Arguments[1]).Length() < .001f);
+            Assert.AreEqual((int)(profile.Combat.MeleePedDamage * profile.Ability.StoredPowerFraction), f.Game.Calls.Single(call => call.Name == "ped.damage").Arguments[1]);
             Assert.IsFalse(f.Game.Native.Calls.Any(call => call.Hash == Hash.START_PARTICLE_FX_NON_LOOPED_ON_ENTITY));
         }
     }

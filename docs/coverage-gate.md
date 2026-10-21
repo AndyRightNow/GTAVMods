@@ -66,6 +66,8 @@ scenario must protect an observable outcome; executing wiring or adapter calls
 alone does not qualify. The required review rules are in `AGENTS.md`. The
 standalone HTML catalogue contains mod tests only, grouped by player behavior
 and pure calculation; it excludes the script fixtures described below.
+The [tuning test review](tuning-test-review.md) describes the configurable
+mechanisms, assertion audit and focused fault checks added on 2026-10-21.
 
 The standalone checks in `scripts/tests/` exercise gate rejection paths and
 compile real portable-PDB fixtures. They run before the production build and do

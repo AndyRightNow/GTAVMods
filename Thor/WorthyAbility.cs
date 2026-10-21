@@ -13,31 +13,9 @@ namespace Thor
 {
     public abstract class WorthyAbility : IThorAbility
     {
-        protected static float FULL_POWER_LEVEL_MAX_RATIO = 100.0f;
-        protected static int FULL_POWER_MAX_HEALTH = 30000;
-        protected static float HALF_POWER_LEVEL_MAX_RATIO = 50.0f;
-        protected static float POWER_LEVEL_PRESENT_MAX_TIME_AFTER_LOSING_WEAPON = 10000.0f;
-        protected static float PLAYER_MOVEMENT_MULTIPLIER = 1.5f;
-        protected static float MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND = 0.2f;
-        protected static float CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_SOUND = 140.0f;
-        protected static float CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_WEAPON_ROTATION = 5.0f;
-        protected static float WEAPON_BEFORE_RETURN_TO_PED_WAIT_TIME = 700.0f;
-        protected static int CATCHING_WEAPON_ANIMATION_DURATION = 250;
-        protected static Bone WEAPON_HOLDING_HAND_ID = Bone.PHRightHand;
-        protected static float THROW_WEAPON_SPEED_MULTIPLIER = 100.0f;
-        protected static float AUTO_RETURN_TO_NEW_APPLIED_PED_POSITION_Z_AXIS = 1000.0f;
-        protected static float ANIMATION_ANGLE_RANGE_STEP = 45.0f;
-        protected static float RAY_CAST_MAX_DISTANCE = 100000.0f;
-        protected static float FLY_UPWARD_VELOCITY = 50.0f;
-        protected static float FLY_HORIZONTAL_VELOCITY_LEVEL_1 = 70.0f;
-        protected static float AIR_DASH_ATTACK_LANDING_VELOCITY = 200.0f;
-        protected static int FLY_WITH_THROWN_WEAPON_MAX_TIME = 2000;
-        protected static float FLY_SPRINT_VELOCITY_MULTIPLIER = 4.0f;
-        protected static float RANGE_TO_LOOK_FOR_CLOSEST_ENTITY = 20.0f;
-        protected static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
-        protected static int MAX_TARGET_COUNT = 15;
-        protected static Vector3 THROW_WEAPON_Z_AXIS_PRECISION_COMPENSATION = new Vector3(0.0f, 0.0f, 5.0f);
-        protected static int HEALTH_RECOVER_TIMER_INTERVAL = 200;
+        protected const float FULL_POWER_LEVEL_MAX_RATIO = 100.0f;
+        protected const Bone WEAPON_HOLDING_HAND_ID = Bone.PHRightHand;
+        protected readonly GameplayTuning tuning;
 
         protected readonly GameServices game;
         protected readonly NativeHelper effects;
@@ -71,9 +49,10 @@ namespace Thor
         protected int currentlyGrabbedEntity = 0;
 
         protected WorthyAbility(GameServices game, NativeHelper effects, Random random,
-            Mjolnir weapon, IAudioPlaybackFactory audio, IEventLog log)
+            Mjolnir weapon, IAudioPlaybackFactory audio, IEventLog log, GameplayTuning tuning)
         {
             this.game = game;
+            this.tuning = tuning;
             this.effects = effects;
             this.random = random;
             this.log = log;
@@ -91,8 +70,8 @@ namespace Thor
             isInAirDashAttack = false;
             pedFxTimer = null;
             hasSummonedThunder = false;
-            catchWeaponSoundPlayer = new AudioClip(AudioClip.ResourcePath("catch-hammer.wav"), 0.3f, audio, log);
-            weaponCloseToPlayerSoundPlayer = new AudioClip(AudioClip.ResourcePath("hammer-close-to-player.wav"), 0.3f, audio, log);
+            catchWeaponSoundPlayer = new AudioClip(AudioClip.ResourcePath("catch-hammer.wav"), tuning.Ability.CatchVolume, audio, log);
+            weaponCloseToPlayerSoundPlayer = new AudioClip(AudioClip.ResourcePath("hammer-close-to-player.wav"), tuning.Ability.ApproachVolume, audio, log);
             weaponJustFinishedAttackingTargetsTimestamp = null;
             powerLevel = 0.0f;
             lastLostWeaponTime = null;
@@ -254,7 +233,7 @@ namespace Thor
         {
             if (pedHealthRecoverTimer == null)
             {
-                pedHealthRecoverTimer = new ADModUtils.Utilities.Timer(HEALTH_RECOVER_TIMER_INTERVAL, RecoverHealth, () => game.Host.GameTime);
+                pedHealthRecoverTimer = new ADModUtils.Utilities.Timer(tuning.Ability.HealthRecoveryIntervalMs, RecoverHealth, () => game.Host.GameTime);
             }
 
             pedHealthRecoverTimer.OnTick();
@@ -264,25 +243,21 @@ namespace Thor
         {
             if (powerLevel > 0)
             {
-                game.Entities.SetHealth(attachedPed, game.Entities.Health(attachedPed) + (int)(game.Peds.MaxHealth(attachedPed) * powerLevel / FULL_POWER_LEVEL_MAX_RATIO / 10));
+                game.Entities.SetHealth(attachedPed, game.Entities.Health(attachedPed) + (int)(game.Peds.MaxHealth(attachedPed) * powerLevel / FULL_POWER_LEVEL_MAX_RATIO * tuning.Ability.HealthRecoveryFraction));
             }
         }
 
         protected void SummonThunder()
         {
-            game.Gameplay.LightningFlash();
-            game.Gameplay.LightningFlash();
-            game.Gameplay.LightningFlash();
-            game.Gameplay.LightningFlash();
+            for (int flash = 0; flash < tuning.Ability.ThunderFlashesPerBurst; flash++)
+                game.Gameplay.LightningFlash();
             PlayThunderFx();
             if (pedFxTimer == null)
             {
-                pedFxTimer = new ADModUtils.Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS, PlayThunderFx, () => game.Host.GameTime);
+                pedFxTimer = new ADModUtils.Utilities.Timer(tuning.Ability.ThunderIntervalMs, PlayThunderFx, () => game.Host.GameTime);
             }
-            game.Gameplay.LightningFlash();
-            game.Gameplay.LightningFlash();
-            game.Gameplay.LightningFlash();
-            game.Gameplay.LightningFlash();
+            for (int flash = 0; flash < tuning.Ability.ThunderFlashesPerBurst; flash++)
+                game.Gameplay.LightningFlash();
         }
 
         protected abstract bool ShouldPossessFullPower();
@@ -298,7 +273,7 @@ namespace Thor
             {
                 if (HasWeapon)
                 {
-                    powerLevel = HALF_POWER_LEVEL_MAX_RATIO;
+                    powerLevel = (FULL_POWER_LEVEL_MAX_RATIO * tuning.Ability.StoredPowerFraction);
                     lastLostWeaponTime = null;
                 }
                 else
@@ -306,35 +281,35 @@ namespace Thor
                     if (!lastLostWeaponTime.HasValue && powerLevel > 0)
                     {
                         // Begin the grace period only after the last power source
-                        // is lost, preserving half power rather than boosting it.
+                        // is lost, preserving stored power rather than boosting it.
                         lastLostWeaponTime = game.Host.GameTime;
                         powerAtWeaponLoss = powerLevel;
                     }
                     if (lastLostWeaponTime.HasValue)
                     {
                         int timePast = unchecked(game.Host.GameTime - lastLostWeaponTime.Value);
-                        if (timePast > POWER_LEVEL_PRESENT_MAX_TIME_AFTER_LOSING_WEAPON)
+                        if (timePast > tuning.Ability.PowerFadeMs)
                         {
                             powerLevel = 0.0f;
                             lastLostWeaponTime = null;
                         }
                         else
                         {
-                            powerLevel = powerAtWeaponLoss * (1 - timePast / POWER_LEVEL_PRESENT_MAX_TIME_AFTER_LOSING_WEAPON);
+                            powerLevel = powerAtWeaponLoss * (1 - timePast / tuning.Ability.PowerFadeMs);
                         }
                     }
                 }
             }
 
-            hasSummonedThunder = powerLevel > HALF_POWER_LEVEL_MAX_RATIO;
+            hasSummonedThunder = powerLevel > (FULL_POWER_LEVEL_MAX_RATIO * tuning.Ability.StoredPowerFraction);
         }
 
         protected void HandleMovement()
         {
-            var movementMultiplier = 1.0f + (PLAYER_MOVEMENT_MULTIPLIER - 1.0f) * powerLevel / FULL_POWER_LEVEL_MAX_RATIO;
+            var movementMultiplier = 1.0f + (tuning.Ability.MovementMultiplier - 1.0f) * powerLevel / FULL_POWER_LEVEL_MAX_RATIO;
             game.Gameplay.SetMoveRate(attachedPed, movementMultiplier);
             game.Gameplay.SetSwimRate(game.Host.PlayerHandle, movementMultiplier);
-            if (powerLevel >= HALF_POWER_LEVEL_MAX_RATIO)
+            if (powerLevel >= (FULL_POWER_LEVEL_MAX_RATIO * tuning.Ability.StoredPowerFraction))
             {
                 game.Gameplay.SuperJumpThisFrame(game.Host.PlayerHandle);
             }
@@ -348,7 +323,7 @@ namespace Thor
             effects.PlayThunderFx(attachedPed, Bone.SkelRightThigh);
             if (IsHoldingWeapon)
             {
-                effects.PlayThunderFx(game.Weapons.CurrentObject(attachedPed), 0.5f);
+                effects.PlayThunderFx(game.Weapons.CurrentObject(attachedPed), tuning.Ability.HeldLightningScale);
             }
         }
 
@@ -367,11 +342,11 @@ namespace Thor
                 if (!game.Entities.IsInAir(attachedPed))
                 {
                     isInAirDashAttack = false;
-                    ApplyForcesAndDamagesOnNearbyEntities(true, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, Vector3.Zero, powerLevel);
+                    ApplyForcesAndDamagesOnNearbyEntities(true, tuning.Ability.MeleeRange, Vector3.Zero, powerLevel);
                 }
                 else
                 {
-                    game.Entities.SetVelocity(attachedPed, new Vector3(0.0f, 0.0f, -AIR_DASH_ATTACK_LANDING_VELOCITY));
+                    game.Entities.SetVelocity(attachedPed, new Vector3(0.0f, 0.0f, -tuning.Ability.LandingSpeed));
                 }
             }
         }
@@ -393,7 +368,7 @@ namespace Thor
 
             if (!isWeaponAttackingTargets &&
                 weaponJustFinishedAttackingTargetsTimestamp.HasValue &&
-                unchecked(game.Host.GameTime - weaponJustFinishedAttackingTargetsTimestamp.Value) >= WEAPON_BEFORE_RETURN_TO_PED_WAIT_TIME)
+                unchecked(game.Host.GameTime - weaponJustFinishedAttackingTargetsTimestamp.Value) >= tuning.Ability.ReturnDelayMs)
             {
                 shouldWeaponReturnToPed = true;
                 weaponJustFinishedAttackingTargetsTimestamp = null;
@@ -431,7 +406,7 @@ namespace Thor
                 return;
             }
 
-            ApplyForcesAndDamagesOnNearbyEntities(false, RANGE_TO_LOOK_FOR_CLOSEST_ENTITY, game.Entities.ForwardVector(attachedPed), powerLevel);
+            ApplyForcesAndDamagesOnNearbyEntities(false, tuning.Ability.MeleeRange, game.Entities.ForwardVector(attachedPed), powerLevel);
         }
 
         protected void ApplyForcesAndDamagesOnNearbyEntities(bool applyToAll, float range, Vector3 forceDirection, float powerLevel)
@@ -467,20 +442,20 @@ namespace Thor
 
         protected void SetInvincible(bool toggle)
         {
-            var invincible = toggle && powerLevel > HALF_POWER_LEVEL_MAX_RATIO;
+            var invincible = toggle && powerLevel > (FULL_POWER_LEVEL_MAX_RATIO * tuning.Ability.StoredPowerFraction);
 
 
             if (invincible || !toggle)
             {
                 game.Peds.SetCanSufferCriticalHits(attachedPed, !toggle);
-                game.Peds.SetMaxHealth(attachedPed, FULL_POWER_MAX_HEALTH);
+                game.Peds.SetMaxHealth(attachedPed, tuning.Ability.FullPowerMaxHealth);
                 game.Peds.SetDiesOnLowHealth(attachedPed, !toggle);
             }
             else
             {
                 game.Peds.SetCanSufferCriticalHits(attachedPed, false);
                 game.Gameplay.SetCanBeDamaged(attachedPed, true);
-                game.Peds.SetMaxHealth(attachedPed, (int)(100 + FULL_POWER_MAX_HEALTH * powerLevel / FULL_POWER_LEVEL_MAX_RATIO));
+                game.Peds.SetMaxHealth(attachedPed, (int)(tuning.Ability.UnpoweredMaxHealth + tuning.Ability.FullPowerMaxHealth * powerLevel / FULL_POWER_LEVEL_MAX_RATIO));
                 game.Entities.SetInvincible(attachedPed, false);
                 game.Peds.SetDiesOnLowHealth(attachedPed, false);
                 game.Entities.SetBulletProof(attachedPed, false);
@@ -504,9 +479,9 @@ namespace Thor
             if (isFlyingWithThrownWeapon)
             {
                 int elapsed = unchecked(game.Host.GameTime - flyWithThrownWeaponStartTime);
-                if (elapsed < FLY_WITH_THROWN_WEAPON_MAX_TIME)
+                if (elapsed < tuning.Ability.ThrowFlightDurationMs)
                 {
-                    velocity += flyWithThrownWeaponDirection * FLY_HORIZONTAL_VELOCITY_LEVEL_1 * 2;
+                    velocity += flyWithThrownWeaponDirection * tuning.Ability.ForwardFlightSpeed * tuning.Ability.ThrowFlightSpeedMultiplier;
                 }
                 else
                 {
@@ -516,20 +491,20 @@ namespace Thor
 
             if (game.Input.IsKeyPressed(Keys.X))
             {
-                velocity.Z = FLY_UPWARD_VELOCITY;
+                velocity.Z = tuning.Ability.UpwardFlightSpeed;
             }
             if (game.Entities.IsInAir(attachedPed))
             {
                 if (game.Input.IsControlPressed(GTA.Control.ScriptPadUp) ||
                     game.Input.IsKeyPressed(Keys.W))
                 {
-                    velocity += game.Cameras.GameplayDirection * FLY_HORIZONTAL_VELOCITY_LEVEL_1;
+                    velocity += game.Cameras.GameplayDirection * tuning.Ability.ForwardFlightSpeed;
                 }
             }
             
             if (game.Input.IsControlPressed(GTA.Control.Sprint))
             {
-                velocity += Vector3.Multiply(velocity, FLY_SPRINT_VELOCITY_MULTIPLIER);
+                velocity += Vector3.Multiply(velocity, tuning.Ability.SprintExtraSpeedMultiplier);
             }
             if (isFlying)
             {
@@ -542,13 +517,13 @@ namespace Thor
             if (velocity.Length() > 0)
             {
                 isFlying = true;
-                game.Cameras.Shake(CameraShake.MediumExplosion, 0.01f);
+                game.Cameras.Shake(CameraShake.MediumExplosion, tuning.Ability.FlightShakeAmplitude);
                 SetAttachedPedToRagdoll();
                 HandleMidIsFlying(velocity, weaponHoldingHandCoord);
                 game.Entities.SetVelocity(game.Weapons.CurrentObject(attachedPed), game.Entities.Velocity(game.Weapons.CurrentObject(attachedPed)) + velocity);
                 game.Gameplay.DisablePainAudio(attachedPed, true);
 
-                var nearbyEntities = game.World.NearbyEntities(game.Entities.Position(attachedPed), 5.0f);
+                var nearbyEntities = game.World.NearbyEntities(game.Entities.Position(attachedPed), tuning.Ability.FlightContactRange);
                 foreach (var ent in nearbyEntities)
                 {
                     if (ent != 0 && ent != attachedPed && ent != game.Weapons.CurrentObject(attachedPed) &&
@@ -575,7 +550,7 @@ namespace Thor
         protected void SetAttachedPedToRagdoll()
         {
             game.Peds.SetCanRagdoll(attachedPed, true);
-            effects.Operations.SetPedToRagdoll(attachedPed, ADModUtils.RagdollType.WideLegs, 2, 1000);
+            effects.Operations.SetPedToRagdoll(attachedPed, ADModUtils.RagdollType.WideLegs, tuning.Ability.FlightRagdollMinMs, tuning.Ability.FlightRagdollMaxMs);
         }
 
         protected abstract bool IsSummonWeaponKeyPressed();
@@ -615,7 +590,7 @@ namespace Thor
 
             if (!game.Input.IsControlPressed(GTA.Control.VehicleSubDescend) && game.Input.IsControlPressed(GTA.Control.ThrowGrenade) && !isGrabbing)
             {
-                var nearbyEnts = game.World.NearbyEntities(game.Entities.Position(game.Host.PlayerPed), 1.5f);
+                var nearbyEnts = game.World.NearbyEntities(game.Entities.Position(game.Host.PlayerPed), tuning.Ability.GrabRange);
 
                 foreach (var ent in nearbyEnts)
                 {
@@ -672,11 +647,11 @@ namespace Thor
             {
                 isCollectingTargets = true;
                 var result = game.World.Raycast(
-                    game.Cameras.GameplayPosition + game.Cameras.GameplayDirection * 10.0f,
-                    game.Cameras.GameplayPosition + game.Cameras.GameplayDirection * RAY_CAST_MAX_DISTANCE,
+                    game.Cameras.GameplayPosition + game.Cameras.GameplayDirection * tuning.Ability.AimRayStartDistance,
+                    game.Cameras.GameplayPosition + game.Cameras.GameplayDirection * tuning.Ability.AimRayDistance,
                     ADModUtils.NativeHelper.IntersectAllObjects
                 );
-                if (targets.Count < MAX_TARGET_COUNT &&
+                if (targets.Count < tuning.Ability.MaxTargets &&
                     result.DidHit &&
                     IsValidHitEntity(result.Entity))
                 {
@@ -704,10 +679,10 @@ namespace Thor
             {
                 game.World.DrawMarker(
                     MarkerType.Cone,
-                    game.Entities.Position(target) + new Vector3(0.0f, 0.0f, 2.0f),
+                    game.Entities.Position(target) + tuning.Ability.TargetMarkerOffset,
                     game.Cameras.GameplayDirection,
                     Vector3.Zero,
-                    new Vector3(1.0f, 1.0f, 1.0f), Color.Red
+                    tuning.Ability.TargetMarkerScale, tuning.Ability.TargetMarkerColor
                 );
             }
         }
@@ -747,8 +722,8 @@ namespace Thor
             float distanceBetweenWeaponToPedHand = Math.Abs(fromWeaponToPedHand.Length());
             var weaponToPedHandRaycastResult = game.World.Capsule(
                 Weapon.Position, 
-                new Vector3(Weapon.Position.X, Weapon.Position.Y, Weapon.Position.Z + MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND), 
-                MINIMUM_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND,
+                new Vector3(Weapon.Position.X, Weapon.Position.Y, Weapon.Position.Z + tuning.Ability.CatchRadius),
+                tuning.Ability.CatchRadius,
                 IntersectFlags.Peds
             );
             int weaponToPedHandRaycastHitEntity = weaponToPedHandRaycastResult.Entity;
@@ -769,13 +744,13 @@ namespace Thor
                     catchDictName,
                     catchAnimName,
                     AnimationFlags.UpperBodyOnly | AnimationFlags.Secondary,
-                    CATCHING_WEAPON_ANIMATION_DURATION
+                    tuning.Ability.CatchAnimationMs
                 );
-                effects.PlayThunderFx(attachedPed, WEAPON_HOLDING_HAND_ID, 0.8f);
+                effects.PlayThunderFx(attachedPed, WEAPON_HOLDING_HAND_ID, tuning.Ability.CatchLightningScale);
                 game.Gameplay.GiveWeaponObjectToPed(Weapon.WeaponObject, attachedPed);
                 PlayCatchWeaponSound();
                 weaponCloseToPlayerSoundPlayer.Stop();
-                game.Cameras.Shake(CameraShake.LargeExplosion, 0.01f);
+                game.Cameras.Shake(CameraShake.LargeExplosion, tuning.Ability.CatchShakeAmplitude);
                 shouldWeaponReturnToPed = true;
                 weaponJustFinishedAttackingTargetsTimestamp = null;
                 log.Throttled("INFO", "hammer.catchRequested", 2000, "ped", attachedPed, "gameTime", game.Host.GameTime);
@@ -784,11 +759,11 @@ namespace Thor
                 SummonThunder();
                 return;
             }
-            else if (distanceBetweenWeaponToPedHand <= CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_WEAPON_ROTATION)
+            else if (distanceBetweenWeaponToPedHand <= tuning.Ability.UprightDistance)
             {
                 isWeaponCloseToPed = true;
             }
-            else if (distanceBetweenWeaponToPedHand <= CLOSE_DISTANCE_BETWEEN_WEAPON_AND_PED_HAND_FOR_SOUND)
+            else if (distanceBetweenWeaponToPedHand <= tuning.Ability.ApproachSoundDistance)
             {
                 PlayWeaponCloseSound();
             }
@@ -880,7 +855,7 @@ namespace Thor
             game.Weapons.Select(attachedPed, WeaponHash.Unarmed, true);
             if (hasInitialVelocity)
             {
-                var weaponVelocity = game.Cameras.GameplayDirection * THROW_WEAPON_SPEED_MULTIPLIER + THROW_WEAPON_Z_AXIS_PRECISION_COMPENSATION;
+                var weaponVelocity = game.Cameras.GameplayDirection * tuning.Ability.ThrowSpeed + tuning.Ability.ThrowVelocityOffset;
                 game.Entities.SetVelocity(Weapon.WeaponObject, game.Entities.Velocity(Weapon.WeaponObject) + weaponVelocity);
             }
             return true;
@@ -894,7 +869,7 @@ namespace Thor
                 new Vector2(game.Entities.ForwardVector(attachedPed).X, game.Entities.ForwardVector(attachedPed).Y),
                 new Vector2(directionToTurnTo.X, directionToTurnTo.Y)
             );
-            bool useDefaultAnimation = Math.Abs(angleBetweenPedForwardAndCamDirection) < ANIMATION_ANGLE_RANGE_STEP;
+            bool useDefaultAnimation = Math.Abs(angleBetweenPedForwardAndCamDirection) < tuning.Ability.DefaultThrowAngleDegrees;
             if (!useDefaultAnimation)
             {
                 randomAction = ADModUtils.Utilities.Random.PickOneIf(animationActionList, (AnimationActions aa) => effects.Operations.DoesAnimationActionHaveAngles((uint)aa), random);

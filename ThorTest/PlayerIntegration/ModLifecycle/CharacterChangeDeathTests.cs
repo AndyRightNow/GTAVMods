@@ -62,7 +62,9 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
         [TestMethod]
         public void ChangingCharactersDuringAnAerialAttackRestoresTheOldPlayerAndClearsTargetsAndMomentum()
         {
-            var s = new PlayerSessionFixture();
+            var tuning = new GameplayTuning();
+            tuning.Ability.FullPowerMaxHealth = 9317;
+            var s = new PlayerSessionFixture(tuning: tuning);
             s.Player.InAir = true;
             s.Game.Input.Keys.Add(Keys.W);
             s.Game.Input.Pressed.Add(Control.Attack);
@@ -77,7 +79,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             s.Game.ApplyWeaponObservation(11, WeaponHash.Hammer, 30);
             s.Frame(0);
             Assert.AreEqual(200, s.Game.Entity(10).MaxHealth);
-            Assert.AreEqual(30000, s.Game.Entity(11).MaxHealth);
+            Assert.AreEqual(tuning.Ability.FullPowerMaxHealth, s.Game.Entity(11).MaxHealth);
             Assert.AreEqual(Vector3.Zero, s.Game.Entity(11).Velocity);
             foreach (string flag in new[] { "airDash", "flying", "throwFlight", "attacking", "collecting", "hoverWhirl" })
                 StringAssert.Contains(s.State(), flag + "=False");
@@ -88,9 +90,11 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
         [TestMethod]
         public void RemovingThePlayerEntityReleasesHoverObjectsWithoutRestoringADeletedCharacter()
         {
-            var s = new PlayerSessionFixture();
+            var tuning = new GameplayTuning();
+            tuning.Ability.FullPowerMaxHealth = 7143;
+            var s = new PlayerSessionFixture(tuning: tuning);
             s.Frame(0);
-            Assert.AreEqual(30000, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.FullPowerMaxHealth, s.Player.MaxHealth);
             s.Game.Observations[10].Exists = false;
             s.Game.Calls.Clear();
             s.Frame(0);
@@ -109,13 +113,16 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
         [TestMethod]
         public void ChangingCharactersAndDyingRestoreThePreviousCharactersHealth()
         {
-            var s = new PlayerSessionFixture();
+            var tuning = new GameplayTuning();
+            tuning.Ability.FullPowerMaxHealth = 6579;
+            tuning.Ability.UnpoweredMaxHealth = 127;
+            var s = new PlayerSessionFixture(tuning: tuning);
             s.Frame();
-            Assert.AreEqual(30000, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.FullPowerMaxHealth, s.Player.MaxHealth);
             s.Game.Host.PlayerPed = 11;
             s.Frame();
             Assert.AreEqual(200, s.Game.Entity(10).MaxHealth);
-            Assert.AreEqual(100, s.Game.Entity(11).MaxHealth, "The new character has not picked up the hammer.");
+            Assert.AreEqual(tuning.Ability.UnpoweredMaxHealth, s.Game.Entity(11).MaxHealth, "The new character has not picked up the hammer.");
             Assert.IsFalse(s.Game.Observations[21].Exists);
             Assert.IsFalse(s.Game.Observations[22].Exists);
             s.Game.Entity(11).Dead = true;
@@ -126,7 +133,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             Assert.AreEqual(allocated, s.CreatedWeapons.Count);
             s.Game.Entity(11).Dead = false;
             s.Frame();
-            Assert.AreEqual(100, s.Player.MaxHealth);
+            Assert.AreEqual(tuning.Ability.UnpoweredMaxHealth, s.Player.MaxHealth);
         }
     }
 }

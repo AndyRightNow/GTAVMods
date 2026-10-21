@@ -168,14 +168,16 @@ namespace Thor
     {
         public static ThorController Create(GameServices game, IAudioPlaybackFactory audio, IEventLog log, Random random,
             Func<bool> consoleOpen, Func<long> droppedRecords, ThorSessionInfo session,
-            Func<long> milliseconds = null, Func<long> timestamp = null, long frequency = 0)
+            Func<long> milliseconds = null, Func<long> timestamp = null, long frequency = 0,
+            GameplayTuning tuning = null)
         {
-            var effects = new NativeHelper(game, log);
-            var pathfinder = new PathFinder.PathFinder(game, log);
-            var camera = new WeaponCamera(game, random, log);
-            var thunder = new Thunder(effects, random);
-            var weapon = new Mjolnir(game, effects, random, pathfinder, camera, thunder, audio, log);
-            var ability = new MjolnirWorthyAbility(game, effects, random, weapon, audio, log);
+            tuning = tuning ?? new GameplayTuning();
+            var effects = new NativeHelper(game, log, tuning);
+            var pathfinder = new PathFinder.PathFinder(game, log, tuning.Navigation);
+            var camera = new WeaponCamera(game, random, log, tuning.Camera);
+            var thunder = new Thunder(effects, random, tuning.Effects);
+            var weapon = new Mjolnir(game, effects, random, pathfinder, camera, thunder, audio, log, tuning);
+            var ability = new MjolnirWorthyAbility(game, effects, random, weapon, audio, log, tuning);
             var clock = Stopwatch.StartNew();
             var diagnostics = new GameplayDiagnostics(game, log, milliseconds ?? (() => clock.ElapsedMilliseconds), droppedRecords);
             return new ThorController(game, ability, diagnostics, log, pathfinder.Dispose,

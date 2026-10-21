@@ -64,9 +64,25 @@ namespace GTAVMods.Tests.PureFunctions.ParsingAndFormatting
         [TestMethod]
         public void MissingDataAndUnavailableTextRemainValidJsonAndLongTextIsBounded()
         {
+            var longText = "diagnostic prefix:" + new string('x', 40000) + ":tail";
+            var muchLongerText = "diagnostic prefix:" + new string('z', 160000) + ":tail";
+            const string ordinaryText = "Hammer recalled; player=10, weapon=20.";
             var record = LogJson.Parse(JsonLogFormat.Record(new Dictionary<string, object> { { "level", null } },
-                new Dictionary<string, object> { { "text", new string('x', 40000) }, { "unavailable", new UnavailableDiagnostic() } }));
-            Assert.AreEqual(new string('x', 32768), record["data"]["text"].InnerText);
+                new Dictionary<string, object> { { "text", longText }, { "ordinary", ordinaryText },
+                    { "unavailable", new UnavailableDiagnostic() } }));
+            var retainedText = record["data"]["text"].InnerText;
+            Assert.IsTrue(retainedText.StartsWith("diagnostic prefix:", StringComparison.Ordinal));
+            Assert.IsTrue(retainedText.Length < longText.Length, "Oversized diagnostic text must be bounded.");
+            Assert.IsTrue(longText.StartsWith(retainedText, StringComparison.Ordinal),
+                "Bounding text must retain an intact prefix rather than corrupt or reorder it.");
+            var largerRecord = LogJson.Parse(JsonLogFormat.Record(new Dictionary<string, object>(),
+                new Dictionary<string, object> { { "text", muchLongerText } }));
+            var retainedLargerText = largerRecord["data"]["text"].InnerText;
+            Assert.AreEqual(retainedText.Length, retainedLargerText.Length,
+                "Increasing oversized input must not increase the bounded record text.");
+            Assert.IsTrue(muchLongerText.StartsWith(retainedLargerText, StringComparison.Ordinal));
+            Assert.AreEqual(ordinaryText, record["data"]["ordinary"].InnerText,
+                "Ordinary diagnostic messages must remain complete.");
             Assert.AreEqual("null", record["level"].GetAttribute("type"));
             Assert.AreEqual("null", record["data"]["unavailable"].GetAttribute("type"));
             var absent = LogJson.Parse(JsonLogFormat.Record(new Dictionary<string, object>(), null));

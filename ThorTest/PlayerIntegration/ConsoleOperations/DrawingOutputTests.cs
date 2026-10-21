@@ -43,8 +43,13 @@ namespace GTAVMods.Tests.PlayerIntegration.ConsoleOperations
                     && t.Color == Color.FromArgb(ConsoleSettings.TextAlpha, Color.LightGray)));
                 scene.Evaluate("CONSOLE.Debug = false; CONSOLE.ClearLines(); CONSOLE.PrintLine(new string('x', 200))");
                 var chunks = scene.Platform.Text.Take(3).ToArray();
+                // GTA's text-component limit is 99 characters. The reported screen width
+                // of each chunk is .01 of the 1200-pixel screen, independent of padding.
                 CollectionAssert.AreEqual(new[] { 99, 99, 12 }, chunks.Select(t => t.Text.Length).ToArray());
-                CollectionAssert.AreEqual(new[] { 5, 17, 29 }, chunks.Select(t => t.Position.X).ToArray());
+                Assert.AreEqual("12:34:56: " + new string('x', 200), string.Concat(chunks.Select(t => t.Text)));
+                Assert.AreEqual(12, chunks[1].Position.X - chunks[0].Position.X);
+                Assert.AreEqual(12, chunks[2].Position.X - chunks[1].Position.X);
+                Assert.IsTrue(chunks.All(t => t.Position.Y == chunks[0].Position.Y));
                 scene.Evaluate("CONSOLE.ClearLines(); CONSOLE.RemoveLastLine(); CONSOLE.PrintLine(\"temporary\"); CONSOLE.RemoveLastLine(); CONSOLE.PrintLine(new string('x', 89))");
                 Assert.AreEqual(99, scene.Platform.Text.First().Text.Length);
                 Assert.IsFalse(scene.Shows("temporary"));
@@ -123,7 +128,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ConsoleOperations
                 // Geometry draws during expression execution, before the next console frame.
                 CollectionAssert.AreEquivalent(new[] { "000", "001", "010", "011", "100", "101", "110", "111" },
                     labels.Select(t => t.Text).ToArray());
-                Assert.IsTrue(labels.All(t => t.Position == new Point(300, 450) && t.Scale == .15f));
+                Assert.IsTrue(labels.All(t => t.Position == new Point(300, 450)));
                 Assert.AreEqual(new Vector3(9, 18, 33), fixture.Outputs.Projection);
             }
         }

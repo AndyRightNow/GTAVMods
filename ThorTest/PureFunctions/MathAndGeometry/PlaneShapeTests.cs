@@ -32,6 +32,8 @@ namespace GTAVMods.Tests.PureFunctions.MathAndGeometry
             var corners = Rectangle3D.CreateCorners(center, new Vector3(-1,-2,-3), new Vector3(1,2,3));
             var original = corners.ToDictionary(c => c.Key, c => c.Value);
             var rotated = Rectangle3D.RotateCorners(corners, center, new Quaternion(0,0,(float)Math.Sqrt(.5),(float)Math.Sqrt(.5)));
+            CollectionAssert.AreEquivalent(original.Keys.ToArray(), rotated.Keys.ToArray(),
+                "Rotation must retain every corner, including its label.");
             foreach (var corner in rotated) {
                 var prior = original[corner.Key] - center;
                 var expected = center + new Vector3(-prior.Y, prior.X, prior.Z);
@@ -50,16 +52,19 @@ namespace GTAVMods.Tests.PureFunctions.MathAndGeometry
             Assert.AreEqual(1f, plane.XAxis.Length(), 0.00001f);
             Assert.AreEqual(1f, plane.YAxis.Length(), 0.00001f);
             Assert.AreEqual(0f, Vector3.Dot(plane.XAxis, plane.YAxis), 0.00001f);
-            float rootTwo = (float)System.Math.Sqrt(2);
-            var coordinates = plane.GetPlaneCoord(new Vector3(10 + 3 * rootTwo, 20 - rootTwo, 80));
+            Assert.AreEqual(0f, Vector3.Dot(plane.Normal, plane.XAxis), 0.00001f);
+            Assert.AreEqual(0f, Vector3.Dot(plane.Normal, plane.YAxis), 0.00001f);
+            // A plane may choose any orthonormal basis. Coordinates are measured in that basis,
+            // while projection back to world space must remove only normal displacement.
+            var coordinates = plane.GetPlaneCoord(center + 2 * plane.XAxis - 4 * plane.YAxis + new Vector3(0, 0, 50));
             Assert.AreEqual(2f, coordinates.X, 0.00001f);
             Assert.AreEqual(-4f, coordinates.Y, 0.00001f);
-            var negative = plane.GetPlaneCoord(new Vector3(10 - 3 * rootTwo, 20 + rootTwo, -20));
+            var negative = plane.GetPlaneCoord(center - 2 * plane.XAxis + 4 * plane.YAxis - new Vector3(0, 0, 50));
             Assert.AreEqual(-2f, negative.X, 0.00001f);
             Assert.AreEqual(4f, negative.Y, 0.00001f);
-            var world = plane.GetWorldCoord(new Vector2(-2, -2));
-            Assert.AreEqual(10f, world.X, 0.00001f);
-            Assert.AreEqual(20f - (float)(2 * System.Math.Sqrt(2)), world.Y, 0.00001f);
+            var world = plane.GetWorldCoord(plane.GetPlaneCoord(new Vector3(13, 19, 80)));
+            Assert.AreEqual(13f, world.X, 0.00001f);
+            Assert.AreEqual(19f, world.Y, 0.00001f);
             Assert.AreEqual(30f, world.Z, 0.00001f);
             Assert.AreEqual(Vector2.Zero, plane.GetPlaneCoord(center));
             Assert.AreEqual(0f, Vector3.Dot(world - center, plane.Normal), 0.00001f,

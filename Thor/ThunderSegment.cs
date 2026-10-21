@@ -5,14 +5,16 @@ namespace Thor
     public class ThunderSegment
     {
         private readonly ADModUtils.NativeHelper effects;
+        private readonly EffectsTuning tuning;
         private Vector3 start;
         private Vector3 end;
         private static string THUNDER_FX_SET_NAME = "core";
         private static string THUNDER_FX_NAME = "muz_railgun";
 
-        public ThunderSegment(Vector3 start, Vector3 end, ADModUtils.NativeHelper effects)
+        public ThunderSegment(Vector3 start, Vector3 end, ADModUtils.NativeHelper effects, EffectsTuning tuning)
         {
             this.effects = effects;
+            this.tuning = tuning;
             this.start = start;
             this.end = end;
         }
@@ -20,7 +22,7 @@ namespace Thor
         public void Render()
         {
             var len = start.DistanceTo(end);
-            var scale = len * 0.4f;
+            var scale = len * tuning.TrailParticleScalePerMetre;
             var middle = (start + end) / 2;
 
             var startToEnd = ADModUtils.Utilities.Math.DirectionToRotation(end - start);

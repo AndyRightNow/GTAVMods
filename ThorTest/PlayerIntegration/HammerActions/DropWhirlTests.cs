@@ -24,11 +24,12 @@ namespace GTAVMods.Tests.PlayerIntegration.HammerActions
             const int frameMs = 16;
             var s = new PlayerSessionFixture();
             s.Frame(frameMs);
+            int fullHealth = s.Player.MaxHealth;
             s.Game.Ropes.Creations.Enqueue(70);
             s.Frame(frameMs, Keys.Z);
             Assert.IsTrue(s.Game.Ropes.Ropes.Contains(70));
             s.Frame(frameMs, Keys.Z);
-            Assert.AreEqual(30000, s.Game.Entity(10).MaxHealth);
+            Assert.AreEqual(fullHealth, s.Game.Entity(10).MaxHealth);
             Assert.IsTrue(s.Audio.Clips["whirling-hammer.wav"].IsPlaying);
             s.Chord(Keys.F);
             Assert.IsEmpty(s.Game.Ropes.Ropes);
@@ -54,7 +55,10 @@ namespace GTAVMods.Tests.PlayerIntegration.HammerActions
         [DataRow(Keys.Z, false)]
         public void FailedDropLeavesHeldHammerOwnedAndRetryableWithoutStartingThrowOrRope(Keys action, bool targeted)
         {
-            var s = new PlayerSessionFixture();
+            var profile = new GameplayTuning();
+            profile.Ability.ThrowSpeed = 79;
+            profile.Ability.ThrowVelocityOffset = new Vector3(0.3f, -0.7f, 1.1f);
+            var s = new PlayerSessionFixture(tuning: profile);
             s.Frame();
             s.Frame(16, Keys.Y);
             s.Game.ObserveNextFrame(game => game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20));
@@ -88,7 +92,7 @@ namespace GTAVMods.Tests.PlayerIntegration.HammerActions
             Assert.IsTrue(s.Game.Entity(20).Exists);
             Assert.AreEqual(targeted, s.State().Contains("attacking=True"));
             Assert.AreEqual(action == Keys.Z, s.State().Contains("rope=True"));
-            Assert.AreEqual(action == Keys.T && !targeted ? new Vector3(0, 100, 5) : Vector3.Zero,
+            Assert.AreEqual(action == Keys.T && !targeted ? Vector3.UnitY * profile.Ability.ThrowSpeed + profile.Ability.ThrowVelocityOffset : Vector3.Zero,
                 s.Game.Entity(20).Velocity);
             s.Controller.Abort();
             s.AssertNoErrors();

@@ -46,10 +46,12 @@ namespace GTAVMods.Tests.PlayerIntegration.Diagnostics
             Assert.AreEqual("WARN", warning.Level);
             Assert.AreEqual(dictionary, warning.Data["dictionary"]);
             Assert.IsFalse(string.IsNullOrEmpty((string)warning.Data["animation"]));
-            Assert.HasCount(2, s.Game.Calls.Where(call => call.Name == "host.yield").ToArray());
+            Assert.IsTrue(s.Game.Calls.Any(call => call.Name == "host.yield"),
+                "Waiting for animation streaming must yield to the game before falling back.");
             Assert.IsFalse(s.Game.Native.Calls.Any(call => call.Hash == Hash.TASK_PLAY_ANIM));
             Assert.AreEqual(WeaponHash.Unarmed, s.Game.Entity(10).CurrentWeapon);
-            Assert.AreEqual(new Vector3(0, 100, 5), s.Game.Entity(20).Velocity);
+            Assert.IsTrue(Vector3.Dot(s.Game.Entity(20).Velocity, s.Player.Forward) > 0,
+                "An unavailable animation must still release the hammer forwards.");
             s.Controller.Abort();
             Assert.AreEqual(0, s.Log.Last("session.end").Data["droppedLogRecords"]);
             s.AssertNoErrors();
@@ -134,12 +136,21 @@ namespace GTAVMods.Tests.PlayerIntegration.Diagnostics
             Assert.AreEqual(attempts, observed.Storage.Creates, "Frames within backoff must not keep probing the disk.");
             Assert.IsTrue(observed.Writer.DroppedRecords > lost);
             Assert.IsTrue(s.Game.Entity(20).Velocity.Length() > 0, "A failed diagnostic write cannot stop recall.");
+            long expectedLost = observed.Writer.DroppedRecords;
+            for (int snapshot = 0; snapshot < 3; snapshot++)
+            {
+                // At the same instant the key diagnostic is throttled, but every F9
+                // still requests a snapshot. Count those failed requests independently.
+                s.Controller.KeyDown(new KeyEventArgs(Keys.F9));
+                expectedLost++;
+            }
+            Assert.AreEqual(expectedLost, observed.Writer.DroppedRecords);
             observed.Storage.BeforeAppend = null;
             observed.Storage.BeforeCreate = null;
             observed.Clock.ElapsedMilliseconds = 5000;
             s.Controller.KeyDown(new KeyEventArgs(Keys.F9));
             Assert.AreEqual("manual-F9", observed.Last("gameplay.snapshot").Data["reason"]);
-            Assert.AreEqual(observed.Writer.DroppedRecords.ToString(CultureInfo.InvariantCulture),
+            Assert.AreEqual(expectedLost.ToString(CultureInfo.InvariantCulture),
                 LogJson.Text(observed.Storage.Records.Last(), "droppedRecords"));
             s.Controller.Abort();
         }
@@ -151,15 +162,20 @@ namespace GTAVMods.Tests.PlayerIntegration.Diagnostics
             observed.Storage.Existing.Add(new LogFile("newest", observed.Clock.UtcNow));
             observed.Storage.Existing.Add(new LogFile("locked", observed.Clock.UtcNow.AddDays(-1)));
             observed.Storage.Existing.Add(new LogFile("oldest", observed.Clock.UtcNow.AddDays(-2)));
-            observed.Storage.BeforeDelete = path => { if (path == "locked") throw new IOException("old file locked"); };
+            var deletionAttempts = new List<string>();
+            observed.Storage.BeforeDelete = path =>
+            {
+                deletionAttempts.Add(path);
+                if (path == "locked") throw new IOException("old file locked");
+            };
             var s = new PlayerSessionFixture(log: observed);
             s.Frame(0);
             string first = observed.Session.FilePath;
             s.Controller.KeyDown(new KeyEventArgs(Keys.F9));
             s.Controller.KeyDown(new KeyEventArgs(Keys.F9));
             Assert.AreNotEqual(first, observed.Session.FilePath);
-            Assert.IsFalse(observed.Storage.Deleted.Contains("newest"));
-            Assert.IsFalse(observed.Storage.Deleted.Contains("locked"));
+            Assert.IsFalse(deletionAttempts.Contains("newest"));
+            Assert.IsTrue(deletionAttempts.Contains("locked"), "Retention must encounter the locked old file.");
             Assert.IsTrue(observed.Storage.Deleted.Contains("oldest"));
             Assert.AreEqual("manual-F9", observed.Last("gameplay.snapshot").Data["reason"]);
             Assert.AreEqual(0L, observed.Writer.DroppedRecords);

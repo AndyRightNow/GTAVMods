@@ -10,21 +10,18 @@ namespace Thor
 {
     public class Mjolnir : GodlyWeapon
     {
-        private static float HAMMER_ROPE_LENGTH = 0.19f;
         private int hammerRope;
         private int hammerRopeAttachedPed;
-        private Bone hammerRopeAttachedPedBoneId;
         private int hammerRopeAttachedIntermediateEnt;
         private readonly AudioClip hammerWhirlingSoundPlayer;
-        private Vector3 AttachedIntermediateEntOffset = Vector3.UnitX * 0.05f;
         private bool isWhirling;
 
         public Mjolnir(GameServices game, NativeHelper effects, Random random,
             PathFinder.PathFinder pathfinder, WeaponCamera camera, Thunder thunder,
-            IAudioPlaybackFactory audio, IEventLog log)
-            : base(WeaponHash.Hammer, game, effects, random, pathfinder, camera, thunder, log)
+            IAudioPlaybackFactory audio, IEventLog log, GameplayTuning tuning)
+            : base(WeaponHash.Hammer, game, effects, random, pathfinder, camera, thunder, log, tuning)
         {
-            hammerWhirlingSoundPlayer = new AudioClip(AudioClip.ResourcePath("whirling-hammer.wav"), 1, audio, log);
+            hammerWhirlingSoundPlayer = new AudioClip(AudioClip.ResourcePath("whirling-hammer.wav"), tuning.Hammer.WhirlVolume, audio, log);
             isWhirling = false;
             throwActions = new List<AnimationActions>
                 {
@@ -51,8 +48,6 @@ namespace Thor
             }
             if (hammerRopeAttachedPed != 0)
             {
-                //hammerRope.Length = 0;
-                //hammerRope.Length = HAMMER_ROPE_LENGTH;
                 return;
             }
             HandleWeaponAvailability();
@@ -71,7 +66,7 @@ namespace Thor
                 Utilities.Math.DirectionToQuaternion(Vector3.UnitZ, LocalForwardVector)
             );
 
-            game.Entities.SetQuaternion(weaponObject, Quaternion.Lerp(prevQua, targetQua, HAMMER_ROTATION_UPWARD_LERP_RATIO));
+            game.Entities.SetQuaternion(weaponObject, Quaternion.Lerp(prevQua, targetQua, tuning.Hammer.RotationBlend));
         }
 
         private void HandleWeaponInAirRotation()
@@ -91,7 +86,7 @@ namespace Thor
 
         protected Vector3 GetHammerRopeAttachPosition(int weaponObject)
         {
-            return game.Entities.Position(weaponObject) + new Vector3(0.0f, 0.0f, -0.15f);
+            return game.Entities.Position(weaponObject) + tuning.Hammer.RopeAttachOffset;
         }
 
         public void Whirl(ADModUtils.Plane hammerWhirlingPlane, bool physically = true, int weaponObj = 0)
@@ -113,10 +108,10 @@ namespace Thor
 
             if (physically)
             {
-                var velocity = (hammerPosProjOnPlane - game.Entities.Position(weaponObj)) * 1.0f;
+                var velocity = (hammerPosProjOnPlane - game.Entities.Position(weaponObj)) * tuning.Hammer.PhysicalWhirlPlaneCorrection;
 
-                velocity += ((perpHammerPosProjOnPlaneWorldPoint - planeCenter) * 1500.0f);
-                velocity += ((game.Entities.Position(weaponObj) - planeCenter) * 500.0f);
+                velocity += ((perpHammerPosProjOnPlaneWorldPoint - planeCenter) * tuning.Hammer.PhysicalWhirlTangentSpeed);
+                velocity += ((game.Entities.Position(weaponObj) - planeCenter) * tuning.Hammer.PhysicalWhirlOutwardSpeed);
                 game.Entities.SetVelocity(weaponObj, velocity);
 
                 RotateToDirection(weaponObj, (game.Entities.Position(weaponObj) - planeCenter).Normalized);
@@ -126,7 +121,7 @@ namespace Thor
             {
                 var nextHammerPos = planeCenter + (hammerPosProjOnPlane - planeCenter).Normalized;
                 var perpHammerPosProjOnPlaneWorldVec = (perpHammerPosProjOnPlaneWorldPoint - hammerPosProjOnPlane).Normalized;
-                nextHammerPos = planeCenter + (nextHammerPos + perpHammerPosProjOnPlaneWorldVec - planeCenter).Normalized * 0.3f;
+                nextHammerPos = planeCenter + (nextHammerPos + perpHammerPosProjOnPlaneWorldVec - planeCenter).Normalized * tuning.Hammer.VisualWhirlRadius;
                 game.Entities.SetPosition(weaponObj, nextHammerPos);
                 RotateToDirection(weaponObj, (nextHammerPos - planeCenter).Normalized);
             }
@@ -139,7 +134,7 @@ namespace Thor
             var planeCenter = game.Peds.BonePosition(ped, boneId);
 
             // DetachRope has released both previous owned resources.
-            hammerRope = game.Ropes.Create(RopeType.ThickRope, planeCenter, Vector3.Zero, HAMMER_ROPE_LENGTH, 0.0f, false);
+            hammerRope = game.Ropes.Create(RopeType.ThickRope, planeCenter, Vector3.Zero, tuning.Hammer.RopeLength, 0.0f, false);
             if (hammerRope == 0)
                 throw new InvalidOperationException("Could not create the hammer rope.");
             hammerRopeAttachedIntermediateEnt = effects.Operations.CreateWeaponObject(WeaponHash.Grenade, 1, planeCenter);
@@ -157,14 +152,12 @@ namespace Thor
             // Reset weapon rotation so that the attach position is normalized
             game.Entities.SetRotation(weaponObject, Vector3.Zero);
 
-            game.Ropes.Connect(hammerRope, hammerRopeAttachedIntermediateEnt, game.Entities.Position(hammerRopeAttachedIntermediateEnt), weaponObject, hammerAttachPos, HAMMER_ROPE_LENGTH);
+            game.Ropes.Connect(hammerRope, hammerRopeAttachedIntermediateEnt, game.Entities.Position(hammerRopeAttachedIntermediateEnt), weaponObject, hammerAttachPos, tuning.Hammer.RopeLength);
             game.Ropes.ActivatePhysics(hammerRope);
 
             game.Entities.SetNoCollision(weaponObject, ped, true);
             hammerRopeAttachedPed = ped;
-            hammerRopeAttachedPedBoneId = boneId;
 
-            //effects.Operations.SetObjectPhysicsParams(weaponObject, 1000000.0f);
         }
 
         public void DetachRope()
@@ -204,7 +197,7 @@ namespace Thor
         private void RestoreHammerPhysics()
         {
             if (weaponObject != 0 && game.Entities.Exists(weaponObject))
-                effects.Operations.SetObjectPhysicsParams(weaponObject, WEAPON_MASS);
+                effects.Operations.SetObjectPhysicsParams(weaponObject, tuning.Hammer.Mass);
         }
 
         public void StopEffects()

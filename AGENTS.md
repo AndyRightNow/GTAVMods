@@ -117,6 +117,14 @@ into the game or install assemblies into the GAC.
   Consolidate redundant coverage while preserving useful assertions. Avoid
   unrelated omnibus scenarios, tautologies, private implementation assertions,
   and tests of a fake's own setup with no meaningful contract guarantee.
+- Keep manually calibrated gameplay settings under `Thor/Tuning`, grouped by
+  feature and supplied through `GameplayTuning` when composing a session. Test
+  the mechanism with deliberately different supplied settings and independent
+  player outcomes: honoring a delay, crossing a threshold, scaling damage or
+  preserving spatial relationships. Do not copy the default animation timing,
+  camera, movement or effect tables into expected-value matrices. Those defaults
+  require in-game tuning; an exact number is an appropriate assertion only when
+  it follows from the scenario's input or an independent engine/math contract.
 - Maintain the strict 100% line and branch gate without weakening assertions or
   adding coverage exclusions to accommodate test changes. Review test quality
   separately from coverage; a covered line does not establish correct behavior.
