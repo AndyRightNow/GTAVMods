@@ -19,7 +19,6 @@ namespace GTAVMods.Game
         bool IsVehicle(int entity);
         Vector3 Position(int entity);
         float Speed(int entity); // metres per second
-        void SetVelocity(int entity, Vector3 metresPerSecond);
         void ClearLastDamage(int entity);
         void SetFreezeWhileWaitingForCollision(int entity, bool freeze);
         void ActivatePhysics(int entity);
@@ -34,7 +33,6 @@ namespace GTAVMods.Game
         /// <summary>Creates a weapon object from an already loaded asset.</summary>
         /// <returns>Zero on creation failure; otherwise a handle the caller must release.</returns>
         int CreateWeaponObject(WeaponHash weapon, int ammo, Vector3 position, bool showWorldModel, float scale);
-        void SetWeaponVisible(int ped, bool visible);
         void GiveWeaponObjectToPed(int weaponObject, int ped);
         /// <summary>Drops the ped's current weapon and returns its object handle.</summary>
         /// <remarks>
@@ -69,7 +67,6 @@ namespace GTAVMods.Game
         bool IsPlaying(int entity, string dictionary, string animation);
         void Play(int ped, string dictionary, string animation, AnimationFlags flags,
             int durationMilliseconds, float blendInSpeed, float blendOutSpeed, float playbackRate);
-        void Stop(int ped, string dictionary, string animation, float blendOutSpeed);
     }
 
     /// <summary>Particle asset observations and effect commands.</summary>
@@ -77,8 +74,7 @@ namespace GTAVMods.Game
     /// RequestAsset does not imply readiness. UseAsset selects the loaded asset for the next start call
     /// on the current script thread; callers own the request/check/select/start sequence and any timeout.
     /// Positions and offsets use metres, rotations use degrees, and scale is unitless.
-    /// Non-looped starts only issue requests. Looped starts return zero on failure; callers own nonzero
-    /// handles and release them with StopLooped. Native errors propagate without retry or suppression.
+    /// Starts only issue requests. Native errors propagate without retry or suppression.
     /// </remarks>
     public interface IParticleAccess
     {
@@ -88,11 +84,6 @@ namespace GTAVMods.Game
         void PlayOnEntity(string effect, int entity, Vector3 offset, Vector3 rotationDegrees, float scale);
         void PlayOnPedBone(string effect, int ped, Bone bone, Vector3 offset, Vector3 rotationDegrees, float scale);
         void PlayAt(string effect, Vector3 position, Vector3 rotationDegrees, float scale);
-        int StartLoopedOnPedBone(string effect, int ped, Bone bone, Vector3 offset, Vector3 rotationDegrees, float scale);
-        int StartLoopedAt(string effect, Vector3 position, Vector3 rotationDegrees, float scale);
-        void StopLooped(int effect);
-        /// <summary>Converts RGB bytes to native 0..1 floats; does not change the effect's alpha.</summary>
-        void SetLoopedColor(int effect, Color color);
     }
 
     /// <summary>World-space drawing commands for the current frame.</summary>

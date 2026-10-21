@@ -11,10 +11,11 @@ namespace GTAVMods.Game
     // The coverage boundary manifest approves each method individually.
     public static class GtaRuntime
     {
-        public static GameServices Create() => new GameServices(
-            new GtaHost(), new GtaInput(), new GtaEntities(), new GtaPeds(),
-            new GtaWeapons(), new GtaWorld(), new GtaCameras(), new GtaRopes(),
-            new NativeInvoker(new GtaNative()), new NativeOutputs(new GtaOutputs()));
+        public static GameServices Create(IGameHost host, IGameInput input, IEntityAccess entities,
+            IPedAccess peds, IWeaponAccess weapons, IWorldAccess world, ICameraAccess cameras, IRopeAccess ropes,
+            IRawNative native, IArgumentMarshaller marshaller, IRawNativeOutputs outputs)
+            => new GameServices(host, input, entities, peds, weapons, world, cameras, ropes,
+                new NativeInvoker(native, marshaller), new NativeOutputs(outputs));
     }
 
     public sealed class GtaHost : IGameHost
@@ -41,7 +42,6 @@ namespace GTAVMods.Game
     public sealed class GtaEntities : IEntityAccess
     {
         private readonly HandleLifetime lifetime;
-        public GtaEntities() : this(new GtaEntityLifetimeBindings()) { }
         public GtaEntities(IEntityLifetimeBindings bindings) { lifetime = new HandleLifetime(bindings, "Entity"); }
         public bool Exists(int entity) => lifetime.Exists(entity);
         [GamePrimitive] public bool IsDead(int entity) => Entity.FromHandle(entity).IsDead;
@@ -126,7 +126,6 @@ namespace GTAVMods.Game
     public sealed class GtaWorld : IWorldAccess
     {
         private readonly IWorldQueryBindings queries;
-        public GtaWorld() : this(new GtaWorldQueries()) { }
         public GtaWorld(IWorldQueryBindings queries) { this.queries = queries; }
         [GamePrimitive] public int[] NearbyEntities(Vector3 position, float radius) => GameHandles.OfMany(World.GetNearbyEntities(position, radius));
         public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0)
@@ -152,7 +151,6 @@ namespace GTAVMods.Game
     public sealed class GtaCameras : ICameraAccess
     {
         private readonly HandleLifetime lifetime;
-        public GtaCameras() : this(new GtaCameraLifetimeBindings()) { }
         public GtaCameras(ICameraLifetimeBindings bindings) { lifetime = new HandleLifetime(bindings, "Camera"); }
         public Vector3 GameplayPosition { [GamePrimitive] get => GameplayCamera.Position; }
         public Vector3 GameplayDirection { [GamePrimitive] get => GameplayCamera.Direction; }
@@ -174,7 +172,6 @@ namespace GTAVMods.Game
     public sealed class GtaRopes : IRopeAccess
     {
         private readonly HandleLifetime lifetime;
-        public GtaRopes() : this(new GtaRopeLifetimeBindings()) { }
         public GtaRopes(IRopeLifetimeBindings bindings) { lifetime = new HandleLifetime(bindings, "Rope"); }
         [GamePrimitive] public int Create(RopeType type, Vector3 position, Vector3 rotation, float length, float minLength, bool breakable)
             => GameHandles.Of(World.AddRope(type, position, rotation, length, minLength, breakable));

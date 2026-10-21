@@ -13,6 +13,7 @@
     <ThresholdStat>minimum</ThresholdStat>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="..\Thor\resources\*.wav" Link="Thor\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <PackageReference Include="coverlet.msbuild" Version="10.1.0" PrivateAssets="all" />

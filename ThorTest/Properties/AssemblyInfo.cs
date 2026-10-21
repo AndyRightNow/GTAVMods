@@ -1,6 +1,10 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+// Console registration and culture/clock scenarios share process-wide state.
+[assembly: DoNotParallelize]
 
 [assembly: AssemblyTitle("ThorTest")]
 [assembly: AssemblyDescription("")]

@@ -7,7 +7,6 @@ namespace ADModUtils
     {
         bool IsPlaying { get; }
         double DurationSeconds { get; }
-        event EventHandler Stopped;
         void Rewind();
         void Play();
         void Stop();
@@ -25,7 +24,7 @@ namespace ADModUtils
         public NAudioPlaybackFactory() : this(UtilityPrimitives.CreateAudioOutput) { }
         public NAudioPlaybackFactory(Func<IWavePlayer> createOutput)
         {
-            this.createOutput = createOutput ?? throw new ArgumentNullException(nameof(createOutput));
+            this.createOutput = Require.NotNull(createOutput, nameof(createOutput));
         }
 
         public IAudioPlayback Open(string path, float volume)
@@ -56,42 +55,17 @@ namespace ADModUtils
         {
             this.output = output;
             this.reader = reader;
-            output.PlaybackStopped += OnStopped;
         }
         public bool IsPlaying => output.PlaybackState == PlaybackState.Playing;
         public double DurationSeconds => reader.TotalTime.TotalSeconds;
-        public event EventHandler Stopped;
-        private void OnStopped(object sender, StoppedEventArgs args) => Stopped?.Invoke(this, EventArgs.Empty);
         public void Rewind() => reader.Position = 0;
         public void Play() => output.Play();
         public void Stop() => output.Stop();
         public void Dispose()
         {
-            output.PlaybackStopped -= OnStopped;
             try { output.Dispose(); }
             finally { reader.Dispose(); }
         }
     }
 
-    public static class OneShotAudio
-    {
-        public static void Play(string path, IAudioPlaybackFactory factory)
-        {
-            var playback = factory.Open(path, 1.0f);
-            EventHandler finished = null;
-            finished = (sender, args) =>
-            {
-                playback.Stopped -= finished;
-                playback.Dispose();
-            };
-            playback.Stopped += finished;
-            try { playback.Play(); }
-            catch
-            {
-                playback.Stopped -= finished;
-                playback.Dispose();
-                throw;
-            }
-        }
-    }
 }

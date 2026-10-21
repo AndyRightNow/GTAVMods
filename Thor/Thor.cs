@@ -87,7 +87,7 @@ namespace Thor
                 if (ped != previousPedHandle && ability.IsAttachedToPed) ability.RemoveAbility();
                 previousPedHandle = ped;
                 if (!ability.IsAttachedToPed) ability.ApplyOn(ped);
-                ability.OnTick(false);
+                ability.OnTick();
             }
             catch (Exception error)
             {
@@ -167,18 +167,21 @@ namespace Thor
     public static class ThorComposition
     {
         public static ThorController Create(GameServices game, IAudioPlaybackFactory audio, IEventLog log, Random random,
-            Func<bool> consoleOpen, Func<long> droppedRecords, ThorSessionInfo session)
+            Func<bool> consoleOpen, Func<long> droppedRecords, ThorSessionInfo session,
+            Func<long> milliseconds = null, Func<long> timestamp = null, long frequency = 0,
+            GameplayTuning tuning = null)
         {
-            var effects = new NativeHelper(game, log);
-            var pathfinder = new PathFinder.PathFinder(game, log);
-            var camera = new WeaponCamera(game, random, log);
-            var thunder = new Thunder(game, effects, random);
-            var weapon = new Mjolnir(game, effects, random, pathfinder, camera, thunder, audio, log);
-            var ability = new MjolnirWorthyAbility(game, effects, random, weapon, thunder, audio, log);
+            tuning = tuning ?? new GameplayTuning();
+            var effects = new NativeHelper(game, log, tuning);
+            var pathfinder = new PathFinder.PathFinder(game, log, tuning.Navigation);
+            var camera = new WeaponCamera(game, random, log, tuning.Camera);
+            var thunder = new Thunder(effects, random, tuning.Effects);
+            var weapon = new Mjolnir(game, effects, random, pathfinder, camera, thunder, audio, log, tuning);
+            var ability = new MjolnirWorthyAbility(game, effects, random, weapon, audio, log, tuning);
             var clock = Stopwatch.StartNew();
-            var diagnostics = new GameplayDiagnostics(game, log, () => clock.ElapsedMilliseconds, droppedRecords);
+            var diagnostics = new GameplayDiagnostics(game, log, milliseconds ?? (() => clock.ElapsedMilliseconds), droppedRecords);
             return new ThorController(game, ability, diagnostics, log, pathfinder.Dispose,
-                consoleOpen, Stopwatch.GetTimestamp, Stopwatch.Frequency, session, droppedRecords);
+                consoleOpen, timestamp ?? Stopwatch.GetTimestamp, frequency == 0 ? Stopwatch.Frequency : frequency, session, droppedRecords);
         }
     }
 
@@ -188,7 +191,11 @@ namespace Thor
         [GamePrimitive]
         public Thor()
         {
-            controller = ThorComposition.Create(GtaRuntime.Create(), new NAudioPlaybackFactory(), Logger.Default,
+            var game = GtaRuntime.Create(new GtaHost(), new GtaInput(),
+                new GtaEntities(new GtaEntityLifetimeBindings()), new GtaPeds(), new GtaWeapons(),
+                new GtaWorld(new GtaWorldQueries()), new GtaCameras(new GtaCameraLifetimeBindings()),
+                new GtaRopes(new GtaRopeLifetimeBindings()), new GtaNative(), new GtaArgumentMarshaller(), new GtaOutputs());
+            controller = ThorComposition.Create(game, new NAudioPlaybackFactory(), Logger.Default,
                 new Random(), new Func<bool>(ReadConsoleOpen), new Func<long>(ReadDroppedRecords),
                 ThorSessionInfo.Capture(Logger.LogFilePath));
             Tick += OnTick;

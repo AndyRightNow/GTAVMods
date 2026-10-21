@@ -17,7 +17,6 @@ namespace GTAVMods.Game
         public bool IsDisabledPressed(Control control) => native.Call<bool>(Hash.IS_DISABLED_CONTROL_PRESSED, 0, (int)control);
         public void Enable(Control control, bool enabled) => native.Call(Hash.ENABLE_CONTROL_ACTION, 0, (int)control, enabled);
         public void Disable(Control control, bool disabled) => native.Call(Hash.DISABLE_CONTROL_ACTION, 0, (int)control, disabled);
-        public void EnableAll() => native.Call(Hash.ENABLE_ALL_CONTROL_ACTIONS, 0);
         public void DisableAll() => native.Call(Hash.DISABLE_ALL_CONTROL_ACTIONS, 0);
     }
 
@@ -63,7 +62,6 @@ namespace GTAVMods.Game
         public bool InAnyVehicle(int ped) => native.Call<bool>(Hash.IS_PED_IN_ANY_VEHICLE, ped, false);
         public bool SittingInAnyVehicle(int ped) => native.Call<bool>(Hash.IS_PED_SITTING_IN_ANY_VEHICLE, ped);
         public int Vehicle(int ped) => native.Call<int>(Hash.GET_VEHICLE_PED_IS_IN, ped, false);
-        public int Group(int ped) => native.Call<int>(Hash.GET_PED_GROUP_INDEX, ped);
     }
 
     public sealed class NativeConsoleWorld : IConsoleWorld
@@ -92,25 +90,10 @@ namespace GTAVMods.Game
     {
         private readonly INativeInvoker native;
         public NativeConsoleNetwork(INativeInvoker native) { this.native = native; }
-        public int PlayerCount() => native.Call<int>(Hash.NETWORK_GET_NUM_CONNECTED_PLAYERS);
-        public void Kick(int player) => native.Call(Hash.NETWORK_SESSION_KICK_PLAYER, player);
-        public void LocalInvincibleTime(int milliseconds) => native.Call(Hash.NETWORK_SET_LOCAL_PLAYER_INVINCIBLE_TIME, milliseconds);
-        public void MarkScriptSafe() => native.Call(Hash.NETWORK_SET_SCRIPT_IS_SAFE_FOR_NETWORK_GAME);
-        public void RegisterScript() => native.Call(Hash.NETWORK_SET_THIS_SCRIPT_IS_NETWORK_SCRIPT, 1, true, 1);
-        public void TrackDamage(int networkId, bool enabled) => native.Call(Hash.ACTIVATE_DAMAGE_TRACKER_ON_NETWORK_ID, networkId, enabled);
-        public void Spectate(int ped, bool enabled) => native.Call(Hash.NETWORK_SET_IN_SPECTATOR_MODE, enabled, ped);
         public bool RequestEntityControl(int entity) => native.Call<bool>(Hash.NETWORK_REQUEST_CONTROL_OF_ENTITY, entity);
         public bool HasEntityControl(int entity) => native.Call<bool>(Hash.NETWORK_HAS_CONTROL_OF_ENTITY, entity);
         public int NetworkId(int entity) => native.Call<int>(Hash.NETWORK_GET_NETWORK_ID_FROM_ENTITY, entity);
         public bool RequestNetworkIdControl(int networkId) => native.Call<bool>(Hash.NETWORK_REQUEST_CONTROL_OF_NETWORK_ID, networkId);
     }
 
-    public sealed class NativeConsoleStats : IConsoleStats
-    {
-        private readonly INativeInvoker native;
-        public NativeConsoleStats(INativeInvoker native) { this.native = native; }
-        public void SetInt(int hash, int value, bool save) => native.Call(Hash.STAT_SET_INT, hash, value, save);
-        public void SetFloat(int hash, float value, bool save) => native.Call(Hash.STAT_SET_FLOAT, hash, value, save);
-        public void SetBool(int hash, bool value, bool save) => native.Call(Hash.STAT_SET_BOOL, hash, value, save);
-    }
 }

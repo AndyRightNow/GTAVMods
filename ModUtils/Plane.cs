@@ -15,16 +15,21 @@ namespace ADModUtils
         public Vector3 Center { get; }
 
         public Plane(Vector3 normal, Vector3 point)
-            : this(normal, point, Utilities.Random.SystemRandomInstance)
+            : this(normal, point, Utilities.Math.PerpendicularTo(normal, 1, 1, 1))
         {
         }
 
         public Plane(Vector3 normal, Vector3 point, Random random)
+            : this(normal, point, Utilities.Math.RandomVectorPerpendicularTo(normal, random))
+        {
+        }
+
+        private Plane(Vector3 normal, Vector3 point, Vector3 axis)
         {
             if (normal == Vector3.Zero) throw new ArgumentException("A plane needs a nonzero normal.", nameof(normal));
             Normal = normal;
             Center = point;
-            XAxis = Utilities.Math.RandomVectorPerpendicularTo(normal, random);
+            XAxis = axis;
             YAxis = Vector3.Cross(normal, XAxis).Normalized;
         }
         

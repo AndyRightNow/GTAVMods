@@ -72,6 +72,63 @@ into the game or install assemblies into the GAC.
   both checksums in `scripts/Restore-Dependencies.ps1`, updating compatibility
   checks, rebuilding and repeating live testing.
 
+## Test design
+
+- Unit tests are reserved for pure utility/helper functions: explicit inputs
+  determine the result, with no mutable global state, clock reads, randomness,
+  I/O, callbacks with side effects, or changes to caller-owned state. A helper's
+  name does not make a stateful component eligible for unit testing.
+- All other mod tests must be integration scenarios expressed from the player's
+  perspective. Drive the shipped entry points with player input, frame/lifecycle
+  events and explicit engine observations, then assert the expected gameplay,
+  console, presentation, recovery or diagnostic outcome. Use the real cooperating
+  mod components and adapters; replace only external game, device, storage and
+  host boundaries. Do not replace an ability, controller, logger or other mod
+  collaborator with a probe.
+- Do not retain isolated module, adapter, fake-conformance or wiring tests under
+  an "integration" label. Protect their useful contracts inside the player
+  scenario that depends on them. Do not invent player actions or expose internal
+  state solely to make otherwise unreachable code satisfy the coverage gate.
+- Every test case must specify a real behavior: a meaningful starting condition
+  and trigger, an observable expected outcome, and the regression it prevents.
+  This applies to gameplay, engine contracts, utilities, diagnostics and CI
+  guardrails. Name and organize cases by the behavior being protected.
+- Keep test folders, namespaces, classes and the review catalogue aligned with
+  `ThorTest/README.md`. Group player scenarios by feature, then behavior; place
+  pure helpers under `PureFunctions` and shared fixtures/fakes under `Support`.
+  Give each scenario one home based on its primary expectation. Feature-specific
+  fallback belongs with that feature; pausing, explicit retry and script reload
+  belong under lifecycle recovery. Do not recreate catch-all module, contract or
+  wiring suites, or duplicate scenarios to make them appear in several groups.
+- Exercise module construction and wiring through those behavior scenarios.
+  Do not add standalone tests whose only outcome is successful construction,
+  concrete type identity, dependency assignment, forwarding to a mock, or
+  executing lines for coverage. Do not disguise such tests by renaming them.
+- Use real cooperating mod components where their interaction is part of the
+  behavior. Replace the game and other external boundaries with explicit,
+  maintainable observations and failures. Keep command submission separate from
+  observed completion; fakes must not implement the mod's decisions or simulate
+  physics to manufacture success.
+- Assert independent outcomes: gameplay state, externally visible commands and
+  their contract values, retained or released resources, diagnostics, or rejected
+  invalid input. Exact native arguments are appropriate when they specify an
+  engine contract; merely repeating implementation calls is not sufficient.
+- Each case and parameter variant must protect a distinct condition or failure.
+  Consolidate redundant coverage while preserving useful assertions. Avoid
+  unrelated omnibus scenarios, tautologies, private implementation assertions,
+  and tests of a fake's own setup with no meaningful contract guarantee.
+- Keep manually calibrated gameplay settings under `Thor/Tuning`, grouped by
+  feature and supplied through `GameplayTuning` when composing a session. Test
+  the mechanism with deliberately different supplied settings and independent
+  player outcomes: honoring a delay, crossing a threshold, scaling damage or
+  preserving spatial relationships. Do not copy the default animation timing,
+  camera, movement or effect tables into expected-value matrices. Those defaults
+  require in-game tuning; an exact number is an appropriate assertion only when
+  it follows from the scenario's input or an independent engine/math contract.
+- Maintain the strict 100% line and branch gate without weakening assertions or
+  adding coverage exclusions to accommodate test changes. Review test quality
+  separately from coverage; a covered line does not establish correct behavior.
+
 ## Install or update the mod
 
 1. **Close GTA V before changing DLLs, runtime files or model archives.** Confirm

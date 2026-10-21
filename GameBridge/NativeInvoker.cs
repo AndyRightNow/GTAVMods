@@ -25,7 +25,6 @@ namespace GTAVMods.Game
     {
         private readonly IRawNative native;
         private readonly IArgumentMarshaller marshaller;
-        public NativeInvoker(IRawNative native) : this(native, new GtaArgumentMarshaller()) { }
         public NativeInvoker(IRawNative native, IArgumentMarshaller marshaller)
         {
             this.native = native;
@@ -55,7 +54,6 @@ namespace GTAVMods.Game
     {
         private readonly IRawNativeOutputs native;
         public NativeOutputs(IRawNativeOutputs native) { this.native = native; }
-        public bool LastDamageBone(int ped, out int bone) => native.LastDamageBone(ped, out bone);
         public Quaternion EntityQuaternion(int entity)
         {
             native.EntityQuaternion(entity, out float x, out float y, out float z, out float w);

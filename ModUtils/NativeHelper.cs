@@ -20,24 +20,13 @@ namespace ADModUtils
     {
         private readonly GameServices game;
         private readonly IEventLog log;
-
-        public NativeHelper(
-            GameServices game,
-            string[] animationDictNames,
-            string[] animationNames,
-            AnimationWaitTimeDict animationWaitTime,
-            bool[] animationWithAngles,
-            bool[] animationWithAnglesAndIncompletePlusOrMinusSign,
-            string[] particleEffectSetNames,
-            string[] particleEffectNames,
-            int meleeHitPedDamage,
-            float meleeHitForce
-        )
-            : this(game, animationDictNames, animationNames, animationWaitTime, animationWithAngles,
-                animationWithAnglesAndIncompletePlusOrMinusSign, particleEffectSetNames, particleEffectNames,
-                meleeHitPedDamage, meleeHitForce, Logger.Default)
-        {
-        }
+        private readonly int meleeRagdollMinMs;
+        private readonly int meleeRagdollMaxMs;
+        private readonly float animationBlendInSpeed;
+        private readonly float animationBlendOutSpeed;
+        private readonly float animationPlaybackRate;
+        private readonly int animationLoadTimeoutMs;
+        private readonly int weaponAssetLoadTimeoutMs;
 
         public NativeHelper(
             GameServices game,
@@ -50,6 +39,13 @@ namespace ADModUtils
             string[] particleEffectNames,
             int meleeHitPedDamage,
             float meleeHitForce,
+            int meleeRagdollMinMs,
+            int meleeRagdollMaxMs,
+            float animationBlendInSpeed,
+            float animationBlendOutSpeed,
+            float animationPlaybackRate,
+            int animationLoadTimeoutMs,
+            int weaponAssetLoadTimeoutMs,
             IEventLog log)
         {
             this.game = game;
@@ -63,19 +59,17 @@ namespace ADModUtils
             ParticleEffectNames = particleEffectNames;
             MeleeHitPedDamage = meleeHitPedDamage;
             MeleeHitForce = meleeHitForce;
+            this.meleeRagdollMinMs = meleeRagdollMinMs;
+            this.meleeRagdollMaxMs = meleeRagdollMaxMs;
+            this.animationBlendInSpeed = animationBlendInSpeed;
+            this.animationBlendOutSpeed = animationBlendOutSpeed;
+            this.animationPlaybackRate = animationPlaybackRate;
+            this.animationLoadTimeoutMs = animationLoadTimeoutMs;
+            this.weaponAssetLoadTimeoutMs = weaponAssetLoadTimeoutMs;
         }
 
         public int GetAnimationWaitTimeByDictNameAndAnimName(string dictName, string animName)
-        {
-            if (AnimationWaitTime.ContainsKey(dictName) &&
-                AnimationWaitTime[dictName].ContainsKey(animName))
-            {
-                return AnimationWaitTime[dictName][animName];
-            }
-
-            return 0;
-
-        }
+            => AnimationTiming.GetDelay(AnimationWaitTime, dictName, animName);
 
         public string GetAnimationDictNameByAction(uint action)
         {
@@ -112,21 +106,11 @@ namespace ADModUtils
             if (IsPed(ent) && ent != game.Host.PlayerPed)
             {
                 var ped = ent;
-                SetPedToRagdoll(ped, RagdollType.Normal, 100, 100);
+                SetPedToRagdoll(ped, RagdollType.Normal, meleeRagdollMinMs, meleeRagdollMaxMs);
                 game.Peds.ApplyDamage(ped, (int)(MeleeHitPedDamage * powerLevel / 100.0f));
             }
             game.Entities.ApplyForce(ent, direction * MeleeHitForce * powerLevel / 100.0f);
             game.Gameplay.ClearLastDamage(ent);
-        }
-
-        public void ClearPlayerAnimation(int ped, string dictName, string animName)
-        {
-            game.Animations.Stop(ped, dictName, animName, 3f);
-        }
-
-        public Bone GetLastDamagedBone(int ped)
-        {
-            return game.Outputs.LastDamageBone(ped, out int bone) ? (Bone)bone : Bone.IKRoot;
         }
 
         public void PlayPlayerAnimation(int ped, string dictName, string animName, AnimationFlags flag, int duration = -1, bool checkIsPlaying = true)
@@ -139,7 +123,7 @@ namespace ADModUtils
             int started = game.Host.GameTime;
             while (!game.Animations.IsDictionaryLoaded(dictName))
             {
-                if (unchecked(game.Host.GameTime - started) >= 1000)
+                if (unchecked(game.Host.GameTime - started) >= animationLoadTimeoutMs)
                 {
                     log.Throttled("WARN", "animation.timeout." + dictName, 10000, "dictionary", dictName, "animation", animName);
                     return;
@@ -147,7 +131,8 @@ namespace ADModUtils
                 game.Host.Yield();
             }
 
-            game.Animations.Play(ped, dictName, animName, flag, duration, 8f, 1f, -8f);
+            game.Animations.Play(ped, dictName, animName, flag, duration,
+                animationBlendInSpeed, animationBlendOutSpeed, animationPlaybackRate);
         }
 
         public bool IsEntityPlayingAnim(int ent, string dictName, string animName)
@@ -155,24 +140,14 @@ namespace ADModUtils
             return game.Animations.IsPlaying(ent, dictName, animName);
         }
 
-        public void SetEntityVelocity(int entity, Vector3 velocity)
-        {
-            game.Gameplay.SetVelocity(entity, velocity);
-        }
-
         public int CreateWeaponObject(WeaponHash weaponHash, int amountCount, Vector3 position, bool showWorldModel = true, float scale = 1.0f)
         {
             log.Event("INFO", "asset.weapon.request", "weapon", weaponHash.ToString(), "position", position.ToString(), "scale", scale);
-            if (!game.Weapons.RequestAsset(weaponHash, 3000))
+            if (!game.Weapons.RequestAsset(weaponHash, weaponAssetLoadTimeoutMs))
                 throw new System.InvalidOperationException("Could not load weapon asset " + weaponHash);
             var prop = game.Gameplay.CreateWeaponObject(weaponHash, amountCount, position, showWorldModel, scale);
             log.Event(prop == 0 ? "ERROR" : "INFO", "asset.weapon.created", "weapon", weaponHash.ToString(), "handle", prop);
             return prop;
-        }
-
-        public void DrawLine(Vector3 start, Vector3 end, Color color)
-        {
-            game.Drawing.DrawLine(start, end, color);
         }
 
         public bool IsPed(int entity)
@@ -183,11 +158,6 @@ namespace ADModUtils
         public bool IsVehicle(int entity)
         {
             return game.Gameplay.IsVehicle(entity);
-        }
-
-        public void SetPedWeaponVisible(int ped, bool visible)
-        {
-            game.Gameplay.SetWeaponVisible(ped, visible);
         }
 
         private bool BeforePlayingParticleFx(string effectSetName)
@@ -204,12 +174,6 @@ namespace ADModUtils
             game.Particles.PlayOnEntity(effect, entity, Vector3.Zero, Vector3.Zero, scale);
         }
 
-        public void PlayParticleFx(string effectSetName, string effect, int entity, Vector3 pos, float scale = 1.0f)
-        {
-            if (!BeforePlayingParticleFx(effectSetName)) return;
-            game.Particles.PlayOnEntity(effect, entity, pos, Vector3.Zero, scale);
-        }
-
         public void PlayParticleFx(string effectSetName, string effect, int ped, Bone boneId, float scale = 1.0f)
         {
             if (!BeforePlayingParticleFx(effectSetName)) return;
@@ -220,18 +184,6 @@ namespace ADModUtils
         {
             if (!BeforePlayingParticleFx(effectSetName)) return;
             game.Particles.PlayAt(effect, pos, rot, scale);
-        }
-
-        public int PlayParticleFxLooped(string effectSetName, string effect, int ped, Bone boneId, float scale = 1.0f)
-        {
-            if (!BeforePlayingParticleFx(effectSetName)) return 0;
-            return game.Particles.StartLoopedOnPedBone(effect, ped, boneId, Vector3.Zero, Vector3.Zero, scale);
-        }
-
-        public int PlayParticleFxLooped(string effectSetName, string effect, Vector3 pos, Vector3 rot, float scale = 1.0f)
-        {
-            if (!BeforePlayingParticleFx(effectSetName)) return 0;
-            return game.Particles.StartLoopedAt(effect, pos, rot, scale);
         }
 
         public void SetObjectPhysicsParams(
@@ -256,19 +208,6 @@ namespace ADModUtils
             game.Gameplay.SetRagdoll(ped, (GTA.RagdollType)ragdollType, timeToStayInRagdoll, timeToStandUp);
         }
 
-        public void DrawLines(ref List<Line> lines)
-        {
-            foreach (var line in lines)
-            {
-                line.Draw(game.Drawing);
-            }
-        }
-
-        public void DrawBox(Vector3 a, Vector3 b, Color col)
-        {
-            game.Drawing.DrawBox(a, b, col);
-        }
-
         public static IntersectFlags IntersectAllObjects
         {
             get
@@ -286,5 +225,14 @@ namespace ADModUtils
         public string[] ParticleEffectNames { get; private set; }
         public float MeleeHitForce { get; private set; }
         public int MeleeHitPedDamage { get; private set; }
+    }
+
+    public static class AnimationTiming
+    {
+        public static int GetDelay(Dictionary<string, Dictionary<string, int>> timings, string dictionary, string animation)
+        {
+            return timings.TryGetValue(dictionary, out var clips) && clips.TryGetValue(animation, out int milliseconds)
+                ? milliseconds : 0;
+        }
     }
 }

@@ -18,7 +18,6 @@ namespace GTAVMods.Game
         bool IsDisabledPressed(Control control);
         void Enable(Control control, bool enabled);
         void Disable(Control control, bool disabled);
-        void EnableAll();
         void DisableAll();
     }
 
@@ -67,7 +66,6 @@ namespace GTAVMods.Game
         bool InAnyVehicle(int ped);
         bool SittingInAnyVehicle(int ped);
         int Vehicle(int ped);
-        int Group(int ped);
     }
 
     /// <summary>Model streaming, local vehicle creation, and world utility commands.</summary>
@@ -94,16 +92,9 @@ namespace GTAVMods.Game
     /// <summary>Network identity and control request primitives.</summary>
     /// <remarks>A request's bool is engine acceptance, not durable ownership. Poll
     /// HasEntityControl before an operation that requires ownership. NetworkId is an ID,
-    /// not an entity handle. LocalInvincibleTime is milliseconds. No operation advances time.</remarks>
+    /// not an entity handle. No operation advances time.</remarks>
     public interface IConsoleNetwork
     {
-        int PlayerCount();
-        void Kick(int player);
-        void LocalInvincibleTime(int milliseconds);
-        void MarkScriptSafe();
-        void RegisterScript();
-        void TrackDamage(int networkId, bool enabled);
-        void Spectate(int ped, bool enabled);
         // Request acceptance does not prove ownership; HasEntityControl is authoritative.
         bool RequestEntityControl(int entity);
         bool HasEntityControl(int entity);
@@ -111,13 +102,4 @@ namespace GTAVMods.Game
         bool RequestNetworkIdControl(int networkId);
     }
 
-    /// <summary>Typed integer, floating-point, and boolean stat writes.</summary>
-    /// <remarks>The hash identifies the stat; save is forwarded unchanged. These commands
-    /// issue the write without treating its invocation as proof of remote persistence.</remarks>
-    public interface IConsoleStats
-    {
-        void SetInt(int hash, int value, bool save);
-        void SetFloat(int hash, float value, bool save);
-        void SetBool(int hash, bool value, bool save);
-    }
 }

@@ -242,13 +242,12 @@ namespace GTAVMods.Game
 
     /// <summary>Typed observations from natives that return values through output parameters.</summary>
     /// <remarks>
-    /// LastDamageBone's bone is meaningful only when true. WorldToScreen takes world metres and returns
+    /// WorldToScreen takes world metres and returns
     /// normalized screen coordinates; coordinates are meaningful only when true.
     /// EntityQuaternion returns raw XYZW components without normalization.
     /// </remarks>
     public interface INativeOutputs
     {
-        bool LastDamageBone(int ped, out int bone);
         Quaternion EntityQuaternion(int entity);
         bool WorldToScreen(Vector3 position, out float x, out float y);
     }
@@ -278,7 +277,6 @@ namespace GTAVMods.Game
             ConsoleWorld = new NativeConsoleWorld(native);
             ConsoleNetwork = new NativeConsoleNetwork(native);
             ConsolePlayers = new NativeConsolePlayers(native);
-            ConsoleStats = new NativeConsoleStats(native);
             Outputs = outputs;
         }
         public IGameHost Host { get; }
@@ -299,7 +297,6 @@ namespace GTAVMods.Game
         public IConsoleWorld ConsoleWorld { get; }
         public IConsoleNetwork ConsoleNetwork { get; }
         public IConsolePlayers ConsolePlayers { get; }
-        public IConsoleStats ConsoleStats { get; }
         public INativeOutputs Outputs { get; }
     }
 }
