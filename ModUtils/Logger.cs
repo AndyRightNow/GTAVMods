@@ -60,7 +60,5 @@ namespace ADModUtils
         public static string LogFilePath => Default.FilePath;
         public static long DroppedRecords => Default.DroppedRecords;
 
-        public static void Init(DeveloperConsole.DeveloperConsole console) =>
-            console.PrintLine("Thor diagnostics: " + Default.FilePath);
     }
 }

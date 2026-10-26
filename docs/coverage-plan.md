@@ -1,5 +1,8 @@
 # Mod behavior coverage plan
 
+This historical plan covers the original F8 implementation. The current gate
+replaces DeveloperConsole with AgentBridge; see [gta-use.md](gta-use.md).
+
 ## Goal and scope
 
 Run the real production mod code in Windows CI against deterministic substitutes

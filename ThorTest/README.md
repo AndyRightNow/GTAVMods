@@ -19,13 +19,17 @@ ThorTest/
 │   │   ├── FlightHoverTests.cs
 │   │   ├── MeleeAerialAttackTests.cs
 │   │   └── GrabReleaseTests.cs
-│   ├── ConsoleOperations/
-│   │   ├── OpenCloseControlsTests.cs
-│   │   ├── TypingClipboardHistoryTests.cs
-│   │   ├── CommandsExpressionsShortcutsTests.cs
-│   │   ├── PlayerWorldToolsTests.cs
-│   │   └── DrawingOutputTests.cs
+│   ├── AgentOperations/
+│   │   ├── TurnBasedPlayTests.cs
+│   │   ├── CommandExecutionTests.cs
+│   │   ├── TransportRecoveryTests.cs
+│   │   ├── InspectionAndPersistenceTests.cs
+│   │   ├── WorldStateDecisionTests.cs
+│   │   ├── ReactiveControlTests.cs
+│   │   ├── PythonServiceTests.cs
+│   │   └── ExternalClientTests.cs
 │   ├── ModLifecycle/
+│   │   ├── AgentReloadTests.cs
 │   │   ├── StartupCompatibilityTests.cs
 │   │   ├── EnableDisableTests.cs
 │   │   ├── CharacterChangeDeathTests.cs
@@ -41,10 +45,12 @@ ThorTest/
 │   │   ├── AngleRotationTests.cs
 │   │   └── PlaneShapeTests.cs
 │   ├── ParsingAndFormatting/
-│   │   ├── CommandTextTests.cs
+│   │   ├── AgentProtocolTests.cs
+│   │   ├── NativeRequestTests.cs
 │   │   ├── AnimationNameTimingTests.cs
 │   │   └── DiagnosticVersionTextTests.cs
 │   └── ValidationAndGameValues/
+│       ├── NativeScalarTests.cs
 │       ├── RequiredInputDurationTests.cs
 │       ├── GameObjectIdentifierTests.cs
 │       └── RuntimeCompatibilityTests.cs
@@ -57,6 +63,11 @@ frame updates and lifecycle events. Only external game, device, storage and host
 boundaries are replaced. `PureFunctions` covers deterministic helpers with
 explicit inputs and results; stateful module tests do not belong there.
 
+The FastAPI and Python segment scenarios live in `tools/gta_use/tests`. They run
+real HTTP/WebSocket handlers and separate Python scripts, replacing only the
+external game boundary. `PythonServiceTests` also launches the actual companion
+from the production bridge and exercises the SDK through the real Windows pipe.
+
 Choose a case's home by its primary player expectation. For example, throwing
 despite a missing animation belongs under hammer throwing, while pausing after
 an allocation failure and recovering with Ctrl+A+O belongs under lifecycle
@@ -68,7 +79,7 @@ place; contract assertions stay inside the behavior that relies on them.
 Keep helpers local to a behavior class when only that class uses them. Shared
 fixtures, boundary fakes and scenario setup belong under `Support`; do not put
 test methods there or move mod decisions into fakes. The assembly remains
-nonparallel because console registration and some culture/clock scenarios use
+nonparallel because console streams and some culture/clock scenarios use
 process-wide state.
 
 Gameplay scenarios supply their own [tuning profile](../Thor/Tuning/README.md)

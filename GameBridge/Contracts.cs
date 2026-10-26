@@ -248,6 +248,9 @@ namespace GTAVMods.Game
     /// </remarks>
     public interface INativeOutputs
     {
+        bool AmmoInClip(int ped, uint weapon, out int ammo);
+        bool AimTarget(int player, out int entity);
+        void StreetNames(Vector3 position, out uint street, out uint crossing);
         Quaternion EntityQuaternion(int entity);
         bool WorldToScreen(Vector3 position, out float x, out float y);
     }
@@ -270,13 +273,6 @@ namespace GTAVMods.Game
             Gameplay = new NativeGameplayAccess(native);
             Animations = new NativeAnimationAccess(native);
             Particles = new NativeParticleAccess(native);
-            Drawing = new NativeDrawingAccess(native);
-            ConsoleInput = new NativeConsoleInput(native);
-            ConsoleDrawing = new NativeConsoleDrawing(native);
-            ConsoleEntities = new NativeConsoleEntities(native);
-            ConsoleWorld = new NativeConsoleWorld(native);
-            ConsoleNetwork = new NativeConsoleNetwork(native);
-            ConsolePlayers = new NativeConsolePlayers(native);
             Outputs = outputs;
         }
         public IGameHost Host { get; }
@@ -290,13 +286,6 @@ namespace GTAVMods.Game
         public IGameplayAccess Gameplay { get; }
         public IAnimationAccess Animations { get; }
         public IParticleAccess Particles { get; }
-        public IDrawingAccess Drawing { get; }
-        public IConsoleInput ConsoleInput { get; }
-        public IConsoleDrawing ConsoleDrawing { get; }
-        public IConsoleEntities ConsoleEntities { get; }
-        public IConsoleWorld ConsoleWorld { get; }
-        public IConsoleNetwork ConsoleNetwork { get; }
-        public IConsolePlayers ConsolePlayers { get; }
         public INativeOutputs Outputs { get; }
     }
 }

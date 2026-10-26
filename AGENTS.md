@@ -50,15 +50,15 @@ check that it still exists before using it. Use process-scoped execution-policy
 options; do not change the machine's PowerShell policy.
 
 `Build.ps1` verifies the pinned SHVDNE API download, restores locked NuGet
-packages, builds Release, runs the tests and creates
+packages, prepares Python 3.14 with uv sync --frozen, builds Release, runs the tests and creates
 `artifacts/GTAVMods-Enhanced.zip`. The .NET 10 SDK builds the project; it does
 not replace the game's .NET Framework 4.8 runtime. Builds must not deploy files
-into the game or install assemblies into the GAC.
+into the game or install assemblies into the GAC. Pass -Uv to select an explicit uv executable. After deploying a package with GTA closed, run Install-AgentService.ps1 once to prepare scripts/GtaUse; the bridge then starts and supervises FastAPI automatically. See docs/gta-use.md.
 
 - Run the build/test/package workflow after code or dependency changes. For a
   documentation-only edit, check the documented commands and `git diff --check`.
 - The shared build requires 100% executable line and branch coverage for Thor,
-  ModUtils, DeveloperConsole and GameBridge. See `docs/coverage-gate.md` before
+  ModUtils, AgentBridge and GameBridge. See `docs/coverage-gate.md` before
   changing coverage collection or the reviewed primitive boundary. Tests execute
   the production behavior against deterministic game observations; GTA natives,
   rendering, physics, actual keyboard delivery and audible playback still need
@@ -164,7 +164,9 @@ into the game or install assemblies into the GAC.
 5. Build the package, extract it into a fresh staging directory, and merge its
    **`scripts`** directory into the game root after making backups. Keep all
    packaged dependency DLLs together, including `Thor.dll`, `ModUtils.dll` and
-   `DeveloperConsole.dll`. The three WAV files belong in `scripts/Thor/`.
+   `AgentBridge.dll` and `GameBridge.dll`. Back up and remove the obsolete
+   `scripts/DeveloperConsole.dll` when upgrading; leaving it installs the old F8
+   console alongside the bridge. The three WAV files belong in `scripts/Thor/`.
    Do not copy only `Thor.dll`, and do not deploy the ZIP root as `scripts`.
    SHV, SHVDNE, OpenRPF and DirectStorageFix are separate installations and are
    not bundled in the mod ZIP.
@@ -246,10 +248,10 @@ normal code updates do not require reinstalling it.
    modded setup. If using the imported save, verify Franklin loads at his house.
 4. Inspect the new `ScriptHookV.log`, `ScriptHookVDotNet.log`,
    `DirectStorageFix.log` and newest `scripts/Logs/Thor-*.jsonl`. Confirm
-   `Thor.Thor` and both production console scripts start without load errors.
+   `Thor.Thor` and `GTAVMods.Agent.BridgeScript` start without load errors.
    Check timestamps and session IDs; an old log is not evidence of this run.
 5. Confirm custom hammer geometry, engraved textures and lightning in daylight.
-   Exercise recall, catch, throw and drop, then open both consoles separately.
+   Exercise recall, catch, throw and drop, then exercise the external bridge.
    Press F9 to capture the current state and inspect the resulting log record.
 6. Test Insert reload for cleanup of objects, ropes, cameras and audio. After
    runtime/plugin changes, also exit fully and test a fresh game process:
@@ -262,7 +264,7 @@ normal code updates do not require reinstalling it.
 | Throw / throw and fly | Aim + T / Aim + U |
 | Drop / follow camera / whirl | Y / R / Z |
 | Flight movement | X, W, Sprint, depending on state |
-| Mod console / SHVDNE console | F8 / F4 |
+| External agent console / SHVDNE console | `scripts/Invoke-Gta.ps1` / F4 |
 | Diagnostic snapshot / script reload | F9 / Insert |
 
 Thor starts enabled and changes gameplay, health and weapons. Use a backed-up
@@ -280,7 +282,9 @@ complete; never ship automatic teleport/camera test harnesses.
   counts. Snapshots occur every five seconds and performance summaries every ten.
   Files rotate near 5 MiB and retain the newest ten per log directory.
 - Keep logging bounded: record transitions, throttle recurring errors, and avoid
-  disk writes on every frame or logging text entered into the F8 console.
+  disk writes on every frame. Agent requests/results/output are durable files
+  under `%LOCALAPPDATA%\GTAVMods\Bridge`; see `docs/gta-use.md` for protocol and
+  controls. Do not put console history or diagnostic-only output in memory.
   Logging failures must not crash gameplay.
 - On a managed exception Thor logs the failure and pauses; Ctrl+A+O retries.
   Missing audio is logged once per clip without stopping gameplay.

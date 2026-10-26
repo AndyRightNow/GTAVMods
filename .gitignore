@@ -324,3 +324,4 @@ ASALocalRun/
 *.nvuser
 .deps/
 .dotnet/
+.python-path

@@ -1,10 +1,21 @@
 # Third-party components
 
+The external GTA use service uses uv-managed Python 3.14 and the Python packages
+locked in `uv.lock`: FastAPI, Starlette, Pydantic, Uvicorn, websockets, HTTPX and
+their dependencies. They are installed separately by uv; wheels and the Python
+runtime are not included in the mod ZIP. Upstream notices are retained in the
+installed distributions. See [uv](https://docs.astral.sh/uv/),
+[FastAPI](https://github.com/fastapi/fastapi), [Starlette](https://github.com/encode/starlette),
+[Pydantic](https://github.com/pydantic/pydantic), [Uvicorn](https://github.com/encode/uvicorn),
+[websockets](https://github.com/python-websockets/websockets), and
+[HTTPX](https://github.com/encode/httpx).
+
 GTAVMods source and the original hammer/audio assets are from
 [AndyRightNow/GTAVMods](https://github.com/AndyRightNow/GTAVMods). The repository
 does not declare a top-level license; this migration does not grant new rights
 to redistribute its code or assets. Existing copyright notices are preserved.
-The bundled developer console retains its Dakota628 attribution.
+The former F8 developer console was based on Dakota628's console. That component
+has been removed; its original attribution remains in Git history.
 
 Enhanced model conversion uses [CodeWalker](https://github.com/dexyfex/CodeWalker)
 at commit `485d56bec00262ed7fa472261cce7bbc6202b96e`; its source/license remain

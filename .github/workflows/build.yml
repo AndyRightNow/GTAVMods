@@ -16,6 +16,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: '0.13.5'
       - name: Build, test and package
         shell: pwsh
         run: ./scripts/Build.ps1

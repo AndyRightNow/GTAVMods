@@ -7,7 +7,6 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <PackageReference Include="NAudio" Version="2.4.0" />
-    <ProjectReference Include="..\gtav_console\DeveloperConsole.csproj" />
     <ProjectReference Include="..\GameBridge\GameBridge.csproj" />
   </ItemGroup>
 </Project>

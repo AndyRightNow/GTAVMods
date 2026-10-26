@@ -86,15 +86,4 @@ namespace GTAVMods.Game
         void PlayAt(string effect, Vector3 position, Vector3 rotationDegrees, float scale);
     }
 
-    /// <summary>World-space drawing commands for the current frame.</summary>
-    /// <remarks>
-    /// Coordinates use metres. Color RGBA bytes are forwarded without normalization.
-    /// Commands do not promise visibility, persist geometry, or transfer resource ownership.
-    /// </remarks>
-    public interface IDrawingAccess
-    {
-        void DrawLine(Vector3 start, Vector3 end, Color color);
-        void DrawBox(Vector3 minimum, Vector3 maximum, Color color);
-        void DrawPoly(Vector3 first, Vector3 second, Vector3 third, Color color);
-    }
 }

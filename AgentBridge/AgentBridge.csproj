@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>GTAVMods.Agent</RootNamespace>
+    <AssemblyName>AgentBridge</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <ProjectReference Include="..\ModUtils\ModUtils.csproj" />
+    <ProjectReference Include="..\GameBridge\GameBridge.csproj" />
+  </ItemGroup>
+</Project>

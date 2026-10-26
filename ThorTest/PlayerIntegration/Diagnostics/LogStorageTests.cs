@@ -1,6 +1,6 @@
 using ADModUtils;
 using Control = GTA.Control;
-using DeveloperConsole;
+
 using GTA.Native;
 using GTA;
 using GTA.Math;
@@ -56,30 +56,6 @@ namespace GTAVMods.Tests.PlayerIntegration.Diagnostics
             Assert.AreEqual(0, s.Log.Last("session.end").Data["droppedLogRecords"]);
             s.AssertNoErrors();
             s.AssertReleased();
-        }
-
-        [TestMethod]
-        [DataRow(false)] [DataRow(true)]
-        public void ThorStartupMakesDiagnosticLogDiscoverableAcrossConsoleReloadAndDetachesOnAbort(bool consoleStartsFirst) {
-            var thorScript = new object(); // Host-owned script identity; the callback is the shipped integration.
-            if (!consoleStartsFirst) DeveloperConsole.DeveloperConsole.RegisterConsoleScript(thorScript, ADModUtils.Logger.Init);
-            using (var first = new ConsoleFixture()) {
-                if (consoleStartsFirst) DeveloperConsole.DeveloperConsole.RegisterConsoleScript(thorScript, ADModUtils.Logger.Init);
-                first.Press(Keys.F8); first.Draw();
-                Assert.IsTrue(string.Concat(first.Platform.Text.Select(t => t.Text)).Contains("Thor diagnostics: " + ADModUtils.Logger.LogFilePath));
-                first.Evaluate("return POS.Z");
-                Assert.IsTrue(first.Platform.Text.Any(t => t.Text == "12:34:56: 3"));
-                using (var replacement = new ConsoleFixture()) {
-                    first.Model.Dispose();
-                    replacement.Press(Keys.F8); replacement.Draw();
-                    Assert.IsTrue(replacement.Shows("Thor diagnostics:"));
-                    DeveloperConsole.DeveloperConsole.UnregisterConsoleScript(thorScript);
-                    using (var detached = new ConsoleFixture()) {
-                        detached.Press(Keys.F8); detached.Draw();
-                        Assert.IsFalse(detached.Shows("Thor diagnostics:"), "An aborted Thor script must not attach to the next console.");
-                    }
-                }
-            }
         }
 
         [TestMethod]

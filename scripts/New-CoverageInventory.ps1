@@ -89,7 +89,7 @@ $testRecords = @($records | Where-Object { $_.IsTestProject -eq 'true' })
 if ($testRecords.Count -ne 1) { throw 'The build expects exactly one test assembly inventory.' }
 $testDirectory = Split-Path -Parent $testRecords[0].TargetPath
 $production = @($records | Where-Object { $_.IsTestProject -ne 'true' })
-foreach ($required in @('Thor', 'ModUtils', 'DeveloperConsole')) {
+foreach ($required in @('Thor', 'ModUtils', 'AgentBridge')) {
     if (@($production | Where-Object { $_.AssemblyName -eq $required }).Count -ne 1) {
         throw "Required production assembly is missing: $required"
     }

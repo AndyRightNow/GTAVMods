@@ -13,7 +13,7 @@ stateful module tests, fake ability/logger probes, or standalone adapter tests.
 
 ```mermaid
 flowchart LR
-    P["Player input and lifecycle events"] --> C["Real Thor controller or F8 console"]
+    P["Player input and lifecycle events"] --> C["Real Thor controller or agent bridge"]
     C --> M["Real abilities, hammer, camera and navigation"]
     C --> D["Real diagnostics and audio management"]
     M --> A["Real game adapters and lifetime checks"]
@@ -29,7 +29,7 @@ bindings; tests select explicit external observations. Native argument mapping,
 output assembly and confirmed deletion remain production code in both paths.
 Tests assert these contracts inside the player behavior that relies on them.
 
-`GameBridge/Contracts.cs`, `GameplayContracts.cs` and `ConsoleContracts.cs` define
+`GameBridge/Contracts.cs`, `GameplayContracts.cs` and `AgentWorld.cs` define
 the callable API. This document defines its semantic obligations. The SHVDNE API
 XML in `.deps/shvdne/ScriptHookVDotNet3.xml` is local upstream evidence from the
 pinned archive. The dependency workflow verifies the archive and API DLL hashes
