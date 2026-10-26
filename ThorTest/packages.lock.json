@@ -2,6 +2,12 @@
   "version": 1,
   "dependencies": {
     ".NETFramework,Version=v4.8": {
+      "coverlet.msbuild": {
+        "type": "Direct",
+        "requested": "[10.1.0, )",
+        "resolved": "10.1.0",
+        "contentHash": "iozrXeTbc3mBGSi+2UUL+VVbLzAJZRogo42Zq+rLQL3QiIdXoRtEWmK/BR5HvoYEo2Pam0vjHZwIVTUVmF3zrA=="
+      },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
         "requested": "[18.11.0, )",
@@ -265,13 +271,27 @@
         "contentHash": "okurQJO6NRE/apDIP23ajJ0hpiNmJ+f0BwOlB/cSqTLQlw5upkf+5+96+iG2Jw40G1fCVCyPz/FhIABUjMR+RQ=="
       },
       "developerconsole": {
+        "type": "Project",
+        "dependencies": {
+          "GameBridge": "[1.0.0, )"
+        }
+      },
+      "gamebridge": {
         "type": "Project"
       },
       "modutils": {
         "type": "Project",
         "dependencies": {
           "DeveloperConsole": "[1.0.0, )",
+          "GameBridge": "[1.0.0, )",
           "NAudio": "[2.4.0, )"
+        }
+      },
+      "thor": {
+        "type": "Project",
+        "dependencies": {
+          "DeveloperConsole": "[1.0.0, )",
+          "ModUtils": "[1.0.0, )"
         }
       }
     }

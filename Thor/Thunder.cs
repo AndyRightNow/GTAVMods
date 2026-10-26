@@ -1,124 +1,40 @@
-﻿using GTA;
-using GTA.Math;
 using System;
 using System.Collections.Generic;
+using ADModUtils;
+using GTA.Math;
 
 namespace Thor
 {
-    using ThunderBolt = List<ThunderSegment>;
-
-    public class Thunder
+    public sealed class Thunder
     {
-        private List<ThunderBolt> thunderBolts;
-        private static Thunder instance;
+        private readonly NativeHelper effects;
+        private readonly Random random;
+        private readonly EffectsTuning tuning;
 
-        private Thunder()
+        public Thunder(NativeHelper effects, Random random, EffectsTuning tuning)
         {
-            thunderBolts = new List<ThunderBolt>();
+            this.effects = effects;
+            this.random = random;
+            this.tuning = tuning;
         }
 
-        public static Thunder Instance
+        public void RenderTrail(Vector3 from, Vector3 to)
         {
-            get
-            {
-                if (instance == null)
-                {
-                    instance = new Thunder();
-                }
-
-                return instance;
-            }
-        }
-
-        public void OnTick()
-        {
-        }
-
-        public void Shoot(Vector3 from, Vector3 to, int jaggedness = 15, float maxSwayRate = 0.03f, bool hasDamage = true)
-        {
-            jaggedness = jaggedness == -1 ? 15 : jaggedness;
-            maxSwayRate = maxSwayRate == -1.0f ? 0.03f : maxSwayRate;
-
-            if (hasDamage)
-            {
-                var raycast = World.Raycast(from, to, ADModUtils.NativeHelper.IntersectAllObjects);
-
-                if (raycast.DidHit && raycast.HitEntity != null)
-                {
-                    var ent = raycast.HitEntity;
-
-                    if (ent != Game.Player.Character)
-                    {
-                        NativeHelper.Instance.ApplyForcesAndDamages(ent, to - from);
-                    }
-                }
-            }
-
-            ThunderBolt thunderBolt = new ThunderBolt();
-            GenerateThunderBolt(ref thunderBolt, from, to, jaggedness, maxSwayRate);
-            var i = 0;
-            foreach (var line in thunderBolt)
-            {
-                line.Render();
-                i++;
-            }
-        }
-
-        private void GenerateThunderBolt(ref ThunderBolt thunderBolt, Vector3 start, Vector3 end, int jaggedness, float maxSwayRate, int maxDepthLevel = 3, int currentDepth = 1)
-        {
-            if (currentDepth > maxDepthLevel)
-            {
-                return;
-            }
-
-            var startToEnd = end - start;
-            var direction = (end - start).Normalized;
-            var len = startToEnd.Length();
-            List<float> stops = new List<float>();
-            var rand = ADModUtils.Utilities.Random.SystemRandomInstance;
-            float maxSwayValue = len * maxSwayRate;
-
-            for (int i = 0; i < jaggedness; i++)
-            {
-                var nextStop = Convert.ToSingle(rand.NextDouble());
-                stops.Add(nextStop);
-            }
+            Vector3 direction = (to - from).Normalized;
+            float length = (to - from).Length();
+            var stops = new List<float>();
+            for (int i = 0; i < tuning.TrailInteriorPoints; i++) stops.Add((float)random.NextDouble());
             stops.Sort();
-
-            Vector3 prevPoint = start;
-            foreach (var stop in stops)
+            Vector3 previous = from;
+            foreach (float stop in stops)
             {
-                var randomPerpVec = ADModUtils.Utilities.Math.RandomVectorPerpendicularTo(direction);
-                float randomSway = Convert.ToSingle(rand.NextDouble() * maxSwayValue * ADModUtils.Utilities.Random.RandomNegation());
-
-                var curDir = direction * stop * len + randomPerpVec * randomSway;
-                var curPoint = start + curDir;
-                thunderBolt.Add(new ThunderSegment(prevPoint, curPoint));
-
-                //bool shouldBranchOut = Convert.ToBoolean( rand.Next(0, 2));
-
-                //if (shouldBranchOut)
-                //{
-                //    ThunderBolt subThunderBolt = new ThunderBolt();
-                //    var nextDepthLevel = currentDepth + 1;
-                //    GenerateThunderBolt(
-                //        ref subThunderBolt, 
-                //        curPoint, 
-                //        curPoint + curDir.Normalized * len / nextDepthLevel,
-                //        jaggedness / nextDepthLevel, 
-                //        maxSwayRate / nextDepthLevel, 
-                //        maxDepthLevel,
-                //        nextDepthLevel
-                //    );
-                //    if (subThunderBolt.Count > 0)
-                //    {
-                //        thunderBolt.AddRange(subThunderBolt);
-                //    }
-                //}
-
-                prevPoint = curPoint;
+                Vector3 perpendicular = Utilities.Math.RandomVectorPerpendicularTo(direction, random);
+                float sway = (float)(random.NextDouble() * length * tuning.TrailLateralSwayRatio * Utilities.Random.RandomNegation(random));
+                Vector3 current = from + direction * stop * length + perpendicular * sway;
+                new ThunderSegment(previous, current, effects.Operations, tuning).Render();
+                previous = current;
             }
-            thunderBolt.Add(new ThunderSegment(prevPoint, end));
+            new ThunderSegment(previous, to, effects.Operations, tuning).Render();
         }
     }
 }

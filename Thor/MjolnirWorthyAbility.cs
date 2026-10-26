@@ -1,45 +1,56 @@
 using ADModUtils;
 using GTA;
+using GTAVMods.Game;
 using GTA.Math;
 using System.Windows.Forms;
 
 namespace Thor
 {
-    public class MjolnirWorthyAbility : WorthyAbility<MjolnirWorthyAbility, Mjolnir>
+    public class MjolnirWorthyAbility : WorthyAbility
     {
 
         protected bool isHoldingWeaponRope;
         protected ADModUtils.Plane weaponWhirlingPlane;
         protected ADModUtils.Plane weaponHoverWhirlingPlane;
-        protected Prop weaponUsedForHoveringWhirlingOriginal;
-        protected Prop weaponUsedForHoveringWhirlingShown;
+        protected int weaponUsedForHoveringWhirlingOriginal;
+        protected int weaponUsedForHoveringWhirlingShown;
         protected bool isHoverWhirling;
         public override string DiagnosticState => base.DiagnosticState + ";rope=" + isHoldingWeaponRope + ";hoverWhirl=" + isHoverWhirling;
 
-        public MjolnirWorthyAbility() : base()
+        public MjolnirWorthyAbility(GameServices game, NativeHelper effects, System.Random random,
+            Mjolnir weapon, IAudioPlaybackFactory audio, IEventLog log, GameplayTuning tuning)
+            : base(game, effects, random, weapon, audio, log, tuning)
         {
             isHoldingWeaponRope = false;
             isHoverWhirling = false;
-            Weapon = Mjolnir.Instance;
+            weaponHoverWhirlingPlane = new ADModUtils.Plane(Vector3.WorldUp, Vector3.Zero, random);
         }
 
         public override void RemoveAbility()
         {
-            base.RemoveAbility();
-            Weapon.StopEffects();
+            Cleanup.Run(
+                base.RemoveAbility,
+                Weapon.StopEffects,
+                () =>
+                {
+                    if (weaponUsedForHoveringWhirlingOriginal != 0)
+                    {
+                        if (game.Entities.Exists(weaponUsedForHoveringWhirlingOriginal))
+                            game.Entities.Delete(weaponUsedForHoveringWhirlingOriginal);
+                        weaponUsedForHoveringWhirlingOriginal = 0;
+                    }
+                },
+                () =>
+                {
+                    if (weaponUsedForHoveringWhirlingShown != 0)
+                    {
+                        if (game.Entities.Exists(weaponUsedForHoveringWhirlingShown))
+                            game.Entities.Delete(weaponUsedForHoveringWhirlingShown);
+                        weaponUsedForHoveringWhirlingShown = 0;
+                    }
+                });
             isHoldingWeaponRope = false;
             isHoverWhirling = false;
-
-            if (weaponUsedForHoveringWhirlingOriginal != null)
-            {
-                weaponUsedForHoveringWhirlingOriginal.Delete();
-                weaponUsedForHoveringWhirlingOriginal = null;
-            }
-            if (weaponUsedForHoveringWhirlingShown != null)
-            {
-                weaponUsedForHoveringWhirlingShown.Delete();
-                weaponUsedForHoveringWhirlingShown = null;
-            }
         }
 
         protected override void HandlePreOnTick()
@@ -63,11 +74,6 @@ namespace Thor
 
         protected void HandleHoverWhirlingWeapon()
         {
-            if (weaponHoverWhirlingPlane == null)
-            {
-                weaponHoverWhirlingPlane = new ADModUtils.Plane(Vector3.WorldUp, Vector3.Zero);
-            }
-
             if (isFlying && isHoverWhirling)
             {
                 Weapon.Whirl(weaponHoverWhirlingPlane, false, weaponUsedForHoveringWhirlingOriginal);
@@ -76,18 +82,18 @@ namespace Thor
 
         protected void HandleWhirlingWeapon()
         {
-            if (Game.IsKeyPressed(Keys.Z))
+            if (game.Input.IsKeyPressed(Keys.Z))
             {
                 if (isHoldingWeaponRope)
                 {
-                    var boneCoord = attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position;
+                    var boneCoord = game.Peds.BonePosition(attachedPed, WEAPON_HOLDING_HAND_ID);
 
-                    weaponWhirlingPlane = new ADModUtils.Plane(Vector3.Cross(attachedPed.ForwardVector, Vector3.WorldUp), boneCoord);
+                    weaponWhirlingPlane = new ADModUtils.Plane(Vector3.Cross(game.Entities.ForwardVector(attachedPed), Vector3.WorldUp), boneCoord, random);
 
-                    ADModUtils.NativeHelper.PlayPlayerAnimation(
+                    effects.Operations.PlayPlayerAnimation(
                         attachedPed,
-                        NativeHelper.Instance.GetAnimationDictNameByAction((uint)AnimationActions.WhirlingHammer),
-                        NativeHelper.Instance.GetAnimationNameByAction((uint)AnimationActions.WhirlingHammer),
+                        effects.Operations.GetAnimationDictNameByAction((uint)AnimationActions.WhirlingHammer),
+                        effects.Operations.GetAnimationNameByAction((uint)AnimationActions.WhirlingHammer),
                         AnimationFlags.UpperBodyOnly | AnimationFlags.Secondary
                     );
                     Weapon.Whirl(weaponWhirlingPlane);
@@ -104,7 +110,7 @@ namespace Thor
 
         protected void HandleDropAndHoldWeaponRope()
         {
-            if (Game.IsKeyPressed(Keys.Z))
+            if (game.Input.IsKeyPressed(Keys.Z))
             {
                 DropAndHoldWeaponRope();
             }
@@ -114,25 +120,29 @@ namespace Thor
         {
             base.PlayThunderFx();
 
-            if (IsHoldingWeapon && weaponUsedForHoveringWhirlingShown != null)
+            if (IsHoldingWeapon)
             {
-                NativeHelper.PlayThunderFx(weaponUsedForHoveringWhirlingShown, 0.5f);
+                effects.PlayThunderFx(weaponUsedForHoveringWhirlingShown, tuning.Ability.HeldLightningScale);
             }
         }
 
         protected void InitHoverWhirledWeapon()
         {
-            if (weaponUsedForHoveringWhirlingOriginal == null)
+            if (weaponUsedForHoveringWhirlingOriginal == 0)
             {
-                weaponUsedForHoveringWhirlingOriginal = ADModUtils.NativeHelper.CreateWeaponObject(Weapon.WeaponHash, 1, Vector3.Zero);
-                weaponUsedForHoveringWhirlingOriginal.Opacity = 0;
-                weaponUsedForHoveringWhirlingOriginal.SetNoCollision(attachedPed, true);
+                weaponUsedForHoveringWhirlingOriginal = effects.Operations.CreateWeaponObject(Weapon.WeaponHash, 1, Vector3.Zero);
+                if (weaponUsedForHoveringWhirlingOriginal == 0)
+                    throw new System.InvalidOperationException("Could not create the hidden whirling hammer.");
+                game.Entities.SetOpacity(weaponUsedForHoveringWhirlingOriginal, 0);
+                game.Entities.SetNoCollision(weaponUsedForHoveringWhirlingOriginal, attachedPed, true);
             }
-            if (weaponUsedForHoveringWhirlingShown == null)
+            if (weaponUsedForHoveringWhirlingShown == 0)
             {
-                weaponUsedForHoveringWhirlingShown = ADModUtils.NativeHelper.CreateWeaponObject(Weapon.WeaponHash, 1, Vector3.Zero + new Vector3(0.0f, 0.0f, 10.0f));
-                weaponUsedForHoveringWhirlingShown.Opacity = 0;
-                weaponUsedForHoveringWhirlingShown.SetNoCollision(attachedPed, true);
+                weaponUsedForHoveringWhirlingShown = effects.Operations.CreateWeaponObject(Weapon.WeaponHash, 1, tuning.Ability.HiddenHoverSpawnPosition);
+                if (weaponUsedForHoveringWhirlingShown == 0)
+                    throw new System.InvalidOperationException("Could not create the visible whirling hammer.");
+                game.Entities.SetOpacity(weaponUsedForHoveringWhirlingShown, 0);
+                game.Entities.SetNoCollision(weaponUsedForHoveringWhirlingShown, attachedPed, true);
             }
         }
 
@@ -148,7 +158,7 @@ namespace Thor
         protected override void HandleMidIsFlying(Vector3 velocity, Vector3 weaponHoldingHandCoord)
         {
             var velocityAndUpDot = Vector3.Dot(velocity.Normalized, Vector3.WorldUp);
-            if (velocityAndUpDot >= 0.85f &&
+            if (velocityAndUpDot >= tuning.Ability.HoverUpDotMinimum &&
                 velocityAndUpDot <= 1.0f)
             {
                 isHoverWhirling = true;
@@ -158,16 +168,15 @@ namespace Thor
             {
                 isHoverWhirling = false;
                 SetHeldWeaponVisible(true);
-                Weapon.RotateToDirection(attachedPed.Weapons.CurrentWeaponObject, velocity.Normalized);
-                attachedPed.Weapons.CurrentWeaponObject.Position = weaponHoldingHandCoord + velocity.Normalized * 0.3f;
+                Weapon.RotateToDirection(game.Weapons.CurrentObject(attachedPed), velocity.Normalized);
+                game.Entities.SetPosition(game.Weapons.CurrentObject(attachedPed), weaponHoldingHandCoord + velocity.Normalized * tuning.Ability.ForwardHammerOffset);
             }
             if (isHoverWhirling)
             {
-                weaponUsedForHoveringWhirlingShown.Position =
-                    attachedPed.Bones[WEAPON_HOLDING_HAND_ID].Position +
-                    (weaponUsedForHoveringWhirlingOriginal.Position - weaponHoverWhirlingPlane.Center) +
-                    new Vector3(0, 0, 0.1f);
-                weaponUsedForHoveringWhirlingShown.Rotation = weaponUsedForHoveringWhirlingOriginal.Rotation;
+                game.Entities.SetPosition(weaponUsedForHoveringWhirlingShown, game.Peds.BonePosition(attachedPed, WEAPON_HOLDING_HAND_ID) +
+                    (game.Entities.Position(weaponUsedForHoveringWhirlingOriginal) - weaponHoverWhirlingPlane.Center) +
+                    tuning.Ability.HoverOffset);
+                game.Entities.SetRotation(weaponUsedForHoveringWhirlingShown, game.Entities.Rotation(weaponUsedForHoveringWhirlingOriginal));
             }
         }
         protected override void HandlePreNotFlying()
@@ -177,39 +186,32 @@ namespace Thor
 
         protected void SetHeldWeaponVisible(bool toggle)
         {
-            if (IsHoldingWeapon)
+            if (toggle)
             {
-                if (toggle)
-                {
-                    attachedPed.Weapons.CurrentWeaponObject.ResetOpacity();
-                }
-                else
-                {
-                    attachedPed.Weapons.CurrentWeaponObject.Opacity = 0;
-                }
+                game.Entities.ResetOpacity(game.Weapons.CurrentObject(attachedPed));
             }
-            if (weaponUsedForHoveringWhirlingShown != null)
+            else
             {
-                if (toggle)
-                {
-                    weaponUsedForHoveringWhirlingShown.Opacity = 0;
-
-                }
-                else
-                {
-                    weaponUsedForHoveringWhirlingShown.ResetOpacity();
-                }
+                game.Entities.SetOpacity(game.Weapons.CurrentObject(attachedPed), 0);
+            }
+            if (toggle)
+            {
+                game.Entities.SetOpacity(weaponUsedForHoveringWhirlingShown, 0);
+            }
+            else
+            {
+                game.Entities.ResetOpacity(weaponUsedForHoveringWhirlingShown);
             }
         }
 
         protected override bool IsRenderWeaponCameraKeyPressed()
         {
-            return Game.IsKeyPressed(Keys.R);
+            return game.Input.IsKeyPressed(Keys.R);
         }
 
         protected override bool IsSummonWeaponKeyPressed()
         {
-            return Game.IsKeyPressed(Keys.H);
+            return game.Input.IsKeyPressed(Keys.H);
         }
 
         public override void SummonWeapon()
@@ -222,12 +224,7 @@ namespace Thor
 
         protected void DropAndHoldWeaponRope()
         {
-            if (!IsHoldingWeapon)
-            {
-                return;
-            }
-
-            ThrowWeaponOut(false);
+            if (!ThrowWeaponOut(false)) return;
             Weapon.AttachHammerRopeTo(attachedPed, WEAPON_HOLDING_HAND_ID);
             isHoldingWeaponRope = true;
         }

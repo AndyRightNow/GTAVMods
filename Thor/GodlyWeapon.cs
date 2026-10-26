@@ -1,476 +1,269 @@
-using ADModUtils;
-using GTA;
-using GTA.Math;
-using GTA.Native;
-using GTA.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Thor.PathFinder;
+using ADModUtils;
+using GTA;
+using GTA.Math;
+using GTAVMods.Game;
 
 namespace Thor
 {
-    public class GodlyWeapon<T> where T : class, new()
+    public abstract class GodlyWeapon
     {
-        protected static float MOVE_UPWARD_VELOCITY_MULTIPLIER = 500.0f;
-        protected static float MOVE_FULL_VELOCITY_MULTIPLIER = 100.0f;
-        protected static float MOVE_HALF_VELOCITY_MULTIPLIER = 40.0f;
-        protected static float MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER = 35.0f;
-        protected static float HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 10.0f;
-        protected static float HAMMER_ROTATION_UPWARD_LERP_RATIO = 0.4f;
-        protected static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER = 3.0f;
-        protected static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET = 0.5f;
-        protected static float CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET = 2f;
-        protected static float APPLY_FORCE_RADIUS = 1.0f;
-        protected static float MAX_SHOOT_UPWARD_DIST = 4.0f;
-        protected static int PLAY_THUNDER_FX_INTERVAL_MS = 1000;
-        protected static float WEAPON_MASS = 50000.0f;
-        protected static T instance;
-        protected Prop weaponObject;
-        protected WeaponHash weaponHash;
-        protected Vector3 weaponSpawnPos;
-        protected ADModUtils.Utilities.Timer weaponFxTimer;
-        protected bool isBeingSummoned;
-        protected bool prevHasObstaclesInBetween = false;
-        protected bool isCloseToSummoningPed;
-        protected Vector3 summoningPedForwardDirection;
-        protected bool isInOutOfRangeIdleState = false;
-        protected Vector3 outOfRangeIdleRandomVelocity = Vector3.Zero;
-        protected int outOfRangeIdleRandomVelocityChangeInterval = 1000;
+        protected readonly GameplayTuning tuning;
+        protected readonly GameServices game;
+        protected readonly NativeHelper effects;
+        protected readonly Random random;
+        protected readonly IEventLog log;
+        private readonly PathFinder.PathFinder pathfinder;
+        private readonly WeaponCamera camera;
+        private readonly Thunder thunder;
+        protected int weaponObject;
+        private readonly HashSet<int> retiringWeapons = new HashSet<int>();
+        private readonly WeaponHash weaponHash;
+        private Utilities.Timer weaponFxTimer;
+        protected bool isBeingSummoned, isCloseToSummoningPed;
+        private bool previouslyObstructed, idleOutOfRange;
+        private Vector3 idleVelocity;
+        private int idleInterval;
+        private int idleVelocityStartedAt;
+        private float previousHeight;
         protected AnimationActions[] throwActions;
 
-        protected GodlyWeapon(WeaponHash weapon)
+        protected GodlyWeapon(WeaponHash weapon, GameServices game, NativeHelper effects,
+            Random random, PathFinder.PathFinder pathfinder, WeaponCamera camera, Thunder thunder, IEventLog log, GameplayTuning tuning)
         {
             weaponHash = weapon;
-            weaponSpawnPos = new Vector3(0.0f, 0.0f, 2000.0f);
-            isBeingSummoned = false;
+            this.game = game;
+            this.effects = effects;
+            this.random = random;
+            this.pathfinder = pathfinder;
+            this.camera = camera;
+            this.thunder = thunder;
+            this.log = log;
+            this.tuning = tuning;
+            idleInterval = tuning.Hammer.IdleIntervalMs;
         }
 
         public virtual void OnTick()
         {
-            PathFinder.PathFinder.Instance.OnTick(weaponObject);
-            HandleFx();
-
-            if (isInOutOfRangeIdleState && !isBeingSummoned)
+            if (weaponObject != 0 && !game.Entities.Exists(weaponObject)) WeaponObject = 0;
+            pathfinder.OnTick(weaponObject);
+            weaponFxTimer?.OnTick();
+            if (idleOutOfRange && !isBeingSummoned)
             {
-                if (Game.GameTime % outOfRangeIdleRandomVelocityChangeInterval == 0)
+                if (unchecked((uint)(game.Host.GameTime - idleVelocityStartedAt)) >= (uint)idleInterval)
                 {
-                    outOfRangeIdleRandomVelocityChangeInterval = (int)ADModUtils.Utilities.Random.NextFloat(false) * 1000 + 1000;
-
-                    outOfRangeIdleRandomVelocity = new Vector3(
-                            ADModUtils.Utilities.Random.NextFloat(),
-                            ADModUtils.Utilities.Random.NextFloat(),
-                            ADModUtils.Utilities.Random.NextFloat()
-                        ).Normalized * ADModUtils.Utilities.Random.NextFloat(false) * 30.0f;
+                    idleVelocityStartedAt = game.Host.GameTime;
+                    idleInterval = (int)(Utilities.Random.NextFloat(random, false) * tuning.Hammer.IdleIntervalJitterMs) + tuning.Hammer.IdleIntervalMs;
+                    idleVelocity = new Vector3(Utilities.Random.NextFloat(random), Utilities.Random.NextFloat(random),
+                        Utilities.Random.NextFloat(random)).Normalized * Utilities.Random.NextFloat(random, false) * tuning.Hammer.IdleMaxSpeed;
                 }
-
-                weaponObject.Velocity = Vector3.Lerp(
-                    weaponObject.Velocity,
-                    outOfRangeIdleRandomVelocity,
-                    0.5f * ADModUtils.Utilities.Random.NextFloat(false)
-                    );
+                game.Entities.SetVelocity(weaponObject, Vector3.Lerp(game.Entities.Velocity(weaponObject),
+                    idleVelocity, tuning.Hammer.IdleVelocityBlend * Utilities.Random.NextFloat(random, false)));
             }
         }
 
-        public AnimationActions[] ThrowActions
-        {
-            get
-            {
-                return throwActions;
-            }
-        }
-
-        protected float prevHeightAboveGround = 0.0f;
+        public AnimationActions[] ThrowActions => throwActions;
+        public WeaponHash WeaponHash => weaponHash;
 
         protected void HandleWeaponAvailability()
         {
-            if (weaponObject != null &&
-                weaponObject.Exists())
+            if (weaponObject == 0 || !game.Entities.Exists(weaponObject)) return;
+            game.Entities.SetPersistent(weaponObject, true);
+            game.Gameplay.SetFreezeWhileWaitingForCollision(weaponObject, false);
+            if (game.Entities.HeightAboveGround(weaponObject) - previousHeight > tuning.Hammer.RecoveryHeightJump)
             {
-                weaponObject.IsPersistent = true;
-                Function.Call(Hash.SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION, weaponObject, false);
-
-                if (weaponObject.HeightAboveGround - prevHeightAboveGround > 50.0f)
+                if (!isBeingSummoned && !idleOutOfRange)
                 {
-
-                    if (!isBeingSummoned)
-                    {
-                        isInOutOfRangeIdleState = true;
-                    }
-                }
-                else
-                {
-                    prevHeightAboveGround = weaponObject.HeightAboveGround;
-                }
-
-                var raycastDownwardResult = World.Raycast(weaponObject.Position, Vector3.UnitZ * -1000.0f, IntersectFlags.Map);
-
-                if (raycastDownwardResult.DidHit)
-                {
-                    isInOutOfRangeIdleState = false;
+                    idleOutOfRange = true;
+                    idleVelocityStartedAt = game.Host.GameTime;
                 }
             }
+            else previousHeight = game.Entities.HeightAboveGround(weaponObject);
+            if (game.World.Raycast(game.Entities.Position(weaponObject), Vector3.UnitZ * tuning.Hammer.TerrainProbeEndZ, IntersectFlags.Map).DidHit)
+                idleOutOfRange = false;
         }
 
-        protected void HandleFx()
-        {
-            if (weaponFxTimer != null)
-            {
-                weaponFxTimer.OnTick();
-            }
-        }
+        public void RotateToDirection(int weapon, Vector3 direction)
+            => game.Entities.SetRotation(weapon, Utilities.Math.DirectionToRotation(direction) + new Vector3(-90, 0, 0));
 
-        public virtual Vector3 Velocity
+        public int WeaponObject
         {
+            get => weaponObject;
             set
             {
-                weaponObject.Velocity = value;
-            }
-            get
-            {
-                if (weaponObject != null)
+                bool changed = weaponObject != value;
+                if (!changed && retiringWeapons.Count == 0) return;
+                if (changed)
                 {
-                    return weaponObject.Velocity;
+                    if (weaponObject != 0) retiringWeapons.Add(weaponObject);
+                    // Own the incoming handle before any fallible game configuration.
+                    weaponObject = value;
+                    retiringWeapons.Remove(value);
+                    weaponFxTimer = null;
+                    idleOutOfRange = false;
+                    idleVelocity = Vector3.Zero;
+                    idleInterval = tuning.Hammer.IdleIntervalMs;
+                    previousHeight = 0;
+                    previouslyObstructed = false;
+                    isBeingSummoned = false;
+                    isCloseToSummoningPed = false;
                 }
-                else
+                Cleanup.Run(ReleaseRetiringWeapons, () =>
                 {
-                    return Vector3.Zero;
-                }
+                    if (changed && value != 0) ConfigureWeapon(value);
+                });
             }
         }
 
-        public void RotateToDirection(Entity weaponObj, Vector3 dir)
+        private void ReleaseRetiringWeapons()
         {
-            weaponObj.Rotation = ADModUtils.Utilities.Math.DirectionToRotation(dir) + new Vector3(-90.0f, 0.0f, 0.0f);
+            Cleanup.Run(retiringWeapons.Select(handle => new Action(() => ReleaseRetiringWeapon(handle))).ToArray());
         }
 
-        public static T Instance
+        private void ReleaseRetiringWeapon(int handle)
         {
-            get
-            {
-                if (instance == null)
-                {
-                    instance = new T();
-                }
-
-                return instance;
-            }
-        }
-
-        public WeaponHash WeaponHash
-        {
-            get
-            {
-                return weaponHash;
-            }
-        }
-
-        public Prop WeaponObject
-        {
-            get
-            {
-                return weaponObject;
-            }
-            set
-            {
-                if (weaponObject == value) return;
-                if (weaponObject != null)
-                {
-                    weaponObject.Detach();
-                    weaponObject.Delete();
-                }
-                weaponObject = null;
-                weaponFxTimer = null;
-                if (value != null)
-                {
-                    weaponObject = InitializeWeaponObject(value);
-                    PathFinder.PathFinder.Instance.SetNoCollision(weaponObject);
-                    weaponFxTimer = new ADModUtils.Utilities.Timer(PLAY_THUNDER_FX_INTERVAL_MS,
+            if (game.Entities.Exists(handle))
+                Cleanup.Run(
+                    () => game.Entities.Detach(handle),
                     () =>
                     {
-                        NativeHelper.PlayThunderFx(weaponObject);
+                        game.Entities.Delete(handle);
+                        retiringWeapons.Remove(handle);
                     });
-                }
-            }
+            else retiringWeapons.Remove(handle);
         }
 
-        public Vector3 Position
+        private void ConfigureWeapon(int value)
         {
-            get
+            game.Gameplay.ActivatePhysics(value);
+            game.Entities.SetCollisionEnabled(value, true);
+            effects.Operations.SetObjectPhysicsParams(value, tuning.Hammer.Mass);
+            int blip = game.Entities.AddBlip(value);
+            if (blip != 0)
             {
-                if (weaponObject == null)
-                {
-                    return Vector3.Zero;
-                }
-
-                return Function.Call<Vector3>(Hash.GET_ENTITY_COORDS, weaponObject);
+                game.Entities.SetBlipFriendly(blip, true);
+                game.Entities.SetBlipName(blip, "GodlyWeapon");
             }
+            pathfinder.SetNoCollision(value);
+            weaponFxTimer = new Utilities.Timer(tuning.Hammer.LightningIntervalMs, () => effects.PlayThunderFx(weaponObject), () => game.Host.GameTime);
         }
 
-        public void SetSummonStatus(bool isSumoning, Ped summoningPed = null, bool isCloseToSummoningPed = false)
+        public Vector3 Position => weaponObject == 0 ? Vector3.Zero :
+            game.Gameplay.Position(weaponObject);
+
+        public void SetSummonStatus(bool summoning, bool closeToPed = false)
         {
-            isBeingSummoned = isSumoning;
-            this.isCloseToSummoningPed = isCloseToSummoningPed;
-
-            if (isSumoning && summoningPed != null)
-            {
-                summoningPedForwardDirection = summoningPed.ForwardVector;
-            }
-        }
-
-        protected Prop ActivateWeaponPhysics(Prop newWeaponObject)
-        {
-            Function.Call(Hash.ACTIVATE_PHYSICS, newWeaponObject);
-            newWeaponObject.IsCollisionEnabled = true;
-            ADModUtils.NativeHelper.SetObjectPhysicsParams(newWeaponObject, WEAPON_MASS);
-            return newWeaponObject;
-        }
-
-        protected Prop InitializeWeaponObject(Prop newWeaponObject)
-        {
-            if (newWeaponObject == null)
-            {
-                return null;
-            }
-
-            newWeaponObject = ActivateWeaponPhysics(newWeaponObject);
-
-            Blip weaponBlip = newWeaponObject.AddBlip();
-
-            weaponBlip.IsFriendly = true;
-            weaponBlip.Name = "GodlyWeapon";
-
-            return newWeaponObject;
+            isBeingSummoned = summoning;
+            isCloseToSummoningPed = closeToPed;
         }
 
         public void ShowParticleFx()
         {
-            if (IsMoving)
-            {
-                ADModUtils.NativeHelper.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
-                var fxDirection = -weaponObject.Velocity.Normalized;
-                var speed = Function.Call<float>(Hash.GET_ENTITY_SPEED, weaponObject);
-                Thunder.Instance.Shoot(weaponObject.Position, weaponObject.Position + fxDirection * speed * 0.08f, -1, -1, false);
-            }
+            effects.Operations.PlayParticleFx("scr_familyscenem", "scr_meth_pipe_smoke", weaponObject);
+            Vector3 direction = -game.Entities.Velocity(weaponObject).Normalized;
+            float speed = game.Gameplay.Speed(weaponObject);
+            Vector3 position = game.Entities.Position(weaponObject);
+            thunder.RenderTrail(position, position + direction * speed * tuning.Hammer.TrailDurationSeconds);
         }
 
-        protected virtual bool ShouldApplyForcesToNearbyEntities()
-        {
-            return true;
-        }
+        protected abstract bool ShouldApplyForcesToNearbyEntities();
 
         public void ApplyForcesToNearbyEntities()
         {
-            if (weaponObject == null ||
-                !weaponObject.Exists() ||
-                !IsMoving ||
-                !ShouldApplyForcesToNearbyEntities())
+            if (weaponObject == 0 || !game.Entities.Exists(weaponObject) || !IsMoving || !ShouldApplyForcesToNearbyEntities()) return;
+            foreach (int entity in game.World.NearbyEntities(game.Entities.Position(weaponObject), tuning.Hammer.ImpactRadius))
             {
-                return;
-            }
-
-            var entities = World.GetNearbyEntities(weaponObject.Position, APPLY_FORCE_RADIUS);
-
-            foreach (var ent in entities)
-            {
-                if (ent != Game.Player.Character &&
-                    ent != weaponObject &&
-                    !PathFinder.PathFinder.Instance.IsRelatedEntity(ent))
-                {
-                    ent.ApplyForce(weaponObject.Velocity);
-                    if (ADModUtils.NativeHelper.IsPed(ent))
-                    {
-                        Ped ped = (Ped)ent;
-                        ped.ApplyDamage(100);
-                    }
-                }
+                if (entity == 0 || entity == game.Host.PlayerPed || entity == weaponObject || pathfinder.IsRelatedEntity(entity)) continue;
+                game.Entities.ApplyForce(entity, game.Entities.Velocity(weaponObject));
+                if (effects.Operations.IsPed(entity)) game.Peds.ApplyDamage(entity, tuning.Hammer.ImpactDamage);
             }
         }
 
-        public void DestroyWeaponTrackCam()
-        {
-            WeaponCamera.Instance.DestroyCamera();
-        }
+        public void DestroyWeaponTrackCam() => camera.DestroyCamera();
+        public void RenderWeaponTrackCam() => camera.RenderCamera(weaponObject);
+        public void CancelRenderWeaponTrackCam() => camera.CancelRenderedCamera();
 
-        public void RenderWeaponTrackCam()
+        public void Init()
         {
-            WeaponCamera.Instance.RenderCamera(weaponObject);
-        }
-
-        public void CancelRenderWeaponTrackCam()
-        {
-            WeaponCamera.Instance.CancelRenderedCamera();
-        }
-
-        public void Init(Vector3? spawnPos, bool forceReplacingOld = false)
-        {
-            if (spawnPos == null)
-            {
-                spawnPos = weaponSpawnPos;
-            }
-            if (!forceReplacingOld && weaponObject != null)
-            {
-                return;
-            }
-
+            if (weaponObject != 0) return;
             try
             {
-                WeaponObject = ADModUtils.NativeHelper.CreateWeaponObject(
-                    weaponHash,
-                    1,
-                    (Vector3)spawnPos
-                );
-                if (WeaponObject == null)
-                    throw new InvalidOperationException("The hammer weapon asset could not be created.");
+                WeaponObject = effects.Operations.CreateWeaponObject(weaponHash, 1, tuning.Hammer.SpawnPosition);
+                if (WeaponObject == 0) throw new InvalidOperationException("The hammer weapon asset could not be created.");
             }
-            catch (Exception e)
+            catch (Exception error)
             {
-                Notification.PostTicker("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.", false);
-                ADModUtils.Logger.Log("ERROR", e.ToString());
+                game.Host.Notify("~r~Error occured when initializing GodlyWeapon. Please see the log file for more imformation.");
+                log.Event("ERROR", "hammer.createFailed", "exception", error.ToString());
                 throw;
             }
         }
 
-        public bool MoveToTargets(ref HashSet<Entity> targets)
+        public void MoveToTargets(HashSet<int> targets)
         {
-            if (weaponObject == null)
+            int target = targets.First();
+            if (!game.Entities.Exists(target))
             {
-                return false;
-            }
-            if (targets.Count == 0)
-            {
-                weaponObject.Velocity = Vector3.Zero;
-                return false;
-            }
-
-            var nextTarget = targets.First();
-
-            float distanceBetweenWeaponAndNextTarget = (nextTarget.Position - Position).Length();
-
-            if (nextTarget.Exists() &&
-                nextTarget.Position != Vector3.Zero &&
-                ((ADModUtils.NativeHelper.IsPed(nextTarget) && distanceBetweenWeaponAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PED_TARGET) ||
-                (ADModUtils.NativeHelper.IsVehicle(nextTarget) && distanceBetweenWeaponAndNextTarget <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_VEHICLE_TARGET)))
-            {
-                targets.Remove(nextTarget);
-                Logger.Event("INFO", "hammer.targetReached", "target", nextTarget.Handle, "type", nextTarget.EntityType.ToString(), "remaining", targets.Count);
-            }
-            else
-            {
-                FindWaysToMoveToCoord(nextTarget.Position, false);
-            }
-
-            return true;
-        }
-
-        public bool IsMoving
-        {
-            get
-            {
-                return weaponObject != null && weaponObject.Exists() && weaponObject.Velocity.Length() > 0;
-            }
-        }
-
-        protected float GetVelocityByDistance(Vector3 newPosition, Vector3 curPosition)
-        {
-            float distanceBetweenNewPosAndCurPos = (newPosition - curPosition).Length();
-
-            if (distanceBetweenNewPosAndCurPos <= CLOSE_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
-            {
-                return MOVE_CLOSE_TO_STOP_VELOCITY_MULTIPLIER;
-            }
-            else if (distanceBetweenNewPosAndCurPos <= HALF_TO_STOP_DISTANCE_BEWTEEN_HAMMER_AND_PLAYER)
-            {
-                return MOVE_HALF_VELOCITY_MULTIPLIER;
-            }
-            else
-            {
-                return MOVE_FULL_VELOCITY_MULTIPLIER;
-            }
-        }
-
-        protected void MoveToCoord(Vector3 newPosition, bool slowDownIfClose, Vector3 blendInVelocity)
-        {
-            if (weaponObject == null)
-            {
+                targets.Remove(target);
                 return;
             }
-            Vector3 moveDirection = (newPosition - Position).Normalized;
-            var velocity = blendInVelocity;
-            if (slowDownIfClose)
+            float distance = (game.Entities.Position(target) - Position).Length();
+            if (game.Entities.Position(target) != Vector3.Zero &&
+                ((effects.Operations.IsPed(target) && distance <= tuning.Hammer.PedTargetReachDistance) ||
+                (effects.Operations.IsVehicle(target) && distance <= tuning.Hammer.VehicleTargetReachDistance)))
             {
-                velocity += moveDirection * GetVelocityByDistance(newPosition, Position);
+                targets.Remove(target);
+                log.Event("INFO", "hammer.targetReached", "target", target, "remaining", targets.Count);
             }
-            else
-            {
-                velocity += moveDirection * MOVE_FULL_VELOCITY_MULTIPLIER;
-            }
-
-            weaponObject.Velocity = velocity;
+            else FindWaysToMoveToCoord(game.Entities.Position(target), false);
         }
 
-        public void FindWaysToMoveToCoord(Vector3 newPosition, bool slowDownIfClose)
+        public bool IsMoving => weaponObject != 0 && game.Entities.Exists(weaponObject) && game.Entities.Velocity(weaponObject).Length() > 0;
+
+        private float SpeedForDistance(float distance)
         {
+            if (distance <= tuning.Hammer.NearRecallDistance) return tuning.Hammer.NearRecallSpeed;
+            if (distance <= tuning.Hammer.MediumRecallDistance) return tuning.Hammer.MediumRecallSpeed;
+            return tuning.Hammer.CruiseSpeed;
+        }
 
-            bool curHasObstaclesInBetween = HasObstaclesInBetween(newPosition);
-            if (curHasObstaclesInBetween != prevHasObstaclesInBetween)
-                Logger.Throttled("INFO", "hammer.pathObstruction", 500, "blocked", curHasObstaclesInBetween, "target", newPosition.ToString());
-
-            if (curHasObstaclesInBetween && !IsInOpenAir())
+        public void FindWaysToMoveToCoord(Vector3 position, bool slowDownIfClose)
+        {
+            if (weaponObject == 0) return;
+            bool blocked = HasObstaclesInBetween(position);
+            if (blocked != previouslyObstructed)
+                log.Throttled("INFO", "hammer.pathObstruction", 500, "blocked", blocked, "target", position.ToString());
+            if (blocked && !IsInOpenAir())
             {
-                if (PathFinder.PathFinder.Instance.Position is null)
-                {
-                    return;
-                }
-
-                if (!prevHasObstaclesInBetween && curHasObstaclesInBetween)
-                {
-                    PathFinder.PathFinder.Instance.UpdateStartPosition(weaponObject.Position);
-                }
-
-                prevHasObstaclesInBetween = curHasObstaclesInBetween;
-
-                PathFinder.PathFinder.Instance.UpdateCurrentTarget(newPosition);
-
-                weaponObject.Velocity = PathFinder.PathFinder.Instance.GetTargetVelocity(weaponObject.Position);
+                if (!previouslyObstructed) pathfinder.UpdateStartPosition(game.Entities.Position(weaponObject));
+                previouslyObstructed = blocked;
+                pathfinder.UpdateCurrentTarget(position);
+                game.Entities.SetVelocity(weaponObject, pathfinder.GetTargetVelocity(game.Entities.Position(weaponObject)));
                 return;
             }
-
-            prevHasObstaclesInBetween = curHasObstaclesInBetween;
-
-            MoveToCoord(newPosition, slowDownIfClose, Vector3.Zero);
+            previouslyObstructed = blocked;
+            Vector3 difference = position - Position;
+            float speed = slowDownIfClose ? SpeedForDistance(difference.Length()) : tuning.Hammer.CruiseSpeed;
+            game.Entities.SetVelocity(weaponObject, difference.Normalized * speed);
         }
 
-        private static float OPEN_AIR_TEST_RADIUS = 10.0f;
-
-        protected bool HasObstaclesInBetween(Vector3 newPosition)
+        private bool HasObstaclesInBetween(Vector3 position)
         {
-            var currentWeaponPos = weaponObject.Position;
-
-            var raycastTest = ShapeTest.StartTestCapsule(currentWeaponPos, newPosition, 0.1f, IntersectFlags.Map);
-            ShapeTestResult raycastResult;
-
-            raycastTest.GetResult(out raycastResult);
-
-            return raycastResult.DidHit && World.GetDistance(currentWeaponPos, raycastResult.HitPosition) <= 20.0f;
+            Vector3 current = game.Entities.Position(weaponObject);
+            var hit = game.World.Capsule(current, position, tuning.Hammer.ObstacleProbeRadius, IntersectFlags.Map);
+            return hit.DidHit && current.DistanceTo(hit.Position) <= tuning.Hammer.ObstacleDistance;
         }
 
-
-        protected bool IsInOpenAir()
+        private bool IsInOpenAir()
         {
-            var currentWeaponPos = weaponObject.Position;
-            var raycastXTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitX * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitX * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
-            var raycastYTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitY * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitY * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
-            var raycastZTest = ShapeTest.StartTestCapsule(currentWeaponPos - Vector3.UnitZ * OPEN_AIR_TEST_RADIUS, currentWeaponPos + Vector3.UnitZ * OPEN_AIR_TEST_RADIUS, OPEN_AIR_TEST_RADIUS, IntersectFlags.Map);
-            ShapeTestResult raycastXResult;
-            ShapeTestResult raycastYResult;
-            ShapeTestResult raycastZResult;
-
-            raycastXTest.GetResult(out raycastXResult);
-            raycastYTest.GetResult(out raycastYResult);
-            raycastZTest.GetResult(out raycastZResult);
-
-            return !raycastXResult.DidHit && !raycastYResult.DidHit && !raycastZResult.DidHit;
+            Vector3 current = game.Entities.Position(weaponObject);
+            float radius = tuning.Hammer.OpenAirProbeRadius;
+            var x = game.World.Capsule(current - Vector3.UnitX * radius, current + Vector3.UnitX * radius, radius, IntersectFlags.Map);
+            var y = game.World.Capsule(current - Vector3.UnitY * radius, current + Vector3.UnitY * radius, radius, IntersectFlags.Map);
+            var z = game.World.Capsule(current - Vector3.UnitZ * radius, current + Vector3.UnitZ * radius, radius, IntersectFlags.Map);
+            return !x.DidHit && !y.DidHit && !z.DidHit;
         }
     }
 }

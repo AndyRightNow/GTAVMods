@@ -133,12 +133,19 @@
         "contentHash": "ojD0PX0XhneCsUbAZVKdb7h/70vyYMDYs85lwEI+LngEONe/17A0cFaRFqZU+sOEidcVswYWikYOQ9PPfjlbtQ=="
       },
       "developerconsole": {
+        "type": "Project",
+        "dependencies": {
+          "GameBridge": "[1.0.0, )"
+        }
+      },
+      "gamebridge": {
         "type": "Project"
       },
       "modutils": {
         "type": "Project",
         "dependencies": {
           "DeveloperConsole": "[1.0.0, )",
+          "GameBridge": "[1.0.0, )",
           "NAudio": "[2.4.0, )"
         }
       }

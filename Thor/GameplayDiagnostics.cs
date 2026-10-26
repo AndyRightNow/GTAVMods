@@ -1,33 +1,58 @@
 using System;
-using System.Diagnostics;
 using System.Globalization;
 using ADModUtils;
 using GTA;
 using GTA.Math;
+using GTAVMods.Game;
 
 namespace Thor
 {
-    internal sealed class GameplayDiagnostics
+    public interface IThorAbility
     {
-        private readonly Stopwatch clock = Stopwatch.StartNew();
-        private long nextState, nextSnapshot, nextPerformance;
+        bool IsAttachedToPed { get; }
+        bool IsHoldingWeapon { get; }
+        string DiagnosticState { get; }
+        int WeaponObject { get; }
+        void ApplyOn(int ped);
+        void OnTick();
+        void RemoveAbility();
+        void ResetWeapon();
+        void DisposeSounds();
+        void DisposeWeapon();
+    }
+
+    public sealed class GameplayDiagnostics
+    {
+        private readonly GameServices game;
+        private readonly IEventLog log;
+        private readonly Func<long> milliseconds, droppedRecords;
+        private long nextState, nextSnapshot, nextPerformance, ticks;
         private string previousState;
-        private long ticks;
         private double totalMs, maxMs;
 
-        public void RecordTick(MjolnirWorthyAbility ability, bool disabled, double durationMs)
+        public GameplayDiagnostics(GameServices game, IEventLog log, Func<long> milliseconds, Func<long> droppedRecords)
         {
-            ticks++; totalMs += durationMs; maxMs = System.Math.Max(maxMs, durationMs);
-            long now = clock.ElapsedMilliseconds;
+            this.game = game;
+            this.log = log;
+            this.milliseconds = milliseconds;
+            this.droppedRecords = droppedRecords;
+        }
+
+        public void RecordTick(IThorAbility ability, bool disabled, double durationMs)
+        {
+            ticks++;
+            totalMs += durationMs;
+            maxMs = Math.Max(maxMs, durationMs);
+            long now = milliseconds();
             if (durationMs > 100)
-                Logger.Throttled("WARN", "tick.slow", 5000, "durationMs", durationMs, "gameTime", Game.GameTime);
+                log.Throttled("WARN", "tick.slow", 5000, "durationMs", durationMs, "gameTime", game.Host.GameTime);
             if (now >= nextState)
             {
                 nextState = now + 250;
                 string state = "disabled=" + disabled + ";" + ability.DiagnosticState;
                 if (state != previousState)
                 {
-                    Logger.Event("INFO", "ability.state", "gameTime", Game.GameTime, "previous", previousState, "current", state);
+                    log.Event("INFO", "ability.state", "gameTime", game.Host.GameTime, "previous", previousState, "current", state);
                     previousState = state;
                 }
             }
@@ -39,33 +64,36 @@ namespace Thor
             if (now >= nextPerformance)
             {
                 nextPerformance = now + 10000;
-                Logger.Event("INFO", "performance", "ticks", ticks, "averageTickMs", ticks == 0 ? 0 : totalMs / ticks,
-                    "maxTickMs", maxMs, "frameSeconds", Game.LastFrameTime, "droppedLogRecords", Logger.DroppedRecords);
-                ticks = 0; totalMs = 0; maxMs = 0;
+                log.Event("INFO", "performance", "ticks", ticks, "averageTickMs", totalMs / ticks,
+                    "maxTickMs", maxMs, "frameSeconds", game.Host.LastFrameTime, "droppedLogRecords", droppedRecords());
+                ticks = 0;
+                totalMs = maxMs = 0;
             }
         }
 
-        public static void Snapshot(MjolnirWorthyAbility ability, string reason)
+        public void Snapshot(IThorAbility ability, string reason)
         {
-            var ped = Game.Player.Character;
-            var hammer = ability.Weapon.WeaponObject;
-            if (ped != null && ped.Exists() && ability.IsHoldingWeapon)
-                hammer = ped.Weapons.CurrentWeaponObject;
-            Logger.Event("INFO", "gameplay.snapshot", "reason", reason, "gameTime", Game.GameTime,
+            int ped = game.Host.PlayerPed;
+            bool playerExists = ped != 0 && game.Entities.Exists(ped);
+            int hammer = playerExists && ability.IsHoldingWeapon ? game.Weapons.CurrentObject(ped) : ability.WeaponObject;
+            log.Event("INFO", "gameplay.snapshot", "reason", reason, "gameTime", game.Host.GameTime,
                 "state", ability.DiagnosticState, "player", Describe(ped), "hammer", Describe(hammer),
-                "health", ped != null && ped.Exists() ? ped.Health : 0,
-                "selectedWeapon", ped != null && ped.Exists() ? ped.Weapons.Current.Hash.ToString() : "none",
-                "distance", ped != null && ped.Exists() && hammer != null && hammer.Exists() ? ped.Position.DistanceTo(hammer.Position) : -1,
-                "paused", Game.IsPaused, "aim", Game.IsControlPressed(Control.Aim),
-                "jump", Game.IsControlPressed(Control.Jump), "sprint", Game.IsControlPressed(Control.Sprint));
+                "health", playerExists ? game.Entities.Health(ped) : 0,
+                "selectedWeapon", playerExists ? game.Weapons.Current(ped).ToString() : "none",
+                "distance", playerExists && hammer != 0 && game.Entities.Exists(hammer)
+                    ? game.Entities.Position(ped).DistanceTo(game.Entities.Position(hammer)) : -1,
+                "paused", game.Host.IsPaused, "aim", game.Input.IsControlPressed(Control.Aim),
+                "jump", game.Input.IsControlPressed(Control.Jump), "sprint", game.Input.IsControlPressed(Control.Sprint));
         }
 
-        public static string Describe(Entity entity)
+        public string Describe(int entity)
         {
-            if (entity == null || !entity.Exists()) return "missing";
-            return "handle=" + entity.Handle + ";model=" + entity.Model.Hash +
-                ";position=" + Vector(entity.Position) + ";velocity=" + Vector(entity.Velocity) + ";dead=" + entity.IsDead;
+            if (entity == 0 || !game.Entities.Exists(entity)) return "missing";
+            return "handle=" + entity + ";model=" + game.Entities.ModelHash(entity) +
+                ";position=" + Vector(game.Entities.Position(entity)) + ";velocity=" + Vector(game.Entities.Velocity(entity)) +
+                ";dead=" + game.Entities.IsDead(entity);
         }
-        private static string Vector(Vector3 v) => string.Format(CultureInfo.InvariantCulture, "({0:F2},{1:F2},{2:F2})", v.X, v.Y, v.Z);
+        private static string Vector(Vector3 value) => string.Format(CultureInfo.InvariantCulture,
+            "({0:F2},{1:F2},{2:F2})", value.X, value.Y, value.Z);
     }
 }

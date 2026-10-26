@@ -1,134 +1,79 @@
-﻿using GTA;
+using System;
+using ADModUtils;
 using GTA.Math;
-using System.Collections.Generic;
+using GTAVMods.Game;
 
 namespace Thor
 {
-    enum MjolnirCameraType
+    public enum MjolnirCameraType { StationaryViewFollow, SideFollow, FarSideFollow }
+
+    public sealed class WeaponCamera
     {
-        StationaryViewFollow,
-        SideFollow,
-        FarSideFollow,
-        None
-    }
+        private readonly GameServices game;
+        private readonly Random random;
+        private readonly IEventLog log;
+        private readonly CameraTuning tuning;
+        private int camera;
+        private int? lastSetPosition;
+        private MjolnirCameraType cameraType;
+        private Vector3 sideDirection;
 
-    class WeaponCamera
-    {
-        private Camera hammerTrackCam;
-        private static WeaponCamera instance;
-        private static float CAMERA_FOV = 50.0f;
-        private static float DEFAULT_CAMERA_POSITION_NOT_SET = -1.0f;
-        private static float CAMERA_POSITION_RESET_INTERVAL = 2000.0f;
-        private static float CAMERA_FRONT_DISTANCE_MULTIPLIER = 50.0f;
-        private static float CAMERA_SIDE_DISTANCE_MULTIPLIER = 5.0f;
-        private static float CAMERA_FAR_SIDE_DISTANCE_MULTIPLIER = 70.0f;
-        private static MjolnirCameraType cameraType;
-        private float lastSetCameraPositionTimestamp;
-        private Vector3 currentSideDirection;
-
-        private WeaponCamera()
+        public WeaponCamera(GameServices game, Random random, IEventLog log, CameraTuning tuning)
         {
-            lastSetCameraPositionTimestamp = DEFAULT_CAMERA_POSITION_NOT_SET;
-            cameraType = MjolnirCameraType.None;
+            this.game = game;
+            this.tuning = tuning;
+            this.random = random;
+            this.log = log;
         }
 
-        private bool ShouldResetCamera()
+        public void RenderCamera(int weapon)
         {
-            return lastSetCameraPositionTimestamp == DEFAULT_CAMERA_POSITION_NOT_SET ||
-                Game.GameTime - lastSetCameraPositionTimestamp >= CAMERA_POSITION_RESET_INTERVAL;
-        }
-
-        public static WeaponCamera Instance
-        {
-            get
+            if (camera == 0)
             {
-                if (instance == null)
-                {
-                    instance = new WeaponCamera();
-                }
-
-                return instance;
+                camera = game.Cameras.Create(game.Entities.Position(weapon), Vector3.Zero, tuning.FieldOfView);
+                if (camera == 0) return;
+                log.Event("INFO", "camera.created", "weapon", weapon);
             }
-        }
-
-        public void RenderCamera(Entity weaponObject)
-        {
-            if (hammerTrackCam == null)
+            Vector3 direction = game.Entities.Velocity(weapon).Normalized;
+            int sign = random.Next(0, 2) > 0 ? 1 : -1;
+            bool reset = !lastSetPosition.HasValue || unchecked(game.Host.GameTime - lastSetPosition.Value) >= tuning.ViewDurationMs;
+            if (reset)
             {
-                hammerTrackCam = Camera.Create(ScriptedCameraNameHash.DefaultScriptedCamera,
-                    weaponObject.Position, Vector3.Zero, CAMERA_FOV);
-                if (hammerTrackCam == null) return;
-                ADModUtils.Logger.Event("INFO", "camera.created", "weapon", weaponObject.Handle);
+                cameraType = tuning.Views[random.Next(tuning.Views.Length)];
+                lastSetPosition = game.Host.GameTime;
+                sideDirection = Utilities.Math.RandomVectorPerpendicularTo(direction, random) * sign;
             }
-            Vector3 weaponDirection = weaponObject.Velocity.Normalized;
-            int randomNegationFactor = ADModUtils.Utilities.Random.RandomNegation();
-            bool isJustReset = false;
-
-            if (ShouldResetCamera())
+            if (cameraType == MjolnirCameraType.SideFollow)
             {
-                cameraType = ADModUtils.Utilities.Random.PickOne(new List<MjolnirCameraType>()
-                    {
-                        MjolnirCameraType.SideFollow,
-                        MjolnirCameraType.FarSideFollow,
-                        MjolnirCameraType.FarSideFollow,
-                        MjolnirCameraType.StationaryViewFollow,
-                        MjolnirCameraType.StationaryViewFollow,
-                        MjolnirCameraType.StationaryViewFollow,
-                        MjolnirCameraType.StationaryViewFollow,
-                    }.ToArray());
-                lastSetCameraPositionTimestamp = Game.GameTime;
-                currentSideDirection = ADModUtils.Utilities.Math.RandomVectorPerpendicularTo(weaponDirection) * randomNegationFactor;
-                isJustReset = true;
+                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + sideDirection * tuning.NearDistance);
             }
-
-            switch (cameraType)
-            {
-                case MjolnirCameraType.SideFollow:
-                    hammerTrackCam.Position = weaponObject.Position +
-                        currentSideDirection * CAMERA_SIDE_DISTANCE_MULTIPLIER;
-                    hammerTrackCam.PointAt(weaponObject);
-                    break;
-                case MjolnirCameraType.StationaryViewFollow:
-                    if (isJustReset)
-                    {
-                        hammerTrackCam.Position = weaponObject.Position +
-                            weaponDirection * CAMERA_FRONT_DISTANCE_MULTIPLIER +
-                            currentSideDirection * CAMERA_SIDE_DISTANCE_MULTIPLIER;
-                    }
-                    hammerTrackCam.PointAt(weaponObject);
-                    break;
-                case MjolnirCameraType.FarSideFollow:
-                    hammerTrackCam.Position = weaponObject.Position +
-                        currentSideDirection * CAMERA_FAR_SIDE_DISTANCE_MULTIPLIER;
-                    hammerTrackCam.PointAt(weaponObject);
-                    break;
-                default:
-                    break;
-            }
-
-
-            hammerTrackCam.IsActive = true;
-            ScriptCameraDirector.StartRendering();
+            else if (cameraType == MjolnirCameraType.FarSideFollow)
+                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + sideDirection * tuning.FarDistance);
+            else if (reset)
+                game.Cameras.SetPosition(camera, game.Entities.Position(weapon) + direction * tuning.StationaryLeadDistance + sideDirection * tuning.NearDistance);
+            game.Cameras.PointAt(camera, weapon);
+            game.Cameras.SetActive(camera, true);
+            game.Cameras.StartRendering();
         }
 
         public void DestroyCamera()
         {
-            if (hammerTrackCam != null)
+            if (camera == 0) return;
+            log.Event("INFO", "camera.deleted");
+            Cleanup.Run(CancelRenderedCamera, () =>
             {
-                ADModUtils.Logger.Event("INFO", "camera.deleted");
-                CancelRenderedCamera();
-                hammerTrackCam.Delete();
-                hammerTrackCam = null;
-            }
+                game.Cameras.Delete(camera);
+                camera = 0;
+                lastSetPosition = null;
+            });
         }
 
         public void CancelRenderedCamera()
         {
-            if (hammerTrackCam != null && ScriptCameraDirector.RenderingCam == hammerTrackCam)
+            if (camera != 0 && game.Cameras.RenderingCamera == camera)
             {
-                ADModUtils.Logger.Event("INFO", "camera.stopped");
-                ScriptCameraDirector.StopRendering();
-                hammerTrackCam.IsActive = false;
+                log.Event("INFO", "camera.stopped");
+                Cleanup.Run(game.Cameras.StopRendering, () => game.Cameras.SetActive(camera, false));
             }
         }
     }

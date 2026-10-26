@@ -8,6 +8,7 @@
     <LangVersion>latest</LangVersion>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <Deterministic>true</Deterministic>
+    <DebugType>portable</DebugType>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <ScriptHookVDotNetDirectory>$(MSBuildThisFileDirectory).deps\shvdne</ScriptHookVDotNetDirectory>

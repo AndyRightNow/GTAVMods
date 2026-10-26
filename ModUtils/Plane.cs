@@ -1,5 +1,7 @@
 ﻿using GTA.Math;
 
+using System;
+
 namespace ADModUtils
 {
     public class Plane
@@ -13,27 +15,28 @@ namespace ADModUtils
         public Vector3 Center { get; }
 
         public Plane(Vector3 normal, Vector3 point)
+            : this(normal, point, Utilities.Math.PerpendicularTo(normal, 1, 1, 1))
         {
+        }
+
+        public Plane(Vector3 normal, Vector3 point, Random random)
+            : this(normal, point, Utilities.Math.RandomVectorPerpendicularTo(normal, random))
+        {
+        }
+
+        private Plane(Vector3 normal, Vector3 point, Vector3 axis)
+        {
+            if (normal == Vector3.Zero) throw new ArgumentException("A plane needs a nonzero normal.", nameof(normal));
             Normal = normal;
             Center = point;
-            XAxis = Utilities.Math.RandomVectorPerpendicularTo(normal);
+            XAxis = axis;
             YAxis = Vector3.Cross(normal, XAxis).Normalized;
         }
         
         public Vector2 GetPlaneCoord(Vector3 worldPoint)
         {
-            var cenetrToWorldPoint = worldPoint - Center;
-
-            var worldPointXVec = Vector3.Project(cenetrToWorldPoint, XAxis);
-            var worldPointYVec = Vector3.Project(cenetrToWorldPoint, YAxis);
-
-            bool isXPositive = Vector3.Dot(worldPointXVec.Normalized, XAxis) >= 0.0f;
-            bool isYPositive = Vector3.Dot(worldPointYVec.Normalized, YAxis) >= 0.0f;
-
-            float x = worldPointXVec.Length() * (isXPositive ? 1 : -1);
-            float y = worldPointYVec.Length() * (isYPositive ? 1 : -1);
-
-            return new Vector2(x, y);
+            var offset = worldPoint - Center;
+            return new Vector2(Vector3.Dot(offset, XAxis), Vector3.Dot(offset, YAxis));
         }
 
         public Vector3 GetWorldCoord(Vector2 planePoint)

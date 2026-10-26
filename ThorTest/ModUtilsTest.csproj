@@ -2,11 +2,27 @@
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
+    <CoverletOutputFormat>json,cobertura</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildThisFileDirectory)../artifacts/coverage/</CoverletOutput>
+    <Include>[Thor]*,[ModUtils]*,[DeveloperConsole]*,[GameBridge]*</Include>
+    <IncludeTestAssembly>false</IncludeTestAssembly>
+    <SkipAutoProps>false</SkipAutoProps>
+    <ExcludeByAttribute>GamePrimitiveAttribute</ExcludeByAttribute>
+    <Threshold>100</Threshold>
+    <ThresholdType>line,branch</ThresholdType>
+    <ThresholdStat>minimum</ThresholdStat>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="..\Thor\resources\*.wav" Link="Thor\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <PackageReference Include="coverlet.msbuild" Version="10.1.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="4.5.1" />
     <PackageReference Include="MSTest.TestFramework" Version="4.5.1" />
     <ProjectReference Include="..\ModUtils\ModUtils.csproj" />
+    <ProjectReference Include="..\Thor\Thor.csproj" />
+    <ProjectReference Include="..\GameBridge\GameBridge.csproj" />
+    <ProjectReference Include="..\gtav_console\DeveloperConsole.csproj" />
   </ItemGroup>
 </Project>

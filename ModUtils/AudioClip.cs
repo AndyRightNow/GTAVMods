@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using NAudio.Wave;
 
 namespace ADModUtils
 {
@@ -9,14 +8,17 @@ namespace ADModUtils
     {
         private readonly string path;
         private readonly float volume;
-        private WaveOutEvent output;
-        private AudioFileReader reader;
+        private readonly IAudioPlaybackFactory factory;
+        private readonly IEventLog log;
+        private IAudioPlayback output;
         private bool unavailable;
 
-        public AudioClip(string path, float volume = 1.0f)
+        public AudioClip(string path, float volume, IAudioPlaybackFactory factory, IEventLog log)
         {
             this.path = path;
             this.volume = volume;
+            this.factory = Require.NotNull(factory, nameof(factory));
+            this.log = Require.NotNull(log, nameof(log));
         }
 
         public static string ResourcePath(string name)
@@ -33,39 +35,40 @@ namespace ADModUtils
             {
                 if (output == null)
                 {
-                    reader = new AudioFileReader(path) { Volume = volume };
-                    output = new WaveOutEvent();
-                    output.Init(reader);
-                    Logger.Event("INFO", "audio.loaded", "file", path, "durationSeconds", reader.TotalTime.TotalSeconds, "volume", volume);
+                    output = factory.Open(path, volume);
+                    log.Event("INFO", "audio.loaded", "file", path, "durationSeconds", output.DurationSeconds, "volume", volume);
                 }
-                if (output.PlaybackState == PlaybackState.Playing && !restart) return;
+                if (output.IsPlaying && !restart) return;
                 output.Stop();
-                reader.Position = 0;
+                output.Rewind();
                 output.Play();
-                Logger.Throttled("INFO", "audio.play." + Path.GetFileName(path), 1000, "restart", restart);
+                log.Throttled("INFO", "audio.play." + Path.GetFileName(path), 1000, "restart", restart);
             }
             catch (Exception ex)
             {
-                Logger.Event("WARN", "audio.disabled", "file", path, "exception", ex.ToString());
-                Dispose();
+                Disable(ex);
             }
         }
 
         public void Stop()
         {
-            output?.Stop();
+            try { output?.Stop(); }
+            catch (Exception ex) { Disable(ex); }
+        }
+
+        private void Disable(Exception error)
+        {
+            log.Event("WARN", "audio.disabled", "file", path, "exception", error.ToString());
+            Dispose();
         }
 
         public void Dispose()
         {
             unavailable = true;
-            try { output?.Dispose(); }
-            finally
-            {
-                output = null;
-                reader?.Dispose();
-                reader = null;
-            }
+            var previous = output;
+            output = null;
+            try { previous?.Dispose(); }
+            catch (Exception ex) { log.Event("WARN", "audio.disposeFailed", "file", path, "exception", ex.ToString()); }
         }
     }
 }

@@ -1,617 +1,344 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using GTAVMods.Game;
 using System.Drawing;
-using System.Text.RegularExpressions;
-using System.Threading;
 using System.Windows.Forms;
 using GTA;
-using GTA.UI;
 using Control = GTA.Control;
 using Font = GTA.UI.Font;
 
-/// <summary>
-///     Extends the GTA.Script class
-/// </summary>
 public static class ScriptExtender {
-    /// <summary>
-    ///     Register this script with the console
-    /// </summary>
-    /// <param name="s">The script to register</param>
-    /// <param name="c">The console attached callback</param>
-    public static void RegisterConsoleScript(this Script s, DeveloperConsole.DeveloperConsole.OnConsoleAttached c) {
-        DeveloperConsole.DeveloperConsole.RegisterConsoleScript(s, c);
+    [GamePrimitive]
+    public static void RegisterConsoleScript(this Script script, DeveloperConsole.DeveloperConsole.OnConsoleAttached callback) {
+        new DeveloperConsole.ScriptRegistration(script, callback);
     }
 }
 
 namespace DeveloperConsole {
-    /// <summary>
-    ///     The console model
-    /// </summary>
-    public class DeveloperConsole : Script, IDeveloperConsole {
-        public delegate void OnConsoleAttached(DeveloperConsole developerConsole);
+    internal sealed class ScriptRegistration {
+        private readonly Script _owner;
+        [GamePrimitive]
+        internal ScriptRegistration(Script owner, DeveloperConsole.OnConsoleAttached callback) {
+            _owner = owner;
+            DeveloperConsole.RegisterConsoleScript(owner, callback);
+            owner.Aborted += OnAborted;
+        }
+        [GamePrimitive]
+        private void OnAborted(object sender, EventArgs args) {
+            DeveloperConsole.UnregisterConsoleScript(_owner);
+        }
+    }
 
-        private const int VkCapital = 0x14;
-
-        private static List<KeyValuePair<Script, OnConsoleAttached>> _registeredScripts =
-            new List<KeyValuePair<Script, OnConsoleAttached>>();
-
-        private readonly List<string> _inputHistory = new List<string>();
-        private readonly List<Keys> _keyWasDown = new List<Keys>();
-        private readonly List<KeyValuePair<string, Color>> _lines = new List<KeyValuePair<string, Color>>();
-        private List<Control> _disabledControls = new List<Control>();
-        private string _cursorChar = "";
-        private int _historyCursor = -1;
-        private int _inputOffset;
-        private bool _isHidden;
-        private int _lastBlinkTime;
-        private int _lineOffset;
-
-        /// <summary>
-        ///     Whether or not console debug is enabled
-        /// </summary>
-        public bool Debug = ConsoleSettings.IsDevBuild;
-
-        /// <summary>
-        ///     The consoles input text
-        /// </summary>
-        public string Input = "";
-
-        /// <summary>
-        ///     Creates the console
-        /// </summary>
-        public DeveloperConsole() {
-            Instance = this;
-
+    /// <summary>GTA lifecycle wiring; console behavior is in DeveloperConsole.</summary>
+    public sealed class DeveloperConsoleScript : Script {
+        private readonly DeveloperConsole _console;
+        [GamePrimitive]
+        public DeveloperConsoleScript() {
+            var game = GtaRuntime.Create(new GtaHost(), new GtaInput(),
+                new GtaEntities(new GtaEntityLifetimeBindings()), new GtaPeds(), new GtaWeapons(),
+                new GtaWorld(new GtaWorldQueries()), new GtaCameras(new GtaCameraLifetimeBindings()),
+                new GtaRopes(new GtaRopeLifetimeBindings()), new GtaNative(), new GtaArgumentMarshaller(), new GtaOutputs());
+            var platform = new LiveConsolePlatform(new NativeMethods(new WindowsKeyboardNative()), new WindowsClipboardNative());
+            _console = new DeveloperConsole(platform, new LiveCommandEnvironment(game), new GTAFuncs(game, platform));
             Tick += OnTick;
             KeyDown += OnKeyDown;
             KeyUp += OnKeyUp;
-            Aborted += (sender, args) => {
-                if (Instance == this) Instance = null;
-                RegisteredScripts.Clear();
-            };
+            Aborted += OnAborted;
+        }
+        [GamePrimitive] private void OnTick(object sender, EventArgs args) { _console.Tick(); }
+        [GamePrimitive] private void OnKeyDown(object sender, KeyEventArgs args) { _console.KeyDown(args); }
+        [GamePrimitive] private void OnKeyUp(object sender, KeyEventArgs args) { _console.KeyUp(args); }
+        [GamePrimitive] private void OnAborted(object sender, EventArgs args) { _console.Dispose(); }
+    }
 
+    public sealed class DeveloperConsole : IDeveloperConsole, IDisposable {
+        public delegate void OnConsoleAttached(DeveloperConsole developerConsole);
+        private readonly IConsolePlatform _platform;
+        private readonly ICommandEnvironment _environment;
+        private readonly GTAFuncs _game;
+        private readonly List<string> _inputHistory = new List<string>();
+        private readonly HashSet<Keys> _keyWasDown = new HashSet<Keys>();
+        private readonly List<KeyValuePair<string, Color>> _lines = new List<KeyValuePair<string, Color>>();
+        private List<Control> _disabledControls;
+        private string _cursorChar = "";
+        private int _historyCursor = -1;
+        private int _inputOffset;
+        private bool _isHidden = true;
+        private int _lastBlinkTime;
+        private int _lineOffset;
+        private string _input = "";
+        public bool Debug = ConsoleSettings.IsDevBuild;
+        public string Input {
+            get { return _input; }
+            private set {
+                _input = value;
+                _inputOffset = Math.Min(_inputOffset, _input.Length);
+            }
+        }
+
+        public DeveloperConsole(IConsolePlatform platform, ICommandEnvironment environment, GTAFuncs game) {
+            _platform = platform;
+            _environment = environment;
+            _game = game;
+            Instance = this;
             CommandDispatcher = new CommandDispatcher();
-
-            ShowConsole(false);
-
-            PrintLine(
-                "Developer console: F8 opens/closes. Run 'help' for commands. F4 opens the SHVDN console.");
-
-            foreach (var s in RegisteredScripts) s.Value(this);
+            DefaultCommands.OnConsoleAttached(this);
+            PrintLine("Developer console: F8 opens/closes. Run 'help' for commands. F4 opens the SHVDN console.");
+            foreach (var script in RegisteredScripts.ToArray()) script.Value(this);
         }
 
-        /// <summary>
-        ///     The command dispatcher used by this console
-        /// </summary>
-        public CommandDispatcher CommandDispatcher { get; private set; }
-
-        /// <summary>
-        ///     The current console instance
-        /// </summary>
+        public CommandDispatcher CommandDispatcher { get; }
+        /// <summary>Game helpers available to expressions entered in this console.</summary>
+        public GTAFuncs GameFunctions => _game;
         public static DeveloperConsole Instance { get; private set; }
-        public bool IsOpen => !_isHidden;
+        // Console-created geometry shares the current console's rendering context.
+        internal static GTAFuncs GeometryFunctions => Instance._game;
+        public bool IsOpen { get { return !_isHidden; } }
+        public static List<KeyValuePair<object, OnConsoleAttached>> RegisteredScripts { get; } =
+            new List<KeyValuePair<object, OnConsoleAttached>>();
 
-        // ReSharper disable once ConvertToAutoProperty
-        /// <summary>
-        ///     The list of scripts registered with the console where the key is the script object and the value is the console
-        ///     attached callback
-        /// </summary>
-        public static List<KeyValuePair<Script, OnConsoleAttached>> RegisteredScripts {
-            get { return _registeredScripts; }
-            set { _registeredScripts = value; }
+        public static void RegisterConsoleScript(object owner, OnConsoleAttached callback) {
+            RegisteredScripts.Add(new KeyValuePair<object, OnConsoleAttached>(owner, callback));
+            if (Instance != null) callback(Instance);
+        }
+        public static void UnregisterConsoleScript(object owner) {
+            RegisteredScripts.RemoveAll(entry => ReferenceEquals(entry.Key, owner));
+        }
+        public void Dispose() {
+            var failures = new List<Exception>();
+            try { ShowConsole(false); }
+            catch (Exception error) { failures.Add(error); }
+            try { _game.ReleasePendingModel(); }
+            catch (Exception error) { failures.Add(error); }
+            GTAFuncs.ThrowFailures(failures);
+            if (Instance == this) {
+                Instance = null;
+                RegisteredScripts.Clear();
+            }
         }
 
-        /// <summary>
-        ///     Register a script with the console
-        /// </summary>
-        /// <param name="s">The script to register</param>
-        /// <param name="c">The console attached callback delegate</param>
-        internal static void RegisterConsoleScript(Script s, OnConsoleAttached c) {
-            RegisteredScripts.Add(new KeyValuePair<Script, OnConsoleAttached>(s, c));
-            s.Aborted += (sender, args) => RegisteredScripts.RemoveAll(entry => entry.Key == s);
-            if (Instance != null) c(Instance);
-        }
-
-        #region Handle Console
-
-        /// <summary>
-        ///     Handles key releases
-        /// </summary>
-        /// <param name="sender">The object sending the event</param>
-        /// <param name="e">The event arguments</param>
-        private void OnKeyUp(object sender, KeyEventArgs e) {
-            if (_keyWasDown.Contains(e.KeyCode)) _keyWasDown.Remove(e.KeyCode);
-        }
-
-        /// <summary>
-        ///     Handles key presses
-        /// </summary>
-        /// <param name="sender">The object sending the event</param>
-        /// <param name="e">The event arguments</param>
-        private void OnKeyDown(object sender, KeyEventArgs e) {
-            if (Array.IndexOf(ConsoleSettings.HideKeys, e.KeyCode) >= 0) {
+        public void KeyUp(KeyEventArgs args) { _keyWasDown.Remove(args.KeyCode); }
+        public void KeyDown(KeyEventArgs args) {
+            if (Array.IndexOf(ConsoleSettings.HideKeys, args.KeyCode) >= 0) {
                 ShowConsole(_isHidden);
-                e.SuppressKeyPress = true;
+                args.SuppressKeyPress = true;
                 return;
             }
-
-            if (e.KeyCode == Keys.Escape) {
+            if (args.KeyCode == Keys.Escape) {
                 ShowConsole(false);
-                e.SuppressKeyPress = true;
+                args.SuppressKeyPress = true;
                 return;
             }
-
-            if (_isHidden) {
-                return;
-            }
-
-            switch (e.KeyCode) {
+            if (_isHidden) return;
+            switch (args.KeyCode) {
                 case ConsoleSettings.ScrollUpKey:
-                    ScrollUp();
+                    if (_lines.Count - ConsoleSettings.NumLines + _lineOffset > 0) _lineOffset--;
                     break;
                 case ConsoleSettings.ScrollDownKey:
-                    ScrollDown();
+                    if (_lineOffset < 0) _lineOffset++;
                     break;
                 case ConsoleSettings.HistoryLastKey:
-                    LastInput();
+                    _inputOffset = 0;
+                    if (_historyCursor < _inputHistory.Count - 1) _historyCursor++;
+                    if (_inputHistory.Count > 0) Input = _inputHistory[_historyCursor];
                     break;
                 case ConsoleSettings.HistoryNextKey:
-                    NextInput();
+                    _inputOffset = 0;
+                    if (_historyCursor > 0) Input = _inputHistory[--_historyCursor];
+                    else { _historyCursor = -1; Input = ""; }
                     break;
                 case Keys.C:
-                    if ((e.Modifiers & Keys.Control) == Keys.Control) {
-                        if (Input == null) break;
-                        var t = new Thread(delegate() { Clipboard.SetText(Input); });
-                        t.SetApartmentState(ApartmentState.STA);
-                        t.Start();
-                        t.Join();
-                        break;
-                    }
+                    if (args.Control) { _platform.WriteClipboard(Input); break; }
                     goto default;
                 case Keys.V:
-                    if ((e.Modifiers & Keys.Control) == Keys.Control) {
-                        var t =
-                            new Thread(
-                                delegate() {
-                                    Input = Input.Insert(Input.Length - _inputOffset,
-                                        Clipboard.GetText(TextDataFormat.Text));
-                                });
-                        t.SetApartmentState(ApartmentState.STA);
-                        t.Start();
-                        t.Join();
+                    if (args.Control) {
+                        Input = Input.Insert(Input.Length - _inputOffset, _platform.ReadClipboard());
                         break;
                     }
                     goto default;
                 case ConsoleSettings.CursorLeftKey:
-                    CursorLeft();
+                    if (_inputOffset < Input.Length) _inputOffset++;
                     break;
                 case ConsoleSettings.CursorRightKey:
-                    CursorRight();
+                    if (_inputOffset > 0) _inputOffset--;
                     break;
                 case ConsoleSettings.DelKey:
-                    Del();
+                    if (_inputOffset > 0) {
+                        var position = Input.Length - _inputOffset;
+                        _inputOffset--;
+                        Input = Input.Remove(position, 1);
+                    }
                     break;
                 case ConsoleSettings.BackSpaceKey:
-                    BackSpace();
+                    if (Input.Length - _inputOffset > 0) Input = Input.Remove(Input.Length - _inputOffset - 1, 1);
                     break;
-                case Keys.Enter:
-                    RunCommand();
-                    break;
+                case Keys.Enter: RunCommand(); break;
                 default:
                     _historyCursor = -1;
-                    var s = NativeMethods.GetCharsFromKeys(e.KeyData, (e.Modifiers & Keys.Shift) == Keys.Shift,
-                        (e.Modifiers & Keys.Alt) == Keys.Alt);
-                    if (s != null) {
-                        if (SetKeyDown(e.KeyCode)) return;
-                        var c = s[0];
-                        if ((NativeMethods.GetKeyState(VkCapital) & 0x8000) == 0x8000 ||
-                            (NativeMethods.GetKeyState(VkCapital) & 1) == 1 && char.IsLetter(c))
-                            c = char.IsUpper(c) ? char.ToLower(c) : char.ToUpper(c);
-                        if (NativeMethods.ApplicationIsActivated() && !char.IsControl(c))
-                            Input = Input.Insert(Input.Length - _inputOffset, char.ToString(c));
+                    var text = _platform.TranslateKey(args.KeyCode, args.Shift, args.Alt);
+                    if (!string.IsNullOrEmpty(text) && _keyWasDown.Add(args.KeyCode)) {
+                        var character = text[0];
+                        var caps = _platform.CapsLockState;
+                        if ((caps & 0x8000) != 0 || (caps & 1) != 0 && char.IsLetter(character))
+                            character = char.IsUpper(character) ? char.ToLower(character) : char.ToUpper(character);
+                        if (_platform.IsForeground && !char.IsControl(character))
+                            Input = Input.Insert(Input.Length - _inputOffset, character.ToString());
                     }
                     break;
             }
-
-            e.SuppressKeyPress = true;
+            args.SuppressKeyPress = true;
         }
 
-        private bool SetKeyDown(Keys k) {
-            var ret = _keyWasDown.Contains(k);
-            if (!_keyWasDown.Contains(k)) _keyWasDown.Add(k);
-            return ret;
-        }
-
-        /// <summary>
-        ///     This method is called every game tick
-        /// </summary>
-        /// <param name="sender">The object sending the event</param>
-        /// <param name="e">The event arguments</param>
-        private void OnTick(object sender, EventArgs e) {
-            if (!_isHidden) SetConsoleControls();
-
+        public void Tick() {
+            if (_isHidden) return;
+            SetConsoleControls();
             DrawConsole();
         }
 
-        /// <summary>
-        ///     Draws the console on screen
-        /// </summary>
         private void DrawConsole() {
-            if (!_isHidden) {
-                var offset = ((int)(GTA.UI.Screen.Height) /3) - 20;
+            var width = (int)_platform.Width;
+            var thirdHeight = (int)_platform.Height / 3;
+            var offset = thirdHeight - 20;
+            var height = offset / ConsoleSettings.NumLines;
+            _platform.DrawRectangle(Point.Empty, new Size(width, thirdHeight), ConsoleSettings.DefaultBgColor);
+            var start = Math.Max(0, _lines.Count - ConsoleSettings.NumLines + _lineOffset);
+            var amount = Math.Min(ConsoleSettings.NumLines, _lines.Count - start);
+            for (var index = 0; index < amount; index++) {
+                var line = _lines[start + index];
+                DrawLargeString(line.Key, new Point(5, ConsoleSettings.NumLines * height - height * (amount - index) + 5),
+                    ConsoleSettings.FontSize, line.Value, 0);
+            }
+            const int scrollbarWidth = 8;
+            const int scrollbarPadding = 2;
+            if (_lines.Count > ConsoleSettings.NumLines) {
+                var maxHeight = offset - 6;
+                var scrollHeight = Convert.ToInt32((double)ConsoleSettings.NumLines / _lines.Count * maxHeight);
+                var yOffset = Convert.ToInt32((double)(_lines.Count + _lineOffset) / _lines.Count * maxHeight - scrollHeight);
+                yOffset = Math.Min(yOffset, maxHeight - scrollHeight);
+                _platform.DrawRectangle(new Point(width - scrollbarPadding - scrollbarWidth, yOffset + scrollbarPadding / 2),
+                    new Size(scrollbarWidth, scrollHeight), Color.FromArgb(100, 118, 91, 227));
+            }
+            _platform.DrawText(ConsoleSettings.Version, new Point(width - 20 - scrollbarWidth - scrollbarPadding,
+                ConsoleSettings.NumLines * height - 12), ConsoleSettings.FontSize, ConsoleSettings.DefaultTextColor, 0);
+            _platform.DrawRectangle(new Point(0, thirdHeight - 20), new Size(width, 1),
+                Color.FromArgb(ConsoleSettings.Alpha, 255, 255, 255));
+            if (_platform.GameTime - _lastBlinkTime > 600) {
+                _cursorChar = _cursorChar == "" ? ConsoleSettings.CursorCharacter : "";
+                _lastBlinkTime = _platform.GameTime;
+            }
+            DrawLargeString(ConsoleSettings.PreString + Input.Insert(Input.Length - _inputOffset, _cursorChar),
+                new Point(5, offset + 3), ConsoleSettings.FontSize,
+                Color.FromArgb(ConsoleSettings.TextAlpha, 255, 255, 255), 0);
+        }
 
-                var console = new ContainerElement(new Point(0, 0), new Size((int)(GTA.UI.Screen.Width), (int)(GTA.UI.Screen.Height) / 3),
-                    ConsoleSettings.DefaultBgColor);
-                var consoleText = new ContainerElement(new Point(0, 0), new Size((int)(GTA.UI.Screen.Width), offset));
-                var consoleInput = new ContainerElement(new Point(0, (int)GTA.UI.Screen.Height / 3), new Size((int)GTA.UI.Screen.Width, 20));
-
-                // Draw console log
-                var height = (offset/ConsoleSettings.NumLines);
-
-                var start = _lines.Count - ConsoleSettings.NumLines + _lineOffset;
-                if (start < 0) start = 0;
-
-                var amt = ConsoleSettings.NumLines;
-                if (start + amt > _lines.Count) amt = _lines.Count - start;
-
-                var drawLines = _lines.GetRange(start, amt);
-                for (var i = 0; i < drawLines.Count; i++) {
-                    foreach (
-                        var uit in
-                            GetLargeStringUIText(drawLines[i].Key,
-                                new Point(5, (ConsoleSettings.NumLines*height) - (height*(drawLines.Count - i)) + 5),
-                                ConsoleSettings.FontSize,
-                                drawLines[i].Value, 0, false)) {
-                        consoleText.Items.Add(uit);
-                    }
-                }
-
-                // Draw scrollbar
-                const int scrollBarWidth = 8;
-                const int scrollBarPadding = 2;
-                const int scrollBarVPadding = 6;
-
-                var scrollMaxHeight = (offset - scrollBarVPadding);
-                var scrollRatio = Convert.ToDouble(ConsoleSettings.NumLines)/Convert.ToDouble(_lines.Count);
-                var relLineHeight = Convert.ToDouble(scrollMaxHeight)/Convert.ToDouble(_lines.Count);
-                if (scrollRatio < 1) {
-                    var scrollHeight = Convert.ToInt32(scrollRatio*scrollMaxHeight);
-                    var yOffset = Convert.ToInt32(((_lines.Count + _lineOffset)*relLineHeight) - scrollHeight);
-                    if (yOffset + scrollHeight > scrollMaxHeight) yOffset = scrollMaxHeight - scrollHeight;
-                    console.Items.Add(
-                        new ContainerElement(
-                            new Point(Convert.ToInt16(GTA.UI.Screen.Width) - (scrollBarPadding + scrollBarWidth), yOffset + (scrollBarPadding/2)),
-                            new Size(scrollBarWidth, scrollHeight), Color.FromArgb(100, 118, 91, 227)));
-                }
-
-                // Draw version string
-                console.Items.Add(new TextElement(ConsoleSettings.Version,
-                    new Point(Convert.ToInt16(GTA.UI.Screen.Width) - 20 - scrollBarWidth - scrollBarPadding, (ConsoleSettings.NumLines*height) - 12),
-                    ConsoleSettings.FontSize,
-                    ConsoleSettings.DefaultTextColor, 0, Alignment.Left));
-
-                // Draw Cursor and input
-                consoleInput.Items.Add(new ContainerElement(new Point(0, -20), new Size(Convert.ToInt16(GTA.UI.Screen.Width), 1),
-                    Color.FromArgb(ConsoleSettings.Alpha, 255, 255, 255)));
-
-                if (Game.GameTime - _lastBlinkTime > 600) {
-                    _cursorChar = _cursorChar == "" ? ConsoleSettings.CursorCharacter : "";
-                    _lastBlinkTime = Game.GameTime;
-                }
-
-                var displayString = Input.Insert(Input.Length - _inputOffset, _cursorChar);
-
-                foreach (
-                    var uit in
-                        GetLargeStringUIText(ConsoleSettings.PreString + displayString, new Point(5, offset + 3),
-                            ConsoleSettings.FontSize,
-                            Color.FromArgb(ConsoleSettings.TextAlpha, 255, 255, 255), 0, false)) {
-                    consoleText.Items.Add(uit);
-                }
-
-                console.Items.Add(consoleText);
-                console.Items.Add(consoleInput);
-
-                console.Draw();
+        private void DrawLargeString(string text, Point position, float scale, Color color, Font font) {
+            var x = 0f;
+            for (var index = 0; index < text.Length; index += 99) {
+                var chunk = text.Substring(index, Math.Min(99, text.Length - index));
+                _platform.DrawText(chunk, new Point(position.X + Convert.ToInt32(x), position.Y), scale, color, font);
+                x += _platform.Width * _game.GetTextWidth(chunk, font, scale);
             }
         }
 
-        #endregion
-
-        #region Console Functions
-
-        /// <summary>
-        ///     Prints the man page for a specified command to the console
-        /// </summary>
-        /// <param name="cmd">The command to print info for</param>
-        public void PrintCommandInfo(CommandDispatcher.Command cmd) {
-            PrintLine("Command: " + cmd.Name);
-            PrintLine("Description: " + cmd.Description);
-            foreach (var x in cmd.ExpectedArgs) {
-                var s = cmd.Name + " ";
-                foreach (var ca in x) {
-                    s += "<" + ca.Type + " " + ca.Name + "> ";
-                }
-                PrintLine(s);
+        public void PrintCommandInfo(CommandDispatcher.Command command) {
+            PrintLine("Command: " + command.Name);
+            PrintLine("Description: " + command.Description);
+            foreach (var argumentSet in command.ExpectedArgs) {
+                var line = command.Name + " ";
+                foreach (var argument in argumentSet) line += "<" + argument.Type.ToString() + " " + argument.Name + "> ";
+                PrintLine(line);
+                foreach (var argument in argumentSet)
+                    if (!string.IsNullOrWhiteSpace(argument.Description))
+                        PrintLine(argument.Name + ": " + argument.Description);
             }
         }
-
-        /// <summary>
-        ///     Prints the man page for a specified command to the console
-        /// </summary>
-        /// <param name="cmd">The name of the command to print info for</param>
-        public void PrintCommandInfo(string cmd) {
-            if (CommandDispatcher.Commands.ContainsKey(cmd)) PrintCommandInfo(CommandDispatcher.Commands[cmd]);
-            else PrintError("Failed to print info for command '" + cmd + "', command does not exist.");
+        public void PrintCommandInfo(string command) {
+            if (CommandDispatcher.Commands.ContainsKey(command)) PrintCommandInfo(CommandDispatcher.Commands[command]);
+            else PrintError("Failed to print info for command '" + command + "', command does not exist.");
         }
-
-        /// <summary>
-        ///     Prints a warning line to the console
-        /// </summary>
-        /// <param name="s">The message</param>
-        public void PrintWarning(string s) {
-            PrintLine("[Warning] " + s,
-                Color.FromArgb(ConsoleSettings.TextAlpha, Color.Yellow.R, Color.Yellow.G, Color.Yellow.B));
+        public void PrintWarning(string text) { PrintLine("[Warning] " + text, Color.FromArgb(ConsoleSettings.TextAlpha, Color.Yellow)); }
+        public void PrintError(string text) { PrintLine("[Error] " + text, Color.FromArgb(ConsoleSettings.TextAlpha, Color.Red)); }
+        public void PrintDebug(string text) {
+            if (Debug) PrintLine("[Debug] " + text, Color.FromArgb(ConsoleSettings.TextAlpha, Color.LightGray));
         }
-
-        /// <summary>
-        ///     Prints an error line to the console
-        /// </summary>
-        /// <param name="s">The message</param>
-        public void PrintError(string s) {
-            PrintLine("[Error] " + s, Color.FromArgb(ConsoleSettings.TextAlpha, Color.Red.R, Color.Red.G, Color.Red.B));
+        public void PrintLine(string text, Color color) {
+            _lines.Add(new KeyValuePair<string, Color>(_platform.Now.ToString("HH:mm:ss") + ": " + text, color));
         }
-
-        /// <summary>
-        ///     Prints a debug line to the console if Debug is true
-        /// </summary>
-        /// <param name="s">The message</param>
-        public void PrintDebug(string s) {
-            if (Debug)
-                PrintLine("[Debug] " + s,
-                    Color.FromArgb(ConsoleSettings.TextAlpha, Color.LightGray.R, Color.LightGray.G, Color.LightGray.B));
-        }
-
-        /// <summary>
-        ///     Prints a line to the console
-        /// </summary>
-        /// <param name="s">The message</param>
-        /// <param name="c">The color of the line</param>
-        public void PrintLine(string s, Color c) {
-            s = DateTime.Now.ToString("HH:mm:ss") + ": " + s;
-            _lines.Add(new KeyValuePair<string, Color>(s, c));
-        }
-
-        /// <summary>
-        ///     Prints a line to the console with the default text color
-        /// </summary>
-        /// <param name="s">The message</param>
-        public void PrintLine(string s) {
-            PrintLine(s, ConsoleSettings.DefaultTextColor);
-        }
-
-        /// <summary>
-        ///     Clears all the lines in the console
-        /// </summary>
-        public void ClearLines() {
-            _lines.Clear();
-            _lineOffset = 0;
-        }
-
-        /// <summary>
-        ///     Removes the last line of the console
-        /// </summary>
+        public void PrintLine(string text) { PrintLine(text, ConsoleSettings.DefaultTextColor); }
+        public void ClearLines() { _lines.Clear(); _lineOffset = 0; }
         public void RemoveLastLine() {
+            if (_lines.Count == 0) return;
             _lines.RemoveAt(_lines.Count - 1);
+            _lineOffset = Math.Max(_lineOffset, Math.Min(0, ConsoleSettings.NumLines - _lines.Count));
         }
 
-        #endregion
-
-        #region Input Commands
-
-        /// <summary>
-        ///     Scroll the console up
-        /// </summary>
-        private void ScrollUp() {
-            var newOffset = _lines.Count - ConsoleSettings.NumLines + _lineOffset - 1;
-            if (newOffset >= 0) _lineOffset -= 1;
-        }
-
-        /// <summary>
-        ///     Scroll the console down
-        /// </summary>
-        private void ScrollDown() {
-            var newOffset = _lines.Count - ConsoleSettings.NumLines + _lineOffset + 1;
-            if (newOffset < _lines.Count) _lineOffset += 1;
-        }
-
-        /// <summary>
-        ///     Set the input line to the last item in input history
-        /// </summary>
-        private void LastInput() {
-            _inputOffset = 0;
-            if (_historyCursor < _inputHistory.Count - 1) _historyCursor++;
-            if (_inputHistory.Count > 0) Input = _inputHistory[_historyCursor];
-        }
-
-        /// <summary>
-        ///     Set the input line to the next item in input history
-        ///     If no next line in input history, clears input
-        /// </summary>
-        private void NextInput() {
-            _inputOffset = 0;
-            if (_historyCursor > 0) {
-                _historyCursor--;
-            }
-            else {
-                Input = "";
-                return;
-            }
-            Input = _inputHistory[_historyCursor];
-        }
-
-        /// <summary>
-        ///     Move the cursor to the left 1 character
-        /// </summary>
-        private void CursorLeft() {
-            if (_inputOffset < Input.Length) _inputOffset++;
-        }
-
-        /// <summary>
-        ///     Move the cursor to the right 1 character
-        /// </summary>
-        private void CursorRight() {
-            if (_inputOffset > 0) _inputOffset--;
-        }
-
-        /// <summary>
-        ///     Delete 1 character before the cursor
-        /// </summary>
-        private void BackSpace() {
-            if (Input.Length - _inputOffset > 0) Input = Input.Remove(Input.Length - _inputOffset - 1, 1);
-        }
-
-
-        /// <summary>
-        ///     Delete 1 character after the cursor
-        /// </summary>
-        private void Del() {
-            if (Input.Length > 0) {
-                Input = Input.Remove(Input.Length - _inputOffset, 1);
-                if (_inputOffset > 0) _inputOffset--;
-            }
-        }
-
-        /// <summary>
-        ///     Run the command string from the input line
-        /// </summary>
-        private void RunCommand() {
-            var cmd = Input;
+        public void RunCommand() {
+            var commandText = Input;
             Input = "";
             _inputOffset = 0;
-            _inputHistory.Insert(0, cmd);
-            PrintLine(ConsoleSettings.PreString + cmd);
-
-            //Run command
-            var ct = new CommandParser(cmd, this);
-
-            var cmdName = "";
-            var tokens = new List<CommandToken>();
-
-            foreach (CommandToken t in ct.Tokens) {
-                switch (t.Kind) {
-                    case CommandTokenKind.Word:
-                        if (cmdName == "") {
-                            cmdName = t.String;
-                            if (!CommandDispatcher.Commands.ContainsKey(cmdName)) goto ErrorNotFound;
-                        }
-                        else tokens.Add(t);
-                        break;
-                    case CommandTokenKind.Number:
-                    case CommandTokenKind.String:
-                    case CommandTokenKind.CodeBlock:
-                        tokens.Add(t);
-                        break;
-                }
-            }
-
-            ErrorNotFound:
-            if (cmdName == "" || !CommandDispatcher.Commands.ContainsKey(cmdName)) {
-                PrintError("Command '" + cmdName + "' not found!");
+            _inputHistory.Insert(0, commandText);
+            PrintLine(ConsoleSettings.PreString + commandText);
+            var parsed = new CommandParser(commandText, this, _environment);
+            if (parsed.Tokens.Count == 0 || parsed.Tokens[0].Kind != CommandTokenKind.Word) {
+                PrintError("Command '' not found!");
                 return;
             }
-
-            var c = CommandDispatcher.Commands[cmdName];
-            var i = c.AreTokensValid(tokens);
-
-
-            if (i < 0) {
-                PrintError("Provided arguments are not valid for command '" + cmdName + "'");
-                PrintCommandInfo(c);
+            var name = parsed.Tokens[0].String;
+            CommandDispatcher.Command command;
+            if (!CommandDispatcher.Commands.TryGetValue(name, out command)) {
+                PrintError("Command '" + name + "' not found!");
+                return;
             }
-            else {
-                c.Callback(new CommandDispatcher.CommandEventArgs(c.Name, tokens, i));
-            }
+            var tokens = parsed.Tokens.GetRange(1, parsed.Tokens.Count - 1);
+            var argumentSet = command.AreTokensValid(tokens);
+            if (argumentSet < 0) {
+                PrintError("Provided arguments are not valid for command '" + name + "'");
+                PrintCommandInfo(command);
+            } else command.Callback(new CommandDispatcher.CommandEventArgs(name, tokens, argumentSet));
         }
 
-        /// <summary>
-        ///     Show the console
-        /// </summary>
-        /// <param name="show">Whether or not the console should be shown</param>
-        public void ShowConsole(bool show) {
-            _isHidden = !show;
+        private void ShowConsole(bool show) {
             _lineOffset = 0;
             _historyCursor = -1;
             if (show) {
-                _disabledControls = GTAFuncs.DisableAllControls();
-                SetConsoleControls();
+                RestoreOwnedControls();
+                _disabledControls = _game.CaptureEnabledControls();
+                try {
+                    SetConsoleControls();
+                    _isHidden = false;
+                } catch (Exception error) {
+                    try { RestoreOwnedControls(); }
+                    catch (Exception restoreError) {
+                        throw new AggregateException("Console operations failed.", error, restoreError);
+                    }
+                    throw;
+                }
             } else {
-                GTAFuncs.SetControlActions(false);
-                GTAFuncs.EnableControls(_disabledControls);
-                _disabledControls.Clear();
+                _isHidden = true;
+                RestoreOwnedControls();
+                _keyWasDown.Clear();
             }
         }
-
-        /// <summary>
-        /// Disables all controls not enabled while using the console
-        /// </summary>
+        private void RestoreOwnedControls() {
+            if (_disabledControls == null) {
+                _game.RestorePendingControls();
+                return;
+            }
+            var controls = _disabledControls;
+            // GTAFuncs retains each failed restoration. Successful restores no longer belong
+            // to this console and must not overwrite later changes by other scripts.
+            _disabledControls = null;
+            _game.RestoreControls(controls);
+        }
         private void SetConsoleControls() {
-            GTAFuncs.SetControlActions(false);
-            GTAFuncs.EnableControlAction(Control.MoveLeftRight, true);
-            GTAFuncs.EnableControlAction(Control.MoveUpDown, true);
-            GTAFuncs.EnableControlAction(Control.VehicleAccelerate, true);
-            GTAFuncs.EnableControlAction(Control.VehicleBrake, true);
-            GTAFuncs.EnableControlAction(Control.VehicleDriveLook, true);
-            GTAFuncs.EnableControlAction(Control.VehicleDriveLook2, true);
-            GTAFuncs.EnableControlAction(Control.VehicleMoveLeftRight, true);
-            GTAFuncs.EnableControlAction(Control.VehicleMoveUpDown, true);
-            GTAFuncs.EnableControlAction(Control.LookLeftRight, true);
-            GTAFuncs.EnableControlAction(Control.LookUpDown, true);
-            GTAFuncs.EnableControlAction(Control.FlyUpDown, true);
-            GTAFuncs.EnableControlAction(Control.FlyLeftRight, true);
-            GTAFuncs.EnableControlAction(Control.VehicleFlyRollLeftRight, true);
-            GTAFuncs.EnableControlAction(Control.VehicleFlyPitchUpDown, true);
-            GTAFuncs.EnableControlAction(Control.VehicleFlyYawLeft, true);
-            GTAFuncs.EnableControlAction(Control.VehicleFlyYawRight, true);
-            GTAFuncs.EnableControlAction(Control.VehicleFlyThrottleDown, true);
-            GTAFuncs.EnableControlAction(Control.VehicleFlyThrottleUp, true);
+            _game.DisableControls();
+            foreach (var control in new[] {
+                Control.MoveLeftRight, Control.MoveUpDown, Control.VehicleAccelerate, Control.VehicleBrake,
+                Control.VehicleDriveLook, Control.VehicleDriveLook2, Control.VehicleMoveLeftRight,
+                Control.VehicleMoveUpDown, Control.LookLeftRight, Control.LookUpDown, Control.FlyUpDown,
+                Control.FlyLeftRight, Control.VehicleFlyRollLeftRight, Control.VehicleFlyPitchUpDown,
+                Control.VehicleFlyYawLeft, Control.VehicleFlyYawRight, Control.VehicleFlyThrottleDown,
+                Control.VehicleFlyThrottleUp }) _game.EnableControlAction(control, true);
         }
-
-        #endregion
-
-        #region Utils
-
-        /// <summary>
-        ///     Breaks a large string up into multiple UIText objects
-        /// </summary>
-        /// <param name="s">The input string</param>
-        /// <param name="p">The draw point</param>
-        /// <param name="sz">The font size</param>
-        /// <param name="c">The text color</param>
-        /// <param name="f">The font to draw</param>
-        /// <param name="cnt">Whether or not to center the text</param>
-        /// <returns>A list of UIText objects that compose the string</returns>
-        private List<GTA.UI.TextElement> GetLargeStringUIText(string s, Point p, float sz, Color c, Font f, bool cnt) {
-            var x = 0F;
-            var text = new List<GTA.UI.TextElement>();
-            foreach (var chunk in Split(s, 99)) {
-                var size = GTAFuncs.GetTextWidth(s, f, sz);
-                text.Add(new GTA.UI.TextElement(chunk, new Point(p.X + Convert.ToInt32(x), p.Y), sz, c, f, GTA.UI.Alignment.Left));
-                x += GTA.UI.Screen.Width*size;
-            }
-            return text;
-        }
-
-        /// <summary>
-        ///     Splits a string up into chunks of a specified size
-        /// </summary>
-        /// <param name="str">The string to splait</param>
-        /// <param name="chunkSize">The desired chunk size</param>
-        /// <returns>A list of chunked strings</returns>
-        private static List<string> Split(string str, int chunkSize) {
-            return new List<string>(Regex.Split(str, @"(?<=\G.{" + chunkSize + "})", RegexOptions.Singleline));
-        }
-
-        #endregion
     }
 }
