@@ -3,12 +3,12 @@
 ## Start from a bounded segment
 
 Write an ordinary Python file exporting `run(ctx)` (sync or async). Use `ctx.game`
-for the inherited session/lease. Execute from the uv project:
+for the inherited session/lease. Use the prepared interpreter from `.python-path` (see the skill entrypoint):
 
 ```powershell
-uv run --frozen gta-use run .\policy.py --process 12345 --timeout 180 --stuck-timeout 30 --check-timeout 10
-uv run --frozen gta-use status '<run directory printed by the runner>'
-uv run --frozen gta-use cancel '<run directory printed by the runner>'
+& $gtaPython -m gta_use run .\policy.py --process 12345 --timeout 180 --stuck-timeout 30 --check-timeout 10
+& $gtaPython -m gta_use status '<run directory printed by the runner>'
+& $gtaPython -m gta_use cancel '<run directory printed by the runner>'
 ```
 
 The supervisor owns the lease and heartbeat; a separate worker executes the file.
@@ -33,6 +33,8 @@ def run(ctx):
 This confirms an observation, not mission progress. Runner completion requests
 pause even if the script did not advance simulation. Check `result.json` for
 confirmed pause before handing control to another agent.
+The next movement segment must resume before submitting or waiting for a task;
+starting a policy or accepting a native task does not unpause simulation.
 
 ## Give each segment an explicit contract
 
@@ -62,6 +64,46 @@ observation/behavior is understood. The SDK is in
 [segment.py](../../../../tools/gta_use/segment.py), and supervision in
 [__main__.py](../../../../tools/gta_use/__main__.py).
 
+
+## Find a task without guessing its ABI
+
+For ordinary movement/vehicle tasks, the local SHVDNE XML documents **C# API
+names**, not all native hash names. Search `.deps/shvdne/ScriptHookVDotNet3.xml`
+for `M:GTA.TaskInvoker.FollowNavMeshTo`, `M:GTA.TaskInvoker.EnterVehicle`,
+`M:GTA.TaskInvoker.DriveTo` or `T:GTA.VehicleDrivingFlags`. Read the matching
+overload's parameters and use a short `game.command` with the typed SHVDNE API.
+Read the actual `<member name="...">` entry, not the first `<see cref="...">`
+search hit. For example, PowerShell can select an overload without dumping the XML:
+
+```powershell
+$api = [xml](Get-Content .deps/shvdne/ScriptHookVDotNet3.xml -Raw)
+$api.doc.members.member | Where-Object { $_.name.StartsWith('M:GTA.TaskInvoker.FollowNavMeshTo(') } | Select-Object -First 1 -ExpandProperty OuterXml
+```
+
+Do not assume that an absent `TASK_*` XML search means no movement API exists.
+For raw natives, verify the upstream signature before using `game.native`.
+
+Submit a navigation task once per goal, then observe progress. The in-game C#
+compiler has a 128-attempt budget per managed session; state loops belong in
+Python and should use state packs, not compile new C# on every observation.
+A long route can continue while Python checks health, position and the goal.
+Avoid clear/reissue loops when the same task is making progress.
+
+A straight-line task does not route around a building. Use navmesh movement for
+walkable routes, then inspect `PED.GetNavMeshRouteResult()` when position stalls:
+`TaskNotFound`, `RouteNotYetTried`, `RouteNotFound` and `RouteFound` distinguish
+missing tasks, pending searches and path results. A found route still needs
+observed movement. Repeating the same blocked goal is not recovery. Inspect the
+entrance and probe directions, choose a reachable exterior waypoint, or use normal
+controls for a short verified passage. A mission blip can be inside a building;
+its coordinates do not identify the accessible doorway. Keep automatic warping
+out of ordinary-play policies when choosing navigation overloads.
+
+The runner already provides `ctx.directory`, `ctx.log(event, **data)`,
+`ctx.check`, `ctx.progress`, `ctx.checkpoint` and `ctx.uncertain`. Run the small
+observation example before adding navigation/combat. Add helpers only when an
+actual segment repeats that logic. `ctx.check` terminates the current run on
+observed player death; recovery starts a new run after the real Retry flow.
 ## Reactive loop / behavior tree design
 
 Use a priority selector with persistent node state. Each tick consumes one fresh
@@ -107,7 +149,9 @@ Socket Ping/Pong and successful command receipts are not observation/progress.
 
 `ctx.progress(message, **evidence)` resets the stall timer only for meaningful
 change. Examples: distance reduces beyond a tolerance; a new road cell is reached;
-cover is first acquired; confirmed target health decreases; objective stage changes.
+cover is first acquired; confirmed target health decreases; objective stage changes;
+cutscene time advances during a bounded wait. A long cutscene can exceed the stall
+timeout even while observations keep arriving; report its actual time progression.
 Do not call it unconditionally in every loop, for repeated retries, or merely
 because the controller is alive. Avoid metrics that permit endless circles.
 

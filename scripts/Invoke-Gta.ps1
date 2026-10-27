@@ -115,6 +115,12 @@ if ($Operation -eq 'reload' -and -not $NoWait) {
         Start-Sleep -Milliseconds 50
         try { $state = Read-GtaRecord (Join-Path $bridge.bridge.directory "batch-$batch-status.json") }
         catch [IO.FileNotFoundException] { continue } # A replacement can briefly hide the directory entry on the game volume.
+        catch [IO.IOException] {
+            # Atomic replacement or a scanner may briefly deny this read. Retry
+            # only the observation, within the existing batch deadline.
+            if (($_.Exception.HResult -band 0xffff) -in 32,33) { continue }
+            throw
+        }
         if ($state.batch -ne $batch) { throw 'Another client replaced the current batch. Inspect saved results.' }
         if ($state.state -ne 'running') { break }
     }

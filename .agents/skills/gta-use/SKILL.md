@@ -1,94 +1,109 @@
 ---
 name: gta-use
-description: Operate and diagnose GTA V Enhanced Story Mode through this repository's GTA use bridge. Use for external reload or C# commands, structured world observations, timed controls, screenshots, mission testing, and supervised Python game AI scripts or behavior trees. Includes continuous checkpoint policies and pause/inspect recovery. Does not apply to GTA Online or unrelated desktop automation.
+description: Operate and diagnose GTA V Enhanced Story Mode through the GTA use bridge. Use for external reload and console commands, filtered world observations, timed controls, screenshots, and supervised Python game AI or mission testing. Does not apply to GTA Online or unrelated desktop automation.
 ---
 
 # GTA use
 
-Treat the game as an observed world with explicit actions. Prefer filtered JSON
-observations and supervised Python policies; use screenshots for mission text,
-menus and ambiguous geometry. Do not infer success from command acceptance.
+Use filtered JSON observations and supervised Python policies for continuous
+segments. Use screenshots for objective text, menus and uncertain geometry.
+Command acceptance is not an observed gameplay outcome.
 
-## Read the right reference
+## Start playing without rediscovering the installation
 
-- Skip startup screens and resume Story on launch: [startup helper](../../../docs/story-startup.md).
-- Start, connect, reload, diagnose or recover: [operations](references/operations.md).
-- Choose observations for walking, driving or combat: [world state](references/world-state.md).
-- Write a one-off policy, behavior tree or mission segment: [Python AI](references/python-ai.md).
-- Prepare the Rust HTTP/WebSocket server: [server setup](../../../docs/rust-service.md).
-- Measure latency, CPU, allocations or memory: [profiling guide](../../../docs/bridge-performance.md).
-- Exact API/limits and live evidence: [GTA use guide](../../../docs/gta-use.md).
-- Exact state fields/filters: [state contract](../../../docs/world-state.md).
-- Build, installation and save preservation: [repository instructions](../../../AGENTS.md).
-
-Paths in commands below are relative to the repository root. From a packaged
-installation, use `uv run --project <game>/scripts/GtaUse --frozen ...` instead.
-Use Python 3.14 and the locked uv project. A prepared bridge starts the packaged Rust server
-automatically; do not start competing servers.
-
-## Operating loop
-
-1. Find the actual `GTA5_Enhanced` process and select its PID explicitly. Read
-   discovery through the SDK, run `describe`, and obtain a small state pack.
-   Inspect session/player availability before acting. Readiness of HTTP alone
-   does not prove the game thread is ticking.
-2. Identify the current objective from observations and, when needed, a fresh
-   screenshot. For ordinary mission tests, disable Thor through
-   `game.command("Thor.Thor.Current.SetEnabled(false);")`. Use a backed-up Story
-   save and preserve the user's settings and progress.
-3. Choose the control mode. For an uncertain scene, `game.step(500, inputs, ... )`
-   advances, pauses and observes. For a known segment, write `run(ctx)` and use
-   `gta-use run` with overall, stall and observation deadlines. Resume once and
-   react continuously until a verified checkpoint or uncertainty.
-4. Check independent outcomes: vehicle occupancy, position progress, acquired
-   cover, target damage, objective transition. Reobserve handles after time
-   advances; missing entities and hostile relationship numbers are not sufficient
-   evidence of success or target identity.
-5. On failure, inspect `result.json`, `state.json`, `events.jsonl`, stderr and
-   bridge diagnostics and current game state. Recover the actual game checkpoint, change the policy, then
-   rerun from fresh observations. Never blindly replay an uncertain mutation.
-6. Preserve screenshots and script/log evidence outside Git. Report what was
-   actually observed, including retries and unverified mechanics. A script's
-   checkpoint label does not mean GTA saved a checkpoint or passed the mission.
-
-## First connection
+For an already prepared installation, reuse its recorded Python 3.14 interpreter.
+Build/install uses uv; playing does not need another sync or a new environment.
+From the repository root (or `<game>/scripts/GtaUse` for an installed package):
 
 ```powershell
+$gtaPython = (Get-Content -LiteralPath .python-path -Raw).Trim()
 $gameProcess = Get-Process GTA5_Enhanced -ErrorAction Stop
-uv run --frozen gta-use request describe --process $gameProcess.Id
-uv run --frozen gta-use request state --process $gameProcess.Id --args '{"sections":["player","weapons"]}'
-uv run --frozen gta-use request capture --process $gameProcess.Id
+& $gtaPython -m gta_use describe --process $gameProcess.Id
+& $gtaPython -m gta_use inspect --process $gameProcess.Id --sections player navigation weapons --capture --output artifacts/initial-world.json
 ```
 
-Keep bearer tokens out of tool output, commits and shared evidence. The SDK reads
-the service credential locally. Use the returned screenshot path to inspect the
-actual image; capture requires the GTA window visible and in the foreground.
+Use a fresh output path in an existing directory. `inspect` saves the original
+pack under `state`, bridge status under `status`, and the image path under
+`capture.screenshot`. Open that image; capture requires GTA visible/foreground.
+`describe --command controls` returns one command schema;
+`describe --control Move` returns matching control names. `inspect --blip-limit 256` checks all bounded navigation markers
+once when `navigation.truncated` is true; radius, entity limit, type and LOS filters
+are also CLI options. The raw
+`request describe` remains available for the complete catalogue.
 
-## Boundaries that matter
+If `.python-path` is missing or its interpreter no longer works, read
+[operations](references/operations.md) for setup. Do not run `uv sync` repeatedly
+against a read-only environment. Process enumeration can be restricted in an
+agent sandbox; an empty list there does not prove GTA exited. Use the host's
+verified PID and normal scoped execution approval when required. Never dump
+`service-<PID>.json`, which contains a bearer credential.
 
-- Story Mode only. Close GTA before replacing DLLs or native plugins. The single
-  managed module is `GameBridge.dll`; remove backed-up obsolete AgentBridge and
-  DeveloperConsole DLLs during upgrades to avoid duplicate scripts.
-- General native/C# access is trusted code, not a sandbox. Keep C# short and
-  nonblocking; run long logic in supervised Python. Do not invent unsupported
-  native signatures or pass integer-looking floats without explicit types.
-- A lease pauses/cancels bridge actions on expiry when the game next ticks.
-  It cannot preempt a blocked game thread. A timeout or `paused: null` requires
-  inspection and possibly ordinary desktop input for a modal Retry screen.
-- Pause is not an undo operation. A submitted native task may continue when time
-  resumes. Understand outstanding tasks before switching controllers.
-- Preserve one controller per game. Do not launch detached workers, reset stall
-  timers for unchanged observations, or silently resume an expired/reloaded run.
+For mission scripting, read [Python AI](references/python-ai.md) and consult
+[world state](references/world-state.md) for the fields your policy consumes.
+Start by running the small observation example in Python AI. Then implement the
+next observed objective. The runner already supplies logs, state files, leases,
+heartbeats, checkpoints and timeouts; use `ctx.directory` and `ctx.log` instead
+of building another framework before the first runnable segment.
 
-## Extending the system
+## Observe, act, verify
 
-Discover operations and section schemas with `describe` before creating a new
-shortcut. Reusable game actions belong in `GameBridge/Agent`; engine mappings and
-observations belong in `GameBridge` under `GTAVMods.Game`. Python policy stays in
-`tools/gta_use` or a recorded one-off script. Register namespaced commands or state
-sections for scenario-specific needs; use the existing transport and scheduler.
-Keep state providers bounded and free of gameplay side effects. Follow the
-repository's player-scenario tests and 100% coverage gate for production changes.
+1. Confirm a fresh player and the current objective. Disable Thor once for normal
+   mission play: `game.command("Thor.Thor.Current.SetEnabled(false);")`. Use the
+   backed-up Story save; preserve settings and progress.
+2. Unknown scene: `game.step(500, inputs, **filters)` advances, pauses and observes.
+   Known segment: write `run(ctx)` and use `gta-use run` with finite overall,
+   stall and observation deadlines. Resume once, react until a verified objective
+   or uncertainty, and inspect the runner's final `paused` result.
+3. Verify actual position progress, vehicle occupancy, acquired cover, target
+   damage or objective transition. Revalidate handles after time advances.
+   A hostile relationship alone does not identify a mission enemy.
+4. On failure, inspect `result.json`, `state.json`, `events.jsonl` and stderr.
+   Correct the cause and recover the game's real checkpoint before a new run.
+   A policy checkpoint label does not create a GTA checkpoint or prove success.
+5. Capture significant transitions and the actual Mission Passed screen. Preserve
+   failed attempts and script/log evidence outside Git; report assistance and
+   unverified mechanics as well as successes.
 
-The full Repossession mission was verified on 2026-10-27. That evidence supports
-the documented controls, not a claim of universal mission or campaign coverage.
+## If HTTP works but the game does not answer
+
+`/v1/session` is served outside the game; state and capture need SHVDNE ticks.
+A pause menu, focus loss or mission-failure modal can suspend those ticks. After
+one bounded state failure, inspect the visible game instead of spending minutes
+retrying the same request. Ordinary desktop input may be needed to resume/retry.
+Reobserve before acting; never blindly replay an uncertain mutation. The bridge's
+simulation pause is different from the game's pause menu.
+
+When switching to a separate harness interrupts gameplay, record and temporarily
+disable Settings > Graphics > Pause Game On Focus Loss; restore it afterward.
+Follow each modal's displayed shortcuts, not its hover highlight. On the autosave
+overwrite alert, Esc means No and Enter means Yes. Declining may open a separate
+disable-autosave confirmation. Verify each transition before sending another key.
+
+## Boundaries
+
+- Story Mode only. Close GTA before replacing DLLs/plugins. For setup, runtime
+  changes or save handling, read [AGENTS.md](../../../AGENTS.md) first.
+- One controller per game. Stop an existing policy and confirm pause before a
+  handoff. No detached workers or stall resets for unchanged observations.
+- General native/C# access is trusted code. Keep C# brief and nonblocking; Python
+  owns long logic. Preserve native argument types. See the task lookup guidance
+  in [Python AI](references/python-ai.md) before inventing a native signature.
+- Lease expiry acts on the next game tick; it cannot preempt a blocked script
+  thread. Pause does not erase persistent native tasks. Reload invalidates
+  handles, leases and dynamic registrations.
+
+## Read more only when needed
+
+- Connect, reload, recover or diagnose: [operations](references/operations.md).
+- Field meanings, filters and costs: [world state](references/world-state.md);
+  [full state contract](../../../docs/world-state.md) for exact fields.
+- Write or revise a continuous policy: [Python AI](references/python-ai.md).
+- Install the Rust service: [server setup](../../../docs/rust-service.md).
+- Startup menus: [Story startup helper](../../../docs/story-startup.md).
+- Measure performance: [profiling](../../../docs/bridge-performance.md).
+- Protocol, extensions or historical validation: [full API guide](../../../docs/gta-use.md).
+
+Extend the existing transport/scheduler with namespaced commands or state sections.
+Keep observations bounded and free of gameplay side effects. Production changes
+follow the repository's scenario tests and 100% C# coverage gate. Prior Repossession
+verification is evidence for those controls, not universal mission coverage.

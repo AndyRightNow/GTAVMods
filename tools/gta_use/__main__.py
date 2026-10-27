@@ -15,6 +15,7 @@ import uuid
 from .client import Client
 from .segment import Segment, StopSegment, save_json
 from .windows import read_json
+from .inspection import inspect_game, select_capabilities
 
 
 def child(script):
@@ -130,7 +131,22 @@ def main():
     request = commands.add_parser("request", help="Send a JSON operation, e.g. state or capture.")
     request.add_argument("op")
     request.add_argument("--args", default="{}")
-    for command in (run, request):
+    describe = commands.add_parser("describe", help="List installed capabilities compactly, or select a command/control.")
+    selection = describe.add_mutually_exclusive_group()
+    selection.add_argument("--command", dest="command_name")
+    selection.add_argument("--control", help="Case-insensitive substring of GTA.Control names.")
+    inspection = commands.add_parser("inspect", help="Read bridge status and a filtered world pack without taking control.")
+    inspection.add_argument("--profile", choices=("minimal", "walking", "driving", "combat", "full"), default="minimal")
+    inspection.add_argument("--sections", nargs="+", help="Explicit section names replace profile defaults.")
+    inspection.add_argument("--radius", type=float, help="Nearby radius in metres (1..1000).")
+    inspection.add_argument("--limit", type=int, help="Maximum nearby entities (1..128).")
+    inspection.add_argument("--blip-limit", type=int, help="Maximum navigation markers (1..256).")
+    inspection.add_argument("--types", nargs="+", choices=("ped", "vehicle", "object"))
+    inspection.add_argument("--line-of-sight", choices=("on", "off"))
+    inspection.add_argument("--capture", action="store_true", help="Also capture the visible foreground GTA client.")
+    for command in (describe, inspection):
+        command.add_argument("--output", help="Save full JSON here and print only its path.")
+    for command in (run, request, describe, inspection):
         command.add_argument("--discovery")
         command.add_argument("--process", type=int)
     commands.add_parser("_child", help=argparse.SUPPRESS).add_argument("script")
@@ -146,7 +162,30 @@ def main():
         file = directory / "result.json"
         print(json.dumps(read_json(file if file.exists() else directory / "progress.json")))
     else:
-        print(json.dumps(Client(args.discovery, args.process).request(args.op, **json.loads(args.args)), ensure_ascii=False))
+        game = Client(args.discovery, args.process)
+        try:
+            if args.command == "describe":
+                result = select_capabilities(game.request("describe"), args.command_name, args.control)
+            elif args.command == "inspect":
+                filters = {"profile": args.profile}
+                for argument, field in (("sections", "sections"), ("radius", "radius"), ("limit", "limit"),
+                                        ("blip_limit", "blipLimit"), ("types", "types"), ("line_of_sight", "lineOfSight")):
+                    value = getattr(args, argument)
+                    if value is not None:
+                        filters[field] = value
+                result = inspect_game(game, filters, args.capture)
+            else:
+                result = game.request(args.op, **json.loads(args.args))
+            output = getattr(args, "output", None)
+            if output:
+                path = Path(output).resolve()
+                # Evaluation evidence must not silently replace a previous capture.
+                with path.open("x", encoding="utf-8") as stream:
+                    stream.write(json.dumps(result, ensure_ascii=False, allow_nan=False))
+                result = {"file": str(path)}
+            print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+        finally:
+            game.close()
     return 0
 
 

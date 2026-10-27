@@ -37,6 +37,20 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         {
             using (var s = new AgentScene())
             {
+                // An agent requests one nearby pedestrian and one navigation marker,
+                // skipping a closer vehicle and retaining an actual foreground capture.
+                s.Game.Entity(20).Position = new GTA.Math.Vector3(2, 2, 3);
+                s.Game.AddEntity(40).Position = new GTA.Math.Vector3(6, 1, 0);
+                s.Game.World.Nearby = (position, radius) => new[] { 10, 20, 30, 40 };
+                s.Game.Native.Queries[Hash.GET_ENTITY_TYPE] = a => (int)a[0] == 20 ? 2 : 1;
+                s.Game.Native.Returns(Hash.GET_RELATIONSHIP_BETWEEN_PEDS, 3);
+                s.Blips = new[] { new GTA.Blip(90), new GTA.Blip(91) };
+                s.Game.Native.Returns(Hash.DOES_BLIP_HAVE_GPS_ROUTE, false);
+                s.Game.Native.Returns(Hash.GET_BLIP_INFO_ID_ENTITY_INDEX, 0);
+                s.Game.Native.Returns(Hash.GET_NAME_OF_ZONE, "STRAW");
+                s.Game.Native.Returns(Hash.GET_STREET_NAME_FROM_HASH_KEY, "Forum Drive");
+                s.Game.Native.Returns(Hash.GET_GPS_BLIP_ROUTE_FOUND, false);
+                s.Game.Native.Returns(Hash.GET_GPS_BLIP_ROUTE_LENGTH, 0);
                 string project = ServiceProject(s);
                 using (var bridge = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), project))
                 {
@@ -54,8 +68,9 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                         using (var client = Process.Start(info))
                         {
                             var output = client.StandardOutput.ReadToEndAsync(); var error = client.StandardError.ReadToEndAsync();
-                            try { Wait(() => client.HasExited, tick, 20000); }
-                            finally { if (!client.HasExited) client.Kill(); }
+                            // This includes six fresh CLI launches as well as the supervised policy.
+                            try { Wait(() => client.HasExited, tick, 45000); }
+                            finally { if (!client.HasExited) { client.Kill(); client.WaitForExit(); } }
                             Assert.AreEqual(0, client.ExitCode, error.GetAwaiter().GetResult());
                             StringAssert.Contains(output.GetAwaiter().GetResult(), "screenshot");
                         }
@@ -76,8 +91,8 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                         using (var client = Process.Start(info))
                         {
                             var output = client.StandardOutput.ReadToEndAsync(); var error = client.StandardError.ReadToEndAsync();
-                            try { Wait(() => client.HasExited, () => { s.Game.Host.GameTime += 16; reloaded.Tick(); }, 20000); }
-                            finally { if (!client.HasExited) client.Kill(); }
+                            try { Wait(() => client.HasExited, () => { s.Game.Host.GameTime += 16; reloaded.Tick(); }, 45000); }
+                            finally { if (!client.HasExited) { client.Kill(); client.WaitForExit(); } }
                             Assert.AreEqual(0, client.ExitCode, error.GetAwaiter().GetResult());
                             StringAssert.Contains(output.GetAwaiter().GetResult(), "screenshot");
                             Assert.AreEqual(replacement, (int)Protocol.Decode(File.ReadAllText(discovery))["serviceProcess"]);

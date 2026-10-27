@@ -49,8 +49,8 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             }
         }
 
-        [TestMethod]
-        public void TemporarilyUnavailableStatusFileDoesNotReplayThePlayersAcceptedAction()
+        [TestMethod, DataRow(false), DataRow(true)]
+        public void TemporarilyUnavailableStatusFileDoesNotReplayThePlayersAcceptedAction(bool locked)
         {
             using (var s = new AgentScene())
             using (var bridge = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels)))
@@ -58,6 +58,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 string batch = Path.Combine(s.Root, "pause.json");
                 File.WriteAllText(batch, "[{\"op\":\"pause\"}]");
                 string held = null, status = null;
+                FileStream denied = null;
                 var unavailable = new Stopwatch();
                 Action tick = () => {
                     bridge.Tick();
@@ -66,15 +67,22 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                         status = Directory.GetFiles(s.Root, "batch-*-status.json", SearchOption.AllDirectories).SingleOrDefault();
                         if (status != null && ReadShared(status).Contains("completed"))
                         {
-                            held = status + ".withheld"; File.Move(status, held); unavailable.Start();
+                            held = status + ".withheld";
+                            if (locked) denied = new FileStream(status, FileMode.Open, FileAccess.Read, FileShare.None);
+                            else File.Move(status, held);
+                            unavailable.Start();
                         }
                     }
                     else if (unavailable.IsRunning && unavailable.ElapsedMilliseconds >= 400)
                     {
-                        File.Move(held, status); unavailable.Stop();
+                        if (locked) { denied.Dispose(); denied = null; }
+                        else File.Move(held, status);
+                        unavailable.Stop();
                     }
                 };
-                var reply = AgentClient.Run(s.Root, "-Operation batch -BatchFile \"" + batch + "\"", tick);
+                (int ExitCode, string Output, string Error) reply;
+                try { reply = AgentClient.Run(s.Root, "-Operation batch -BatchFile \"" + batch + "\"", tick); }
+                finally { denied?.Dispose(); }
                 Assert.AreEqual(0, reply.ExitCode, reply.Error);
                 StringAssert.Contains(reply.Output, "completed");
                 Assert.IsNotNull(held, "The storage interruption must have occurred.");

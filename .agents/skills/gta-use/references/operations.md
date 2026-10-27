@@ -44,7 +44,7 @@ small state query and confirm the current player is available.
 | Trusted one-off engine operation | `game.native(...)` or `game.command(...)` | Actual resulting game state |
 | Reload managed scripts | `game.request("reload")` | New ready session; fresh Client |
 
-Use `describe` for current control names, schemas and extensions. Controls accept
+Use `gta-use describe` for a compact capability list, `describe --command controls` for a specific schema, or `describe --control Move` for matching control names. Raw `request describe` returns the complete catalogue. Controls accept
 GTA.Control names or integer IDs, explicit group and normalized value. Positive
 and negative axis directions depend on the control; test a short movement before
 assuming a direction. A batch can apply multiple simultaneous controls in a step,

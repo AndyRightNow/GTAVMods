@@ -81,16 +81,47 @@ development interface, not a Python/C# sandbox.
 
 ## Python command utility
 
-From a source checkout:
+For an already built checkout or installed `scripts/GtaUse` directory, reuse the
+uv-prepared interpreter recorded in `.python-path`. This does not sync packages
+or write to a read-only `.venv` just to play:
 
 ~~~powershell
-uv run --frozen gta-use request describe --process 12345
-uv run --frozen gta-use request state --process 12345 --args '{"profile":"combat","radius":60,"limit":16,"lineOfSight":"on"}'
-uv run --frozen gta-use request capture --process 12345
+$gtaPython = (Get-Content -LiteralPath .python-path -Raw).Trim()
+& $gtaPython -m gta_use describe --process 12345
+& $gtaPython -m gta_use describe --process 12345 --command controls
+& $gtaPython -m gta_use describe --process 12345 --control Move
+& $gtaPython -m gta_use inspect --process 12345 --sections player navigation weapons --capture --output initial-world.json
 ~~~
 
-The packaged project is scripts/GtaUse; use uv run --project <that folder> from
-elsewhere. Select --process when several discovery files exist. --discovery
+`describe` lists installed operations, command names and sections without the
+entire control enum. `--command` selects the actual schema; `--control` searches
+control names without case sensitivity. `inspect` reads bridge status and a world
+pack without acquiring a lease or changing gameplay. `--sections` replaces profile
+defaults; `--profile` selects a named preset. Optional `--capture` saves a PNG of
+the foreground game. `--output` saves full JSON to a new file and prints only its
+path; it refuses to overwrite existing evidence. The output contains `status`,
+`state` (the unchanged pack), and optional `capture.screenshot`.
+
+`--radius`, `--limit`, `--types ped vehicle object`, `--blip-limit` and
+`--line-of-sight on|off` expose the corresponding state filters without inline
+JSON. If navigation reports `truncated`, inspect `--blip-limit 256` once before
+concluding that a mission marker is absent; keep frequent queries bounded.
+
+When operating a separate harness on the same desktop, GTA's **Settings >
+Graphics > Pause Game On Focus Loss** can interrupt the bridge as soon as focus
+changes. Record its original value, turn it off for the supervised test if needed,
+and restore it afterward. This does not dismiss existing pause menus or alerts.
+On an autosave overwrite alert, follow the displayed shortcuts: Esc means No;
+Enter means Yes. A highlighted/hovered No button does not change Enter's meaning.
+
+Raw requests remain available for all filters, e.g.
+`request state --args '{"profile":"combat","radius":60,"limit":16,"lineOfSight":"on"}'`,
+and `request describe` returns the complete catalogue. An intentionally managed
+source environment can still use `uv run --frozen`; `--no-sync` reuses it without
+installation. A missing `.python-path` means build/setup is needed, not a reason
+to repeatedly rebuild an environment during a mission.
+
+Select --process when several discovery files exist. --discovery
 selects another discovery directory. The bridge starts the packaged Rust server
 automatically; the Python command utility does not host a server.
 
