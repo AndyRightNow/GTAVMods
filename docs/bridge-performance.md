@@ -160,3 +160,101 @@ attempts. `final` is a retained partial run: a pause menu interrupted its fifth
 soak block and stopped managed ticks. Clicking the menu's Back control recovered
 the game; the entire benchmark then passed in `final-complete`. No failed or
 uncertain action was automatically replayed.
+
+## Rust versus FastAPI, 2026-10-27
+
+The optional Axum 0.8.9 / Tokio 1.54.1 companion was built with Rust 1.99.1,
+release optimization, thin LTO and a static runtime. Its executable is 1,478,656
+bytes (1.41 MiB). Both backends used the same uv-managed Python 3.14.9 SDK,
+game bridge, durable receipts and logging. Hardware and graphics settings match
+the preceding measurements. No headless or rendering changes were made.
+
+The final pair below used the **same paused Story session**, with Rust followed
+by FastAPI. Each phase ran for 15 seconds; each soak comprised eight 15-second
+blocks. Memory and CPU figures describe the **companion process**, excluding
+GTA, the benchmark client and Python policy processes.
+
+| Measurement | FastAPI | Rust / Axum |
+| --- | ---: | ---: |
+| Private memory during two-minute soak | 49.28–49.38 MiB | 4.25–4.64 MiB |
+| Working set during soak | 85.33–85.39 MiB | 32.77–32.95 MiB |
+| HTTP player-only mean / p95 | 41.84 / 44.46 ms | 44.89 / 55.55 ms |
+| HTTP player-only service CPU per read | 3.75 ms | 1.68 ms |
+| HTTP combat mean / p95 | 45.51 / 56.27 ms | 46.29 / 56.84 ms |
+| HTTP full mean / p95 | 47.47 / 56.10 ms | 41.07 / 44.45 ms |
+| HTTP full service CPU per read | 4.92 ms | 2.61 ms |
+| Requested 10 Hz player stream: observations | 139 | 139 |
+| Player stream: mean arrival interval | 108.86 ms | 108.50 ms |
+| Player stream: service CPU, one core | 3.79% | 1.65% |
+| Two-minute soak completed reads | 2,772 | 2,618 |
+| HTTP-only session discovery mean / p95 | 1.73 / 2.81 ms | 0.95 / 1.65 ms |
+
+Rust saved about **45 MiB of private memory**, approximately 91%, and 55% of
+service CPU per player-only read in this pair. Working set fell about 61%; it is
+a different metric and includes shared resident pages. The latency result is
+mixed: Rust's minimal-state mean was 7.3% slower, while full-state reads were
+faster in this pair. An earlier FastAPI baseline measured 41.66 ms minimal and
+40.64 ms full, with 5.21 / 5.28 ms service CPU per read. That variation prevents
+a broad claim that Rust makes full-state capture faster. The HTTP-only check
+performed 500 warmed `GET /v1/session` reads without game-thread dispatch; it
+isolates a small part of the path, not end-to-end game control latency.
+
+The paired full queries had identical cost counts: 627 nearby candidates,
+48 returned entities/LOS tests, five rays, 114 inventory checks and 15 blips.
+Combat returned 14 peds from 608 candidates in both runs. Minimal/combat/full
+payloads were approximately 1.34 / 9.27 / 27.83 KiB. Game-side capture itself
+averaged 0.26 / 2.05 / 3.49 ms with Rust and 0.31 / 2.69 / 4.30 ms with FastAPI;
+engine scheduling and background load still affect these sequential samples.
+Neither backend changes the game-thread execution model. Requested stream Hz
+remains a ceiling; the player streams delivered about 9.2 observations/second.
+
+Rust's soak handles stayed at 183–184 and fell to 182 at cooldown. Private memory
+settled at 4.60 MiB after cooldown, following modest allocator growth during the
+soak. FastAPI handles ranged from 235–244 and fell to 234, with 49.28 MiB private
+memory afterward. These short runs do not establish long-session leak freedom.
+
+Both supervised Python policies completed 100 observations in 10.04 seconds.
+Mean / p95 observation latency was 45.66 / 62.13 ms through Rust and
+50.37 / 65.00 ms through FastAPI. The Python worker still used about 29.6 MiB
+private memory and the supervisor about 28–29 MiB with either backend. Worker
+CPU was 8.56% / 7.01% of one core (Rust / FastAPI), and supervisor CPU was
+1.25% / 1.56%; these short samples do not support a worker CPU improvement claim.
+Rust replaces the resident HTTP interpreter, not the Python AI runtime.
+
+### Implementation and verification
+
+The final server uses two Tokio executor threads, bounded queues and complete
+pipe-exchange ownership across caller cancellation. Accepted TCP connections use
+TCP_NODELAY. Busy-pipe acquisition waits for Windows availability on a bounded
+blocking worker instead of sleeping for a fixed 10 ms between attempts. Earlier
+Rust builds are retained separately: minimal means were 52.11 ms initially and
+47.03 ms with TCP_NODELAY alone. Those runs required cold game restarts, so they
+are development evidence rather than a controlled attribution of each change.
+
+The complete build passed 324 C# scenarios, 17 Python scenarios and six Rust
+HTTP/WebSocket/pipe scenarios, rustfmt and Clippy. The strict C# line/branch
+coverage gate remains 100%. Windows MSVC CI also passed. Live final-binary checks
+verified automatic startup, observed movement from 500 ms input, pause, capture,
+C# file output, managed reload retaining the service PID/URL, a Python checkpoint
+job, parallel-job rejection and cancellation of a CPU-bound policy. The earlier
+complete Repossession mission was not replayed for this backend comparison.
+
+FastAPI remains the default and provides generated interactive API documentation
+and a single Python service stack to maintain. Rust is selectable with
+`Install-AgentService.ps1 -Backend Rust`, retains the same Python SDK/policies,
+and provides the lower companion footprint measured here. It adds a Rust build
+toolchain and a second HTTP implementation to maintain; its OpenAPI document is
+compact and it has no Swagger UI. See [backend setup](rust-service.md).
+
+Raw evidence is outside Git at
+`C:\Users\Helen\Documents\Codex\2026-10-27\gta-use-rust-comparison`:
+`rust-wait` and `fastapi-after` contain the final pair; `fastapi-before`, `rust`
+and `rust-final` retain the earlier runs. `policy-rust-wait`,
+`policy-fastapi-after`, `metadata-*.json`, `summary.json` and `methodology.json`
+record process counters, exact binary hashes and phase results. Final controls
+and reload evidence are in `live-rust-wait-complete` and `reload-rust-wait`.
+`live-rust-wait` retains an initial harness failure: it tried to start a new job
+after the previous result was written but before its supervisor exited. The
+server correctly returned 409; the revised harness waits after this confirmed
+rejection. Earlier partial-axis movement checks are also retained; full-axis
+input produced observed movement. No uncertain mutation was blindly replayed.
