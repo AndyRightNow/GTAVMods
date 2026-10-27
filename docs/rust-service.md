@@ -40,6 +40,10 @@ One actor serializes complete Windows pipe exchanges. Disconnecting the caller
 does not release an active exchange or replay its request. The pipe ACL requires
 data-only access; generic write access incorrectly requests permission to create
 a pipe instance. Requests are limited to 1 MiB and pipe responses to 4 MiB.
+When the pipe is busy, a bounded Windows availability wait runs on a blocking
+worker, avoiding fixed polling delays between game frames. That worker cannot
+open the pipe or send requests after its caller times out. See Microsoft's
+[WaitNamedPipe contract](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-waitnamedpipew).
 The actor queue holds at most 64 requests; each WebSocket allows 16 outstanding
 commands and one subscription, at most 10 Hz. Slow sends time out after two
 seconds. Transport failures report uncertainty and point to the durable receipt.

@@ -26,6 +26,9 @@ impl Drop for Scene {
 }
 impl Scene {
     async fn start() -> Self {
+        Self::start_with_rearm_delay(Duration::ZERO).await
+    }
+    async fn start_with_rearm_delay(rearm_delay: Duration) -> Self {
         let root = tempfile::tempdir_in(
             std::env::var_os("GTA_USE_TEST_ROOT")
                 .map(PathBuf::from)
@@ -71,6 +74,7 @@ impl Scene {
                 // NamedPipe disconnect discards unread bytes. Wait for the
                 // client to close after consuming its entire response.
                 let _ = server.read_u8().await;
+                sleep(rearm_delay).await;
             }
         });
         Self {
@@ -96,6 +100,40 @@ impl Scene {
 }
 fn envelope(op: &str) -> Value {
     json!({"version":1,"id":uuid::Uuid::new_v4().simple().to_string(),"session":"session-one","op":op})
+}
+
+#[tokio::test]
+async fn a_following_action_waits_for_the_game_to_accept_a_new_connection() {
+    let mut s = Scene::start_with_rearm_delay(Duration::from_millis(150)).await;
+    for index in 0..2 {
+        let action = envelope("batch");
+        let http = s.post(&action);
+        let response =
+            tokio::spawn(async move { http.send().await.unwrap().json::<Value>().await.unwrap() });
+        if index == 1 {
+            assert!(
+                timeout(Duration::from_millis(30), s.observations.recv())
+                    .await
+                    .is_err()
+            );
+            assert!(!response.is_finished());
+        }
+        let (observed, reply) = timeout(Duration::from_secs(2), s.observations.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed, action);
+        reply
+            .send(json!({"ok":true,"id":action["id"],"result":{"accepted":index}}))
+            .unwrap();
+        let receipt = response.await.unwrap();
+        assert_eq!(receipt["result"]["accepted"], index);
+    }
+    assert!(
+        timeout(Duration::from_millis(200), s.observations.recv())
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]

@@ -15,6 +15,7 @@ menus and ambiguous geometry. Do not infer success from command acceptance.
 - Start, connect, reload, diagnose or recover: [operations](references/operations.md).
 - Choose observations for walking, driving or combat: [world state](references/world-state.md).
 - Write a one-off policy, behavior tree or mission segment: [Python AI](references/python-ai.md).
+- Select the optional Rust companion: [backend setup](../../../docs/rust-service.md).
 - Measure latency, CPU, allocations or memory: [profiling guide](../../../docs/bridge-performance.md).
 - Exact API/limits and live evidence: [GTA use guide](../../../docs/gta-use.md).
 - Exact state fields/filters: [state contract](../../../docs/world-state.md).
@@ -22,7 +23,7 @@ menus and ambiguous geometry. Do not infer success from command acceptance.
 
 Paths in commands below are relative to the repository root. From a packaged
 installation, use `uv run --project <game>/scripts/GtaUse --frozen ...` instead.
-Use Python 3.14 and the locked uv project. A prepared bridge starts FastAPI
+Use Python 3.14 and the locked uv project. A prepared bridge starts the selected companion
 automatically; do not start competing servers.
 
 ## Operating loop

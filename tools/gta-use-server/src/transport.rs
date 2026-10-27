@@ -10,6 +10,7 @@ use tokio::{
 use windows_sys::Win32::{
     Foundation::INVALID_HANDLE_VALUE,
     Storage::FileSystem::{CreateFileW, OPEN_EXISTING},
+    System::Pipes::WaitNamedPipeW,
 };
 
 pub const MAX_REQUEST: usize = 1024 * 1024;
@@ -140,9 +141,30 @@ async fn exchange(root: &std::path::Path, process: u32, request: &Value) -> io::
                     .map_err(|e| io::Error::other(format!("Register pipe I/O: {e}")))?;
             }
             match io::Error::last_os_error() {
-                error if matches!(error.raw_os_error(), Some(2 | 231)) => {
-                    sleep(Duration::from_millis(10)).await
+                error if error.raw_os_error() == Some(231) => {
+                    // Wait for the game to arm its next listener instead of
+                    // polling across frame boundaries. The blocking worker
+                    // never opens a handle or sends bytes, and outlives a
+                    // cancelled exchange for at most this bounded wait.
+                    let available = tokio::task::spawn_blocking(move || {
+                        if unsafe { WaitNamedPipeW(path.as_ptr(), 50) } != 0 {
+                            Ok(())
+                        } else {
+                            Err(io::Error::last_os_error())
+                        }
+                    })
+                    .await
+                    .map_err(io::Error::other)?;
+                    match available {
+                        Ok(()) => {}
+                        Err(error) if error.raw_os_error() == Some(121) => {}
+                        Err(error) if error.raw_os_error() == Some(2) => {
+                            sleep(Duration::from_millis(1)).await;
+                        }
+                        Err(error) => return Err(error),
+                    }
                 }
+                error if error.raw_os_error() == Some(2) => sleep(Duration::from_millis(1)).await,
                 error => return Err(io::Error::other(format!("Open game pipe: {error}"))),
             }
         };
