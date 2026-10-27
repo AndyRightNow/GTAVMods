@@ -110,16 +110,18 @@ namespace GTAVMods.Agent
                     default: throw new ArgumentException("Unknown request operation: " + op);
                 }
                 var response = new { id, session = journal.Session, ok = true, result };
-                journal.Save("response-" + id, response);
+                string encoded = Protocol.Encode(response);
+                journal.SaveJson("response-" + id, encoded);
                 journal.Record("response", new { id, ok = true });
-                return Protocol.Encode(response);
+                return encoded;
             }
             catch (Exception error)
             {
                 var response = new { id, session = journal.Session, ok = false, error = error.GetBaseException().Message };
-                if (recorded) journal.Save("response-" + id, response);
+                string encoded = Protocol.Encode(response);
+                if (recorded) journal.SaveJson("response-" + id, encoded);
                 journal.Record("request.failed", response);
-                return Protocol.Encode(response);
+                return encoded;
             }
         }
         private void StopForInspection()

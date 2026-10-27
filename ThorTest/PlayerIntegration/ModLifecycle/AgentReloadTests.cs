@@ -51,7 +51,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             {
                 s.Batch(Step("pause")); s.Frame();
                 connection.Request(Protocol.Encode(s.Envelope("reload")));
-                s.Frame(); s.Frame(); s.Frame(); s.Frame();
+                s.FramesUntil(() => connection.Outgoing != null);
                 Assert.AreEqual(0, reloads); Assert.AreEqual(false, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
                 StringAssert.Contains(connection.Response, "accepted");
                 connection.WriteCompleted.SetResult(true); s.Frame();
@@ -67,10 +67,10 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             using (var s = new AgentScene(() => opened++ == 0 ? reload : status, () => new[] { runtime }))
             {
                 reload.Request(Protocol.Encode(s.Envelope("reload")));
-                s.Frame(); s.Frame(); s.Frame(); s.Frame();
+                s.FramesUntil(() => reload.Outgoing != null);
                 reload.WriteCompleted.SetException(new IOException("client disconnected before receipt")); s.Frame();
                 status.Request(Protocol.Encode(s.Envelope("status")));
-                s.Frame(0, 1000); s.Frame(); s.Frame(); s.Frame(); status.WriteCompleted.SetResult(true); s.Frame();
+                s.Frame(0, 1000); s.FramesUntil(() => status.Outgoing != null); status.WriteCompleted.SetResult(true); s.Frame();
                 Assert.AreEqual(0, reloads); StringAssert.Contains(status.Response, "\"ok\":true");
                 StringAssert.Contains(s.Events, "client disconnected before receipt");
             }
@@ -86,7 +86,7 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             {
                 s.Batch(Step("pause")); s.Frame();
                 connection.Request(Protocol.Encode(s.Envelope("reload")));
-                s.Frame(); s.Frame(); s.Frame(); s.Frame(); connection.WriteCompleted.SetResult(true);
+                s.FramesUntil(() => connection.Outgoing != null); connection.WriteCompleted.SetResult(true);
                 var error = Assert.ThrowsExactly<NotSupportedException>(() => s.Frame());
                 StringAssert.Contains(error.Message, missingMethod ? "compatible Reload" : "core is unavailable");
                 StringAssert.Contains(s.Published, "error");

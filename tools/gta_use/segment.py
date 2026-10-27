@@ -14,7 +14,9 @@ class StopSegment(RuntimeError):
 def save_json(path, value):
     temporary = path.with_suffix(".tmp")
     with temporary.open("w", encoding="utf-8") as stream:
-        json.dump(value, stream, ensure_ascii=False, allow_nan=False)
+        # Encode in one pass instead of thousands of Python-level chunk writes.
+        # Keep the same durable flush and atomic publication contract.
+        stream.write(json.dumps(value, ensure_ascii=False, allow_nan=False))
         stream.flush()
         os.fsync(stream.fileno())
     deadline = time.monotonic() + .5

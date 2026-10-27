@@ -108,7 +108,9 @@ def make_app(link, token, log):
 
     @app.post("/v1/request")
     async def rpc(request: Request):
-        return await dispatch(await body(request))
+        # The pipe response is already decoded JSON. Avoid FastAPI recursively
+        # adapting every scalar in large world packs a second time.
+        return JSONResponse(await dispatch(await body(request)))
 
     def local_path(relative):
         root = link.directory.resolve()

@@ -1,6 +1,7 @@
 """Bounded overlapped pipe I/O and readers compatible with atomic file replacement."""
 import ctypes as c
 from ctypes import wintypes as w
+from functools import cache
 import json
 import os
 import struct
@@ -12,6 +13,7 @@ class Overlapped(c.Structure):
                 ("Offset", w.DWORD), ("OffsetHigh", w.DWORD), ("hEvent", w.HANDLE)]
 
 
+@cache
 def api():
     dll = c.WinDLL("kernel32", use_last_error=True)
     signatures = {

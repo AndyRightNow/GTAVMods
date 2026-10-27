@@ -19,6 +19,7 @@ try {
     & (Join-Path $PSScriptRoot 'tests/Test-CoverageGate.ps1')
     & (Join-Path $PSScriptRoot 'tests/Test-BuildInputManifest.ps1')
     & (Join-Path $PSScriptRoot 'tests/Test-DiagnosticsCollection.ps1')
+    & (Join-Path $PSScriptRoot 'tests/Test-StoryStartup.ps1')
     $coverageRoot = Join-Path $repoRoot 'artifacts/coverage'
     $runName = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N')
     $runDirectory = Join-Path $coverageRoot $runName

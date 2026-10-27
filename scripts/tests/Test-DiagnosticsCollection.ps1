@@ -10,7 +10,7 @@ try {
     $env:LOCALAPPDATA = Join-Path $fixture 'local'
     $game = Join-Path $fixture 'game'
     $bridge = Join-Path $env:LOCALAPPDATA 'GTAVMods/Bridge'
-    foreach ($file in @('GTA5_Enhanced.exe','scripts/AgentBridge.dll','scripts/GameBridge.dll','ScriptHookVDotNet.log','scripts/Logs/Thor-test.jsonl')) {
+    foreach ($file in @('GTA5_Enhanced.exe','scripts/AgentBridge.dll','scripts/GameBridge.dll','StraightToStoryMode.asi','StraightToStoryMode.log','ScriptHookVDotNet.log','scripts/Logs/Thor-test.jsonl')) {
         'fixture' | Set-Content -LiteralPath (Join-Path $game $file)
     }
     'private save' | Set-Content -LiteralPath (Join-Path $game 'SGTA50015')
@@ -35,7 +35,8 @@ try {
         if (@($files | Where-Object Name -eq 'request-test.json').Count -ne 3 -or (Test-Path -LiteralPath (Join-Path $extract 'agent-bridge/session-1'))) { throw 'Newest three sessions were not selected.' }
         if (-not (Test-Path -LiteralPath (Join-Path $extract 'agent-bridge/bridge-123.json'))) { throw 'Discovery metadata is missing.' }
         $manifest = Get-Content -LiteralPath (Join-Path $extract 'manifest.json') -Raw | ConvertFrom-Json
-        foreach ($binary in @('scripts/AgentBridge.dll','scripts/GameBridge.dll')) {
+        if (!(Test-Path -LiteralPath (Join-Path $extract 'StraightToStoryMode.log'))) { throw 'Startup diagnostics are missing.' }
+        foreach ($binary in @('scripts/AgentBridge.dll','scripts/GameBridge.dll','StraightToStoryMode.asi')) {
             $record = @($manifest.Files | Where-Object File -eq $binary)
             if ($record.Count -ne 1 -or $record[0].SHA256 -ne (Get-FileHash -LiteralPath (Join-Path $game $binary)).Hash) { throw 'Bridge binary hash is missing or incorrect.' }
         }

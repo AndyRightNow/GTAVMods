@@ -13,7 +13,7 @@ $destinationPath = [IO.Path]::GetFullPath($Destination)
 $stage = Join-Path ([IO.Path]::GetDirectoryName($destinationPath)) ('diagnostics-stage-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 $warnings = [Collections.Generic.List[string]]::new()
-$files = @(@('ScriptHookV.log','ScriptHookVDotNet.log','asiloader.log','DirectStorageFix.log','OpenRPF.log') |
+$files = @(@('ScriptHookV.log','ScriptHookVDotNet.log','asiloader.log','DirectStorageFix.log','OpenRPF.log','StraightToStoryMode.log') |
     ForEach-Object { Join-Path $root $_ } | Where-Object { Test-Path -LiteralPath $_ })
 $logDir = Join-Path $root 'scripts/Logs'
 if (Test-Path -LiteralPath $logDir) {
@@ -41,7 +41,7 @@ if (Test-Path -LiteralPath $BridgeDirectory) {
         catch { $warnings.Add('agent-bridge/' + $relative + ': ' + $_.Exception.Message) }
     }
 }
-$hashes = foreach ($relative in @('GTA5_Enhanced.exe','ScriptHookV.dll','ScriptHookVDotNet.asi','ScriptHookVDotNet3.dll','DirectStorageFix.asi','OpenRPF.asi','scripts/Thor.dll','scripts/ModUtils.dll','scripts/AgentBridge.dll','scripts/GameBridge.dll')) {
+$hashes = foreach ($relative in @('GTA5_Enhanced.exe','ScriptHookV.dll','ScriptHookVDotNet.asi','ScriptHookVDotNet3.dll','DirectStorageFix.asi','OpenRPF.asi','StraightToStoryMode.asi','scripts/Thor.dll','scripts/ModUtils.dll','scripts/AgentBridge.dll','scripts/GameBridge.dll')) {
     $path = Join-Path $root $relative
     if (Test-Path -LiteralPath $path) { [PSCustomObject]@{File=$relative;SHA256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash;Version=(Get-Item -LiteralPath $path).VersionInfo.FileVersion} }
 }

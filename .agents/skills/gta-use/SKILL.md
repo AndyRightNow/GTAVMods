@@ -11,9 +11,11 @@ menus and ambiguous geometry. Do not infer success from command acceptance.
 
 ## Read the right reference
 
+- Skip startup screens and resume Story on launch: [startup helper](../../../docs/story-startup.md).
 - Start, connect, reload, diagnose or recover: [operations](references/operations.md).
 - Choose observations for walking, driving or combat: [world state](references/world-state.md).
 - Write a one-off policy, behavior tree or mission segment: [Python AI](references/python-ai.md).
+- Measure latency, CPU, allocations or memory: [profiling guide](../../../docs/bridge-performance.md).
 - Exact API/limits and live evidence: [GTA use guide](../../../docs/gta-use.md).
 - Exact state fields/filters: [state contract](../../../docs/world-state.md).
 - Build, installation and save preservation: [repository instructions](../../../AGENTS.md).

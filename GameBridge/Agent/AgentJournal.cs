@@ -41,10 +41,11 @@ namespace GTAVMods.Agent
         public string Directory { get; }
         public string Session { get; }
         public string LogPath => log.FilePath;
-        public string Save(string name, object value)
+        public string Save(string name, object value) => SaveJson(name, Protocol.Encode(value));
+        internal string SaveJson(string name, string json)
         {
             string path = Path.Combine(Directory, name + ".json");
-            files.Save(path, Protocol.Encode(value));
+            files.Save(path, json);
             return path;
         }
         public string Read(string name) => files.Read(Path.Combine(Directory, name + ".json"));

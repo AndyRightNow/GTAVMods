@@ -24,6 +24,11 @@ the original repository's rights. Original game archives and extracted game
 keys are not distributed.
 
 Separate runtime installations (not bundled in the mod ZIP):
+[StraightToStoryMode v1.0](https://github.com/Chiheb-Bacha/StraightToStoryMode/releases/tag/v1.0),
+by Chiheb-Bacha, GPL-3.0. The optional startup installer pins source commit
+`f1acdee8288f825c31908cb25656fb45f4c3ba1b`, verifies the release archive and ASI,
+and retains its license in the installation backup. Source and license remain
+available at the linked upstream repository;
 [DirectStorageFix 1.2](https://github.com/alloc8or/DirectStorageFix), by alloc8or;
 [OpenRPF 0.3](https://www.gta5-mods.com/tools/openrpf-openiv-asi-for-gta-v-enhanced),
 by Transmet, GiZz and Antasurris / Los Santos Multiplayer.

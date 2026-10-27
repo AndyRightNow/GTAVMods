@@ -122,6 +122,16 @@ namespace GTAVMods.Tests.Support
             Clock.ElapsedMilliseconds += wallMs;
             Bridge.Tick();
         }
+        internal void FramesUntil(Func<bool> observed)
+        {
+            var elapsed = System.Diagnostics.Stopwatch.StartNew();
+            while (!observed() && elapsed.ElapsedMilliseconds < 5000)
+            {
+                Frame();
+                System.Threading.Thread.Sleep(1);
+            }
+            Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsTrue(observed(), "Expected transport/game outcome did not arrive within five seconds.");
+        }
         internal string Status => Protocol.Encode(Bridge.Status());
         internal string Events => File.ReadAllText(Log.FilePath);
         internal Dictionary<string, object>[] Results => Directory.GetFiles(Root, "result-*.json").Select(path => Protocol.Decode(File.ReadAllText(path))).OrderBy(row => (int)row["step"]).ToArray();

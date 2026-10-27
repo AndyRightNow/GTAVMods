@@ -45,11 +45,9 @@ namespace GTAVMods.Agent
         private string responseJson;
         private IAgentConnection connection;
         private Task pending;
-        private byte[] buffer;
-        private int offset;
         private long deadline, retryAt;
         private Phase phase;
-        private enum Phase { Connecting, Header, Body, Writing }
+        private enum Phase { Connecting, Reading, Writing }
 
         public PipeServer(Func<IAgentConnection> open, Func<long> clock, Func<string, string> dispatch, Action<string> diagnostic, Action<string> responseSent)
         { this.open = open; this.clock = clock; this.dispatch = dispatch; this.diagnostic = diagnostic; this.responseSent = responseSent; }
@@ -59,42 +57,34 @@ namespace GTAVMods.Agent
             if (clock() < retryAt) return;
             try
             {
-                if (connection == null)
-                {
-                    connection = open(); phase = Phase.Connecting; pending = connection.Connect();
-                    return;
-                }
+                if (connection == null) Open();
                 if (phase != Phase.Connecting && clock() >= deadline) throw new TimeoutException("Pipe request timed out.");
                 if (!pending.IsCompleted) return;
                 pending.GetAwaiter().GetResult();
                 switch (phase)
                 {
                     case Phase.Connecting:
-                        phase = Phase.Header; BeginRead(4); break;
-                    case Phase.Header:
-                    case Phase.Body:
-                        int count = ((Task<int>)pending).Result;
-                        if (count == 0) throw new EndOfStreamException("Client disconnected before completing request.");
-                        offset += count;
-                        if (offset < buffer.Length) { pending = connection.Read(buffer, offset, buffer.Length - offset); return; }
-                        if (phase == Phase.Header)
-                        {
-                            int length = BitConverter.ToInt32(buffer, 0);
-                            if (length <= 0 || length > Protocol.MaximumRequestBytes) throw new InvalidDataException("Invalid request length.");
-                            phase = Phase.Body; BeginRead(length);
-                        }
-                        else
-                        {
-                            string request = new UTF8Encoding(false, true).GetString(buffer);
-                            responseJson = dispatch(request);
-                            byte[] response = Encoding.UTF8.GetBytes(responseJson);
-                            byte[] frame = new byte[response.Length + 4];
-                            Buffer.BlockCopy(BitConverter.GetBytes(response.Length), 0, frame, 0, 4);
-                            Buffer.BlockCopy(response, 0, frame, 4, response.Length);
-                            phase = Phase.Writing; deadline = clock() + 10000; pending = connection.Write(frame);
-                        }
+                        // Framing is transport work, never game work. Windows asynchronous
+                        // reads usually complete after Tick returns; read the whole bounded
+                        // frame on a worker instead of adding a game frame per read stage.
+                        var active = connection;
+                        phase = Phase.Reading; deadline = clock() + 10000;
+                        pending = Task.Run(() => ReadRequest(active));
                         break;
-                    case Phase.Writing: Close(); responseSent(responseJson); break;
+                    case Phase.Reading:
+                        responseJson = dispatch(((Task<string>)pending).Result);
+                        byte[] response = Encoding.UTF8.GetBytes(responseJson);
+                        byte[] frame = new byte[response.Length + 4];
+                        Buffer.BlockCopy(BitConverter.GetBytes(response.Length), 0, frame, 0, 4);
+                        Buffer.BlockCopy(response, 0, frame, 4, response.Length);
+                        phase = Phase.Writing; deadline = clock() + 10000; pending = connection.Write(frame);
+                        break;
+                    case Phase.Writing:
+                        Close(); responseSent(responseJson);
+                        // Arm the next listener now; dispatch still occurs only in a
+                        // later Tick, including when this receipt requests script reload.
+                        Open();
+                        break;
                 }
             }
             catch (Exception error)
@@ -104,17 +94,36 @@ namespace GTAVMods.Agent
             }
         }
 
-        private void BeginRead(int length)
+        private void Open()
         {
-            buffer = new byte[length]; offset = 0; deadline = clock() + 10000;
-            pending = connection.Read(buffer, 0, length);
+            connection = open(); phase = Phase.Connecting; pending = connection.Connect();
+        }
+        private static async Task<string> ReadRequest(IAgentConnection connection)
+        {
+            byte[] header = await ReadExactly(connection, 4).ConfigureAwait(false);
+            int length = BitConverter.ToInt32(header, 0);
+            if (length <= 0 || length > Protocol.MaximumRequestBytes) throw new InvalidDataException("Invalid request length.");
+            byte[] body = await ReadExactly(connection, length).ConfigureAwait(false);
+            return new UTF8Encoding(false, true).GetString(body);
+        }
+        private static async Task<byte[]> ReadExactly(IAgentConnection connection, int length)
+        {
+            var bytes = new byte[length];
+            int offset = 0;
+            while (offset < length)
+            {
+                int count = await connection.Read(bytes, offset, length - offset).ConfigureAwait(false);
+                if (count == 0) throw new EndOfStreamException("Client disconnected before completing request.");
+                offset += count;
+            }
+            return bytes;
         }
         private void Close()
         {
             connection?.Dispose(); connection = null;
             // Disposing a pipe completes outstanding I/O; observe faults without running game work there.
             pending?.ContinueWith(t => GC.KeepAlive(t.Exception), TaskContinuationOptions.OnlyOnFaulted);
-            pending = null; buffer = null;
+            pending = null;
         }
         public void Dispose() => Close();
     }

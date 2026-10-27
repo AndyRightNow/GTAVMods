@@ -16,6 +16,25 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
     public class TransportRecoveryTests
     {
         [TestMethod]
+        public void BufferedPauseRequestExecutesOnTheGameThreadAndPersistsTheExactReceipt()
+        {
+            var transport = new AgentTransport();
+            using (var s = new AgentScene(() => transport))
+            {
+                var request = s.Envelope("batch"); request["steps"] = new[] { Step("pause") };
+                transport.Request(Protocol.Encode(request));
+                s.Frame(); // Start only I/O; a worker must never dispatch game actions.
+                Assert.IsFalse(s.Game.Native.Calls.Any());
+                s.FramesUntil(() => transport.Outgoing != null);
+                Assert.AreEqual(true, Protocol.Decode(transport.Response)["ok"]);
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED));
+                Assert.AreEqual(transport.Response, File.ReadAllText(Path.Combine(s.Root, "response-" + request["id"] + ".json")));
+                transport.WriteCompleted.SetResult(true); s.Frame();
+                Assert.IsTrue(transport.Disposed);
+            }
+        }
+
+        [TestMethod]
         public void PartialPipeReadsExecuteOnceAndDuplicateRequestReturnsTheSavedReceipt()
         {
             var transport = new AgentTransport { Chunk = 1 };
@@ -23,7 +42,10 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             {
                 var request = s.Envelope("batch"); request["steps"] = new[] { Step("pause") };
                 string json = Protocol.Encode(request); transport.Request(json);
-                for (int i = 0; i < transport.Incoming.Length + 10 && transport.Outgoing == null; i++) s.Frame();
+                s.Frame();
+                Assert.IsNull(transport.Outgoing, "Transport work must not dispatch gameplay on a worker.");
+                Assert.IsFalse(s.Game.Native.Calls.Any());
+                s.FramesUntil(() => transport.Outgoing != null);
                 Assert.IsNotNull(transport.Outgoing);
                 Assert.AreEqual(true, Protocol.Decode(transport.Response)["ok"]);
                 Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED));
@@ -43,11 +65,11 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             var next = new AgentTransport(); var connections = new Queue<IAgentConnection>(new[] { bad, next });
             using (var s = new AgentScene(() => connections.Dequeue()))
             {
-                bad.Connected.SetResult(true); s.Frame(); s.Frame(); s.Frame();
+                bad.Connected.SetResult(true); s.FramesUntil(() => bad.Disposed);
                 Assert.IsTrue(bad.Disposed); StringAssert.Contains(s.Events, "Invalid request length");
                 next.Request(Protocol.Encode(s.Envelope("status")));
                 s.Frame(0, 999); Assert.IsNull(next.Outgoing);
-                s.Frame(0, 1); s.Frame(); s.Frame(); s.Frame();
+                s.Frame(0, 1); s.FramesUntil(() => next.Outgoing != null);
                 Assert.AreEqual(true, Protocol.Decode(next.Response)["ok"]); Assert.IsFalse(s.Game.Native.Calls.Any());
             }
         }
@@ -60,7 +82,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             using (var s = new AgentScene(() => bad))
             {
                 bad.Connected.SetResult(true);
-                s.Frame(); s.Frame(); s.Frame(); s.Frame();
+                s.FramesUntil(() => bad.Disposed);
                 Assert.IsTrue(bad.Disposed); Assert.IsNull(bad.Outgoing);
                 StringAssert.Contains(s.Events, "agent.transport.error"); Assert.IsFalse(s.Game.Native.Calls.Any());
             }
@@ -75,6 +97,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             {
                 connection.Request(Protocol.Encode(s.Envelope("status")));
                 s.Frame(); s.Frame(); s.Frame(); s.Frame();
+                if (writing) s.FramesUntil(() => connection.Outgoing != null);
                 s.Frame(0, 10000);
                 Assert.IsTrue(connection.Disposed); StringAssert.Contains(s.Events, "Pipe request timed out");
                 Assert.AreEqual(true, s.Batch(Step("wait", ("ms", 1)))["ok"]);

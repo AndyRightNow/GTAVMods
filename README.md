@@ -10,6 +10,12 @@ Python segments, observed world state, cover combat, driving and normal game
 controls. [Live results and limitations](docs/gta-use.md#live-verification-repossession-2026-10-27)
 describe checkpoint retries, screenshot evidence and server/watchdog recovery.
 
+The repository skill at [.agents/skills/gta-use](.agents/skills/gta-use/SKILL.md)
+covers operation and supervised Python policies. See [bridge profiling](docs/bridge-performance.md)
+for reproducible live latency, CPU, allocation and process-memory measurements.
+To skip the startup screens and resume Story automatically, install the
+[optional startup helper](docs/story-startup.md).
+
 ## Compatibility status
 
 The port targets **ScriptHookVDotNet Enhanced v1.1.0.6**, using its v3 API assembly

@@ -22,5 +22,7 @@ $matchesApi = (Test-Path -LiteralPath $api) -and
     MatchesSmokeTestedBuild = $version -eq [Version]'1.0.1158.16'
     MissingRuntimeFiles = $missing -join ', '
     MatchesPinnedEnhancedApi = $matchesApi
+    StoryStartupInstalled = (Test-Path -LiteralPath (Join-Path $gameRoot 'StraightToStoryMode.asi'))
+    StoryStartupGuide = 'docs/story-startup.md (optional; requires a cold-launch test)'
     InGameValidation = 'Required; file presence and version matching alone do not prove compatibility.'
 }

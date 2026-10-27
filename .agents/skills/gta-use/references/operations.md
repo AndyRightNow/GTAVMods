@@ -16,7 +16,9 @@ across managed reloads. Runtime installation never happens on the game thread.
 
 Launch through Steam with the existing modded Story setup; let the user handle
 sign-in or verification. Use the computer-use skill if desktop UI is needed.
-Select Story/Resume Story, never Online. Do not treat old discovery files as
+With the optional [startup helper](../../../../docs/story-startup.md) installed,
+Story resumes automatically. Otherwise select Story/Resume Story, never Online.
+Do not treat old discovery files as
 running processes; find the current `GTA5_Enhanced` PID.
 
 Discovery is `%LOCALAPPDATA%/GTAVMods/Bridge`. `bridge-<PID>.json` identifies the
