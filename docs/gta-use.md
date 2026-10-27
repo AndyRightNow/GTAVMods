@@ -9,6 +9,27 @@ The old F8 console is removed. The upstream SHVDNE F4 console and Insert shortcu
 remain separate runtime features. External C# statements, reload, native actions,
 screenshots and structured observations replace the mod console.
 
+For an agent workflow, use the repository's
+[gta-use skill](../.agents/skills/gta-use/SKILL.md), including its operations,
+state-selection and Python policy references.
+
+## Runtime structure
+
+`GameBridge.dll` is the single managed bridge. `GTAVMods.Game` implements typed
+engine contracts and state observations; `GTAVMods.Agent` implements the action
+scheduler, commands, receipts, pipe host and companion supervision. Shared file
+diagnostics live in `GameBridge/Diagnostics`, retaining the `ADModUtils` public
+names for source compatibility. ModUtils and Thor depend on GameBridge; the
+bridge has no dependency on either mod or on NAudio. This removes the former
+AgentBridge-to-ModUtils-to-GameBridge dependency chain.
+
+FastAPI remains a separate Python process because SHVDNE hosts .NET Framework
+4.8 and game calls must run on its script thread. This separation also lets
+HTTP diagnostics and Python watchdogs respond when the game stops ticking.
+There is one managed bridge module and one public HTTP/WebSocket service;
+Python policies do not access the private pipe. Coverage still enforces the
+engine namespace boundary inside the combined assembly.
+
 ## Install and automatic startup
 
 Build with the .NET 10 SDK, uv and .NET Framework 4.8:
@@ -20,7 +41,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1
 ~~~
 
 Close GTA, back up replaced files, and merge the package's scripts directory into
-the game root. Back up and remove the obsolete scripts/DeveloperConsole.dll.
+the game root. GameBridge.dll now contains both the agent scheduler and game
+adapters. Back up and remove obsolete scripts/DeveloperConsole.dll and
+scripts/AgentBridge.dll; leaving AgentBridge.dll loads a duplicate script.
 Prepare the packaged service once, with GTA closed:
 
 ~~~powershell
@@ -315,6 +338,17 @@ progress logs, and transport/recovery results. Failed attempts are retained.
 Saves, bearer credentials and gameplay evidence are not shipped in the package.
 
 The validation build passed 321 C# scenarios and 17 Python scenarios. Its strict
-coverage gate measured 100% executable lines and branches in AgentBridge,
-GameBridge, ModUtils and Thor. That gate does not measure GTA physics, rendering
+coverage gate measured 100% executable lines and branches in the bridge,
+ModUtils and Thor. That gate does not measure GTA physics, rendering
 or all possible mission mechanics; the live results above are separate evidence.
+
+After consolidating the managed projects into GameBridge.dll, a fresh Story
+process verified automatic companion startup, one bridge script, filtered state,
+a 500 ms advance/pause, C# evaluation and file output, and managed reload with
+the same companion process. Both Python examples in the repository skill ran
+unchanged to observed checkpoints with confirmed pause. The strict build still
+passed all 321 C# and 17 Python scenarios: GameBridge measured 1005/1005 lines and
+556/556 branches, ModUtils 274/274 and 90/90, Thor 1496/1496 and 610/610.
+This was a startup/reload smoke test; the full mission evidence above predates
+the assembly consolidation. Its local follow-up evidence is under
+`C:\Users\Helen\Documents\Codex\2026-10-27\gta-use-20261027-044636\unified-bridge-smoke`.

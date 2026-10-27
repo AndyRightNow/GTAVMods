@@ -1,0 +1,4 @@
+interface:
+  display_name: "GTA use"
+  short_description: "Control GTA and write supervised Python game AI"
+  default_prompt: "Use $gta-use to inspect the game and run a bounded Python policy with observed checkpoints."

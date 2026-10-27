@@ -53,9 +53,12 @@ observations outside `GtaWorldQueries`. Player integration scenarios check disti
 components, terrain hits with no entity handle, misses and unsuccessful projection results;
 the binding manifest covers only the corresponding host calls and output copying.
 
-Measured behavior outside GameBridge cannot invoke GTA operations or raw native,
-output, world-query or lifetime transports directly. Compiled negative fixtures
-check this rule. The typed contracts and ownership guarantees are documented in
+Measured behavior outside the `GTAVMods.Game` engine namespace in GameBridge
+cannot invoke GTA operations or raw native, output, world-query or lifetime
+transports directly. This includes agent orchestration and shared diagnostics
+inside the unified DLL. Nested types and generated lambdas inherit their owning
+namespace for this check. Compiled negative fixtures check this rule.
+The typed contracts and ownership guarantees are documented in
 [engine-contracts.md](engine-contracts.md); the independent assertion audit is
 documented in [mutation-review.md](mutation-review.md), with reproduction steps
 in [mutation-testing.md](mutation-testing.md).

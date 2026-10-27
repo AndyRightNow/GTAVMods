@@ -1,7 +1,7 @@
 # Mod behavior coverage plan
 
 This historical plan covers the original F8 implementation. The current gate
-replaces DeveloperConsole with AgentBridge; see [gta-use.md](gta-use.md).
+replaces DeveloperConsole with the unified GameBridge; see [gta-use.md](gta-use.md).
 
 ## Goal and scope
 

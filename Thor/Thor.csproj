@@ -7,7 +7,7 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <ProjectReference Include="..\ModUtils\ModUtils.csproj" />
-    <ProjectReference Include="..\AgentBridge\AgentBridge.csproj" />
+    <ProjectReference Include="..\GameBridge\GameBridge.csproj" />
     <Compile Remove="_LEGACY_PathFinder.cs;TestObjects.cs" />
     <None Update="resources\*.wav" CopyToOutputDirectory="PreserveNewest" TargetPath="Thor\%(Filename)%(Extension)" />
   </ItemGroup>

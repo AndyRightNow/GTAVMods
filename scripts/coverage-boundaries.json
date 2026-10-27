@@ -592,17 +592,17 @@
       "reason": "SHVDNE Script lifecycle construction/event forwarding; composition, start, tick, key and cleanup behavior remain covered."
     },
     {
-      "assembly": "AgentBridge",
+      "assembly": "GameBridge",
       "method": "System.Void GTAVMods.Agent.BridgeScript::.ctor()",
       "reason": "Direct SHVDNE lifecycle composition and event forwarding only; transport, commands, scheduling, diagnostics and cleanup are measured through agent gameplay scenarios."
     },
     {
-      "assembly": "AgentBridge",
+      "assembly": "GameBridge",
       "method": "System.Void GTAVMods.Agent.BridgeScript::OnTick(System.Object,System.EventArgs)",
       "reason": "Direct SHVDNE lifecycle composition and event forwarding only; transport, commands, scheduling, diagnostics and cleanup are measured through agent gameplay scenarios."
     },
     {
-      "assembly": "AgentBridge",
+      "assembly": "GameBridge",
       "method": "System.Void GTAVMods.Agent.BridgeScript::OnAborted(System.Object,System.EventArgs)",
       "reason": "Direct SHVDNE lifecycle composition and event forwarding only; transport, commands, scheduling, diagnostics and cleanup are measured through agent gameplay scenarios."
     },

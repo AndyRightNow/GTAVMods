@@ -80,7 +80,7 @@ try {
         $moduleReports[$name] = $property.Value
     }
     $expectedNames = @($inventory.modules | ForEach-Object name)
-    foreach ($required in @('Thor', 'ModUtils', 'AgentBridge')) {
+    foreach ($required in @('Thor', 'ModUtils', 'GameBridge')) {
         if (@($expectedNames | Where-Object { $_ -eq $required }).Count -ne 1) {
             throw "Required production module absent from inventory: $required"
         }
@@ -105,7 +105,7 @@ try {
         if ($behavior.Count -eq 0) {
             # A contracts/bindings-only assembly still participates in inventory.
             # The three actual behavior assemblies may never become empty.
-            if (@('Thor', 'ModUtils', 'AgentBridge') -contains $module.name) {
+            if (@('Thor', 'ModUtils', 'GameBridge') -contains $module.name) {
                 throw "Required behavior module has no executable methods: $($module.name)"
             }
             continue

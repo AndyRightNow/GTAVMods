@@ -21,7 +21,7 @@ function New-Fixture([string]$Name) {
     Write-Json @{ schemaVersion = 1; bindings = @() } $boundary
     $modules = @()
     $report = [ordered]@{}
-    foreach ($name in @('Thor', 'ModUtils', 'AgentBridge')) {
+    foreach ($name in @('Thor', 'ModUtils', 'GameBridge')) {
         $source = Join-Path $folder "$name.cs"
         'class Example { int Read(bool enabled) { return enabled ? 1 : 0; } }' | Set-Content -LiteralPath $source
         $binary = Join-Path $folder "$name.dll"
@@ -68,7 +68,7 @@ function New-Fixture([string]$Name) {
     Write-Json @{ schemaVersion = 2; startedUtc = $started.ToString('O'); inventorySha256 = Hash (Join-Path $folder 'inventory.json') } (Join-Path $folder 'run.json')
     Write-Json $report (Join-Path $folder 'coverage.json')
     $timestamp = [long]([DateTime]::UtcNow - [DateTime]::new(1970, 1, 1)).TotalSeconds
-    "<coverage timestamp='$timestamp'><packages><package name='Thor'/><package name='ModUtils'/><package name='AgentBridge'/></packages></coverage>" |
+    "<coverage timestamp='$timestamp'><packages><package name='Thor'/><package name='ModUtils'/><package name='GameBridge'/></packages></coverage>" |
         Set-Content -LiteralPath (Join-Path $folder 'coverage.cobertura.xml')
     "<TestRun><Results><UnitTestResult outcome='Passed'/></Results><ResultSummary><Counters total='1' executed='1' passed='1'/></ResultSummary></TestRun>" |
         Set-Content -LiteralPath (Join-Path $folder 'unit-tests.trx')

@@ -58,7 +58,7 @@ into the game or install assemblies into the GAC. Pass -Uv to select an explicit
 - Run the build/test/package workflow after code or dependency changes. For a
   documentation-only edit, check the documented commands and `git diff --check`.
 - The shared build requires 100% executable line and branch coverage for Thor,
-  ModUtils, AgentBridge and GameBridge. See `docs/coverage-gate.md` before
+  ModUtils and GameBridge. See `docs/coverage-gate.md` before
   changing coverage collection or the reviewed primitive boundary. Tests execute
   the production behavior against deterministic game observations; GTA natives,
   rendering, physics, actual keyboard delivery and audible playback still need
@@ -67,7 +67,7 @@ into the game or install assemblies into the GAC. Pass -Uv to select an explicit
   `artifacts` contents. Keep dependency caches, game archives, keys, saves,
   account files and gameplay logs out of commits.
 - Intentional NuGet updates require `dotnet restore GTAVMods.sln --force-evaluate`
-  and review of all five `packages.lock.json` files.
+  and review of all four `packages.lock.json` files.
 - A SHVDNE update also requires reviewing the release, updating the version and
   both checksums in `scripts/Restore-Dependencies.ps1`, updating compatibility
   checks, rebuilding and repeating live testing.
@@ -164,9 +164,10 @@ into the game or install assemblies into the GAC. Pass -Uv to select an explicit
 5. Build the package, extract it into a fresh staging directory, and merge its
    **`scripts`** directory into the game root after making backups. Keep all
    packaged dependency DLLs together, including `Thor.dll`, `ModUtils.dll` and
-   `AgentBridge.dll` and `GameBridge.dll`. Back up and remove the obsolete
-   `scripts/DeveloperConsole.dll` when upgrading; leaving it installs the old F8
-   console alongside the bridge. The three WAV files belong in `scripts/Thor/`.
+   the unified `GameBridge.dll`. Back up and remove obsolete
+   `scripts/DeveloperConsole.dll` and `scripts/AgentBridge.dll` when upgrading;
+   leaving them loads the old F8 console or a duplicate bridge script.
+   The three WAV files belong in `scripts/Thor/`.
    Do not copy only `Thor.dll`, and do not deploy the ZIP root as `scripts`.
    SHV, SHVDNE, OpenRPF and DirectStorageFix are separate installations and are
    not bundled in the mod ZIP.

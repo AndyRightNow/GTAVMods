@@ -14,7 +14,7 @@ function Get-CompileHash([string]$Path) {
     'CompileHash|' + $Path + '|' + (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
 }
 function Update-ProductionHashes {
-    foreach ($name in @('Thor', 'ModUtils', 'AgentBridge')) {
+    foreach ($name in @('Thor', 'ModUtils', 'GameBridge')) {
         $recordPath = Join-Path $runDirectory "inputs/$name.txt"
         $records = @(Get-Content -LiteralPath $recordPath | Where-Object { -not $_.StartsWith('CompileHash|') })
         $records + (Get-CompileHash $source) | Set-Content -LiteralPath $recordPath
@@ -166,7 +166,7 @@ public class Example {
     [IO.File]::WriteAllText($source, $sourceText)
     $solutionLines = @()
     $bindings = @()
-    foreach ($name in @('Thor', 'ModUtils', 'AgentBridge')) {
+    foreach ($name in @('Thor', 'ModUtils', 'GameBridge')) {
         $binary = Join-Path $outputDirectory "$name.dll"
         & $DotNet exec $compiler /nologo /noconfig /nostdlib+ /target:library /optimize+ /debug:portable `
             "/reference:$frameworkReference" "/out:$binary" $source
@@ -305,7 +305,7 @@ public class Example {
         'Action other = () => { if (changed && value != 0) number = value; }; Action update = () => { if (changed && value != 0) number = value; }; other(); update();',
         [Text.RegularExpressions.RegexOptions]::Singleline)
     [IO.File]::WriteAllText($source, $collidingSource)
-    foreach ($name in @('Thor', 'ModUtils', 'AgentBridge')) {
+    foreach ($name in @('Thor', 'ModUtils', 'GameBridge')) {
         & $DotNet exec $compiler /nologo /noconfig /nostdlib+ /target:library /optimize+ /debug:portable `
             "/reference:$frameworkReference" "/out:$outputDirectory/$name.dll" $source
         if ($LASTEXITCODE -ne 0) { throw 'Colliding-branch fixture compilation failed.' }
@@ -315,7 +315,7 @@ public class Example {
 
     $branchedSource = $sourceText.Replace('return value;', 'return value > 0 ? value : -value;')
     [IO.File]::WriteAllText($source, $branchedSource)
-    foreach ($name in @('Thor', 'ModUtils', 'AgentBridge')) {
+    foreach ($name in @('Thor', 'ModUtils', 'GameBridge')) {
         & $DotNet exec $compiler /nologo /noconfig /nostdlib+ /target:library /optimize+ /debug:portable `
             "/reference:$frameworkReference" "/out:$outputDirectory/$name.dll" $source
         if ($LASTEXITCODE -ne 0) { throw 'Branched fixture compilation failed.' }
@@ -330,13 +330,32 @@ public class Example {
         'namespace GTAVMods.Game { public interface IEntityLifetimeBindings { void Call(); } } public class Bypass { public void Run(GTAVMods.Game.IEntityLifetimeBindings raw) { raw.Call(); } }'
     )) {
         [IO.File]::WriteAllText($source, $sourceText + $bypass)
-        foreach ($name in @('Thor', 'ModUtils', 'AgentBridge')) {
+        foreach ($name in @('Thor', 'ModUtils', 'GameBridge')) {
             & $DotNet exec $compiler /nologo /noconfig /nostdlib+ /target:library /optimize+ /debug:portable `
                 "/reference:$frameworkReference" "/out:$outputDirectory/$name.dll" $source
             if ($LASTEXITCODE -ne 0) { throw 'Contract-bypass fixture compilation failed.' }
         }
         Update-ProductionHashes
         Assert-Rejected 'Behavior bypasses the typed engine contracts'
+    }
+    # Only GameBridge's engine namespace may implement the raw contracts. Keep
+    # other assemblies valid so these cases cannot fail earlier on Thor.
+    foreach ($bypass in @(
+        'namespace GTAVMods.Agent { public class Bypass { public int Read() { return GTA.Game.Clock(); } } }',
+        'namespace GTAVMods.Agent { public class Bypass { public class Nested { public int Read() { return GTA.Game.Clock(); } } } }',
+        'namespace GTAVMods.Agent { public class Bypass { public int Read(int offset) { Func<int> read = () => GTA.Game.Clock() + offset; return read(); } } }',
+        'namespace GTAVMods.Gameplay { public class Bypass { public int Read() { return GTA.Game.Clock(); } } }',
+        'namespace ADModUtils { public class Bypass { public int Read() { return GTA.Game.Clock(); } } }'
+    )) {
+        [IO.File]::WriteAllText($source, $sourceText + "`n#if GameBridge`n" +
+            'namespace GTA { public static class Game { public static int Clock() { return 1; } } }' + $bypass + "`n#endif`n")
+        foreach ($name in @('Thor', 'ModUtils', 'GameBridge')) {
+            & $DotNet exec $compiler /nologo /noconfig /nostdlib+ /target:library /optimize+ /debug:portable `
+                "/define:$name" "/reference:$frameworkReference" "/out:$outputDirectory/$name.dll" $source
+            if ($LASTEXITCODE -ne 0) { throw 'Unified bridge boundary fixture compilation failed.' }
+        }
+        Update-ProductionHashes
+        Assert-Rejected 'Behavior bypasses the typed engine contracts: GameBridge|'
     }
     Assert-CompileCapture
     Write-Host 'Coverage inventory checks passed: compiler-time hashes and forced compilation, Release mutation configuration, portable PDBs, test build/source freshness, ignored test snapshot retention, setter-lambda ownership, exact primitive review, branch rejection and typed-contract enforcement.'

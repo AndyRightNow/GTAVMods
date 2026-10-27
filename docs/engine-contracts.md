@@ -117,41 +117,33 @@ Successful mod cleanup is idempotent. Failed cleanup retains only resources stil
 requiring release, attempts independent resources, and preserves each error.
 Retrying must not recreate resources before prior ownership is resolved.
 
-## Console contracts
+## Agent command contracts
 
-Control observations use gameplay input group zero. Normalized analog values are
-floats, not rounded integer readings. Temporary control changes capture prior
-state before mutation, restore independently, and retain failed restoration work
-for retry. Successfully restored controls leave mod ownership immediately;
-retrying another control must preserve subsequent changes by other scripts.
-Console close/disposal must not silently abandon pending ownership. It restores
-only controls it captured; it does not force-enable all controls owned by other
-scripts.
+The unified GameBridge contains both `GTAVMods.Game` engine adapters and
+`GTAVMods.Agent` scheduling. The latter uses typed `IAgentWorld` operations;
+assembly membership does not grant it direct native access.
 
-Model spawning and network-control helpers use explicit millisecond timeouts.
-A request result is not proof of readiness or ownership; the corresponding
-observation must confirm it before the dependent action. These helpers remain
-available for the inherited console API, but this mod is supported in Story Mode.
+Controls use explicit groups and normalized analog values. Timed actions submit
+input every frame, release on completion/cancellation, and use bounded game or
+wall time. A batch validates all steps before starting, runs them sequentially,
+and stops after failure. Submission is not proof of observed completion.
 
-A successful vehicle creation transfers its nonzero handle to the caller even
-if releasing the streaming model subsequently fails. The helper retains that
-model release for retry before another spawn, through `ReleasePendingModel`, or
-on console disposal. It cannot hide a created vehicle behind a cleanup exception.
-If no vehicle was created, operation and release failures are surfaced, with both
-original exceptions preserved when both fail. Disposal attempts independent
-control and model cleanup even if one fails.
+The lease watchdog cancels an unattended batch and pauses when the bridge next
+ticks. Native game tasks can persist after input ends; pausing is not a rollback
+of game state. Observe outstanding tasks before resuming or retrying. Modal
+screens may suspend ticks, so the companion records an unconfirmed stop instead
+of claiming a pause it could not observe.
 
-The console's automatic evaluation aliases use its injected environment.
-Convenience geometry constructors use the current console's drawing environment.
-Command help
-shows nonblank argument descriptions alongside the argument signature.
-User-entered C# remains intentionally unrestricted developer code; its arbitrary
-native calls are not shipped mod logic and are not covered by these guarantees.
+Trusted C# uses the active injected world for P/PED, PLAYER, V and POS aliases.
+Its output and results are persisted to files. Arbitrary user-supplied native
+calls are not shipped mod behavior and are outside the typed-contract guarantee.
+Keep such commands bounded and nonblocking; the game thread cannot preempt them.
+See [gta-use.md](gta-use.md) for durable receipts, cancellation, reload and leases.
 
 ## Enforcement and failure attribution
 
 - The compiler-input/PDB inventory rejects direct engine calls and raw native
-  invoker calls from measured behavior outside GameBridge. Only exact reviewed
+  invoker calls from measured behavior outside GameBridge's `GTAVMods.Game` namespace. Only exact reviewed
   primitive bindings may cross the engine boundary directly. GTA math values are
   allowed; there is no general gameplay escape through `GameServices.Native`.
 - Player scenarios check literal native hashes, argument order, units and

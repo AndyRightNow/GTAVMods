@@ -99,9 +99,10 @@ Mode testing.
    remove any old SHVDN API DLL copies from `scripts` before replacing the mod.
 4. Close GTA and back up every file being replaced, recording its relative path
    and hash outside the repository. Extract the package's `scripts` folder into
-   the game root. Keep all packaged DLLs together, including `AgentBridge.dll` and
-   `GameBridge.dll`. Back up and remove the obsolete `scripts/DeveloperConsole.dll`
-   when upgrading so F8 is removed. Preserve unrelated mods. The three WAV files
+   the game root. Keep all packaged DLLs together, including the unified
+   `GameBridge.dll`. Back up and remove obsolete `scripts/DeveloperConsole.dll`
+   and `scripts/AgentBridge.dll` when upgrading, to remove F8 and avoid loading a
+   second bridge script. Preserve unrelated mods. The three WAV files
    belong in `scripts/Thor/`.
    With GTA still closed, run the packaged `Install-AgentService.ps1 -GameDirectory <game path>`
    to prepare the uv environment. The bridge then starts and supervises FastAPI
@@ -241,9 +242,15 @@ save and wrote to the existing SHVDNE log with DirectStorageFix installed.
   Check new session IDs and logs after reload and a full restart. Confirm F8 is gone.
 
 The shared build requires **100% executable line and branch coverage** in Thor,
-ModUtils, AgentBridge and GameBridge. It fails before packaging if tests
+ModUtils and GameBridge. It fails before packaging if tests
 fail, a line or branch is uncovered, or the fresh coverage report does not match
 the compiled source inventory. CI preserves reports even on failure.
+
+Agents can use the repository [gta-use skill](.agents/skills/gta-use/SKILL.md)
+for session discovery, selective world observations, supervised Python policies,
+mission checkpoints and recovery. The managed scheduler and game adapters ship
+together in `GameBridge.dll`; the automatically started FastAPI companion hosts
+the Python-facing HTTP and WebSocket API.
 
 Gameplay runs against focused engine interfaces in tests. Scripted observations
 and recorded primitive commands exercise the real recall, catch, throw, flight,

@@ -1,9 +1,9 @@
 [CmdletBinding()]
 param(
     [string]$DotNet = 'dotnet',
-    [ValidateSet('Thor', 'ModUtils', 'AgentBridge', 'GameBridge')]
-    [ValidateCount(1, 4)]
-    [string[]]$Assembly = @('GameBridge', 'ModUtils', 'Thor', 'AgentBridge'),
+    [ValidateSet('Thor', 'ModUtils', 'GameBridge')]
+    [ValidateCount(1, 3)]
+    [string[]]$Assembly = @('GameBridge', 'ModUtils', 'Thor'),
     [string[]]$Mutate = @('**/*.cs'),
     [ValidateRange(1, 16)][int]$Concurrency = 2,
     [string]$CoverageRunDirectory
