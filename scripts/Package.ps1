@@ -32,7 +32,7 @@ $null = New-Item -ItemType Directory -Path (Join-Path $agent 'tools/gta_use') -F
 Copy-Item -LiteralPath (Join-Path $artifactRoot 'rust/release/gta-use-server.exe') -Destination $agent
 $rustNotices = (Get-Content -LiteralPath (Join-Path $artifactRoot 'rust/notices-path.txt') -Raw).Trim()
 Copy-Item -LiteralPath $rustNotices -Destination (Join-Path $agent 'rust-notices') -Recurse
-foreach ($name in @('pyproject.toml', 'uv.lock', '.python-version', 'gta-service.py')) {
+foreach ($name in @('pyproject.toml', 'uv.lock', '.python-version')) {
     Copy-Item -LiteralPath (Join-Path $repoRoot $name) -Destination $agent
 }
 Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tools/gta_use') -Filter '*.py' -File |

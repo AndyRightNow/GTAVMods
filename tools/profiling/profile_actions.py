@@ -12,7 +12,7 @@ async def run(args):
     game = Client(process=args.process)
     process = Process(game.service['serviceProcess'])
     report = {'gameProcess': args.process, 'serviceProcess': game.service['serviceProcess'],
-              'backend': game.service.get('backend', 'fastapi'), 'session': game.session, 'phases': []}
+              'backend': game.service['backend'], 'session': game.session, 'phases': []}
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     def save():

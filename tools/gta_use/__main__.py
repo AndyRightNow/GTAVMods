@@ -119,10 +119,6 @@ def positive(value):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    server = commands.add_parser("serve", help="Start the FastAPI HTTP/WebSocket companion; the bridge normally starts this automatically.")
-    server.add_argument("--discovery", default=str(Path(os.environ.get("LOCALAPPDATA", ".")) / "GTAVMods" / "Bridge"))
-    server.add_argument("--process", type=int, required=True)
-    server.add_argument("--port", type=int, default=0)
     run = commands.add_parser("run", help="Run a Python segment with independent supervision and a game watchdog.")
     run.add_argument("script")
     run.add_argument("--timeout", type=positive, default=180)
@@ -139,10 +135,6 @@ def main():
         command.add_argument("--process", type=int)
     commands.add_parser("_child", help=argparse.SUPPRESS).add_argument("script")
     args = parser.parse_args()
-    if args.command == "serve":
-        from .service import serve
-        serve(args.discovery, args.process, args.port)
-        return 0
     if args.command == "run":
         return supervise(args)
     if args.command == "_child":

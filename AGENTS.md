@@ -53,7 +53,7 @@ options; do not change the machine's PowerShell policy.
 packages, prepares Python 3.14 with uv sync --frozen, builds Release, runs the tests and creates
 `artifacts/GTAVMods-Enhanced.zip`. The .NET 10 SDK builds the project; it does
 not replace the game's .NET Framework 4.8 runtime. Builds must not deploy files
-into the game or install assemblies into the GAC. Pass -Uv to select an explicit uv executable. After deploying a package with GTA closed, run Install-AgentService.ps1 once to prepare scripts/GtaUse; the bridge then starts and supervises FastAPI automatically. See docs/gta-use.md.
+into the game or install assemblies into the GAC. Pass -Uv to select an explicit uv executable. After deploying a package with GTA closed, run Install-AgentService.ps1 once to prepare scripts/GtaUse; the bridge then starts and supervises the packaged Rust server automatically. Python is retained for the SDK and supervised policies. See docs/gta-use.md.
 
 - Run the build/test/package workflow after code or dependency changes. For a
   documentation-only edit, check the documented commands and `git diff --check`.

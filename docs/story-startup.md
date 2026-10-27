@@ -4,7 +4,7 @@ GTA V Enhanced can skip the splash/legal screens and landing menu and load the
 last Story save on launch. This happens before SHVDNE and the GTA use bridge
 start, so it uses the separate, open-source
 [StraightToStoryMode v1.0 ASI](https://github.com/Chiheb-Bacha/StraightToStoryMode/releases/tag/v1.0).
-The bridge then starts its Python service normally when the scripts initialize.
+The bridge then starts its Rust service when the scripts initialize.
 
 Close GTA and run from the repository in PowerShell:
 
@@ -48,7 +48,7 @@ later edits. Keep the backup directory until rollback is no longer needed.
 On Enhanced 1.0.1158.16, a cold launch from Steam Play reached Franklin at his
 original house without any startup-menu input. The new startup log reported
 `Patch successful!`; SHVDNE started the bridge and Thor at 14:08:02 local time,
-about 114 seconds after Play. The automatically started Python companion served
+about 114 seconds after Play. That run preceded the Rust migration; its Python companion served
 a fresh state pack with `playerAvailable=true`, `pauseMenu=false`,
 `playerControl=true`, and the expected house coordinates. A screenshot confirmed
 the scene. Only after observing successful startup did the test disable Thor and

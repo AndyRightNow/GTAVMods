@@ -11,11 +11,12 @@ Back up/remove old `AgentBridge.dll` and `DeveloperConsole.dll` from `scripts`.
 
 Run the packaged `Install-AgentService.ps1 -GameDirectory <game directory>` once
 with GTA closed. It uses uv/Python 3.14 and writes the interpreter path. The bridge
-starts the selected hidden companion (FastAPI by default), checks it every ten seconds, and reuses it
-across managed reloads. Runtime installation never happens on the game thread.
-Pass `-Backend Rust` to select the packaged Axum/Tokio executable, or
-`-Backend FastApi` to switch back. Both use the same SDK and Python policy runner;
-see [backend setup](../../../../docs/rust-service.md) and
+starts the packaged Rust server invisibly, checks it every ten seconds, and reuses
+it across managed reloads. Runtime installation never happens on the game thread.
+Rust is the sole server; Python runs the SDK and policies. Upgrades back up and
+remove the obsolete Python server, bytecode and backend selector, with a hash
+manifest under `%LOCALAPPDATA%/GTAVMods/Backups`. See
+[server setup](../../../../docs/rust-service.md) and
 [measured comparisons](../../../../docs/bridge-performance.md).
 
 Launch through Steam with the existing modded Story setup; let the user handle

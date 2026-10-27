@@ -361,6 +361,47 @@ async fn a_temporarily_locked_batch_result_is_read_without_resubmitting_the_acti
 }
 
 #[tokio::test]
+async fn an_agent_can_inspect_an_earlier_batch_after_the_game_starts_another() {
+    let mut s = Scene::start().await;
+    let id = "b".repeat(32);
+    save_json(
+        &s.root.path().join(format!("batch-{id}-status.json")),
+        &json!({"batch":id,"state":"completed","total":1}),
+    )
+    .unwrap();
+    save_json(
+        &s.root.path().join(format!("result-{id}-0.json")),
+        &json!({"result":{"paused":true}}),
+    )
+    .unwrap();
+    save_json(
+        &s.root.path().join("batch-status.json"),
+        &json!({"batch":"c".repeat(32),"state":"running"}),
+    )
+    .unwrap();
+    let result: Value = s
+        .get(&format!("/v1/batches/{id}"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(result["batch"], id);
+    assert_eq!(result["state"], "completed");
+    assert_eq!(result["results"], json!([{"paused":true}]));
+    assert_eq!(
+        s.get(&format!("/v1/batches/{}", "d".repeat(32)))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        400
+    );
+    assert!(s.observations.try_recv().is_err());
+}
+
+#[tokio::test]
 async fn websocket_control_is_correlated_while_a_filtered_subscription_is_active() {
     let mut s = Scene::start().await;
     let mut upgrade = format!("{}/v1/ws", s.url.replace("http:", "ws:"))
@@ -370,8 +411,24 @@ async fn websocket_control_is_correlated_while_a_filtered_subscription_is_active
         .headers_mut()
         .insert("authorization", "Bearer scenario-token".parse().unwrap());
     let (mut ws, _) = connect_async(upgrade).await.unwrap();
+    // A mistaken subscription must be rejected without losing the connection
+    // needed to correct it and inspect the game.
+    for invalid in [
+        json!({"type":"subscribe","session":"session-one","hz":100}),
+        json!({"type":"unknown"}),
+    ] {
+        ws.send(tokio_tungstenite::tungstenite::Message::Text(
+            invalid.to_string().into(),
+        ))
+        .await
+        .unwrap();
+        let rejected: Value =
+            serde_json::from_slice(&ws.next().await.unwrap().unwrap().into_data()).unwrap();
+        assert_eq!(rejected["type"], "error");
+    }
+    assert!(s.observations.try_recv().is_err());
     ws.send(tokio_tungstenite::tungstenite::Message::Text(
-        json!({"type":"subscribe","session":"session-one","hz":5,"query":{"sections":["player"]}})
+        json!({"type":"subscribe","session":"session-one","hz":5,"query":{"sections":["player"],"limit":5}})
             .to_string()
             .into(),
     ))
@@ -382,6 +439,7 @@ async fn websocket_control_is_correlated_while_a_filtered_subscription_is_active
     assert_eq!(ack["type"], "subscribed");
     let (state, reply) = s.observations.recv().await.unwrap();
     assert_eq!(state["sections"], json!(["player"]));
+    assert_eq!(state["limit"], 5);
     reply
         .send(json!({"id":state["id"],"ok":true,"result":{"gameTime":150,"health":175}}))
         .unwrap();

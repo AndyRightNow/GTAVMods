@@ -1,19 +1,14 @@
-"""Run real Python segment processes against a local FastAPI service and observed game responses."""
+"""Run real Python policies through the shipped Rust service and observed game pipe."""
 import json
 from collections import deque
-import logging
 from pathlib import Path
-import socket
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import unittest
-import uvicorn
-from gta_use.service import make_app
 from gta_use.segment import save_json
-from test_service import ObservedGame
+from observed_game import ObservedGame, RustScene
 
 
 class ObservedCombat(ObservedGame):
@@ -22,7 +17,7 @@ class ObservedCombat(ObservedGame):
         super().__init__(root)
         self.observations = deque(observations)
 
-    async def request(self, envelope):
+    def request(self, envelope):
         self.requests.append(envelope)
         if envelope["op"] == "batch":
             identifier = envelope["id"]
@@ -49,29 +44,17 @@ class RunnerScenarios(unittest.TestCase):
         self.start_server()
 
     def start_server(self):
-        self.socket = socket.socket()
-        self.socket.bind(("127.0.0.1", 0))
-        self.server = uvicorn.Server(uvicorn.Config(make_app(self.game, "runner-secret", logging.getLogger("runner-test")),
-                                                    log_config=None, access_log=False))
-        self.thread = threading.Thread(target=lambda: self.server.run(sockets=[self.socket]), daemon=True)
-        self.thread.start()
-        deadline = time.monotonic() + 5
-        while not self.server.started and time.monotonic() < deadline:
-            time.sleep(.01)
-        self.assertTrue(self.server.started)
-        (self.root / "service-123.json").write_text(json.dumps({"url": f"http://127.0.0.1:{self.socket.getsockname()[1]}", "token": "runner-secret"}))
+        self.server = RustScene(self.game)
 
     def tearDown(self):
-        self.server.should_exit = True
-        self.thread.join(timeout=10)
-        self.socket.close()
+        self.server.close()
         self.storage.cleanup()
 
     def run_script(self, script, *arguments):
         source = self.root / "segment.py"
         source.write_text(script)
         result = subprocess.run([sys.executable, "-m", "gta_use", "run", str(source), "--discovery", str(self.root),
-                                 "--process", "123", "--output", str(self.root / "run"), *arguments],
+                                 "--process", str(self.game.process), "--output", str(self.root / "run"), *arguments],
                                 capture_output=True, text=True, timeout=15)
         self.assertTrue((self.root / "run/result.json").exists(), result.stdout + result.stderr)
         return result, json.loads((self.root / "run/result.json").read_text())

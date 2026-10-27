@@ -30,7 +30,7 @@ async def main():
         assert result[3]["sections"]["player"]["entity"]["position"] == initial["sections"]["player"]["entity"]["position"]
         assert (await live.request("status"))["paused"] is True
         print(json.dumps({"screenshot": result[4]["screenshot"], "elapsed": result[1]["elapsedGameMs"]}))
-    # The same Python policy is launched by either companion. A checkpoint must
+    # Rust launches the Python policy. A checkpoint must
     # contain observed world evidence; cancellation must pause and release it.
     source = game.directory / "external-policy.py"
     source.write_text('def run(ctx):\n    state = ctx.check(sections=["player"])\n    ctx.checkpoint("position observed", position=state["sections"]["player"]["entity"]["position"])\n')

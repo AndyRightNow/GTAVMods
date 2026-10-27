@@ -1,23 +1,25 @@
 # Rust HTTP/WebSocket companion
 
 `tools/gta-use-server` implements the GTA use companion with Axum 0.8.9 and
-Tokio 1.54.1. It is an optional backend for the existing Python SDK and game
+Tokio 1.54.1. It is the sole HTTP/WebSocket server for the Python SDK and game
 bridge. Python 3.14, uv, checkpoint scripts and the independent policy supervisor
-remain available with either backend. FastAPI remains the installation default.
+remain part of GTA use; Python no longer hosts a server.
 
 With GTA closed and the complete package extracted:
 
 ```powershell
-.\Install-AgentService.ps1 -GameDirectory 'D:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced' -Backend Rust -Uv 'C:\path\to\uv.exe'
-# Switch back, also with GTA closed:
-.\Install-AgentService.ps1 -GameDirectory 'D:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced' -Backend FastApi -Uv 'C:\path\to\uv.exe'
+.\Install-AgentService.ps1 -GameDirectory 'D:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced' -Uv 'C:\path\to\uv.exe'
 ```
 
-The installer records the selected executable in `scripts/GtaUse/.rust-server-path`.
-The managed bridge starts it directly, avoiding a resident Python launcher.
-Both backends use the same per-game mutex, discovery directory, loopback bearer
+The managed bridge starts `scripts/GtaUse/gta-use-server.exe` directly.
+There is no backend setting or Python fallback. Upgrades back up and retire the
+old Python server, cached bytecode and `.rust-server-path` selector. The installer
+records the prepared policy interpreter in `.python-path` and requires the Rust
+binary before changing the environment.
+
+The server uses a per-game mutex, discovery directory, loopback bearer
 authentication and session artifacts. Managed reload retains the companion and
-URL; process failure is checked every ten seconds. Missing selected binaries
+URL; process failure is checked every ten seconds. Missing binaries
 produce diagnostics while the in-game bridge remains available.
 
 The Rust executable accepts three arguments: discovery directory, GTA PID and
@@ -28,10 +30,9 @@ identifies this implementation. Use `Client(process=...)` as before.
 
 ## Interface and resource limits
 
-Both backends support session discovery, versioned requests, streamed states,
+The server supports session discovery, versioned requests, streamed states,
 correlated WebSocket requests, artifact downloads, externally readable batch results and
-Python job start/status/cancellation. Rust provides a compact OpenAPI discovery
-document; FastAPI additionally provides its generated interactive documentation.
+Python job start/status/cancellation and a compact OpenAPI discovery document.
 See [GTA use](gta-use.md) for the operation and state contracts.
 
 The Rust runtime uses two executor threads and at most four blocking workers.
@@ -76,6 +77,35 @@ the managed supervisor can restart it. Clients must inspect game state after an 
 
 Rust scenarios exercise actual loopback HTTP/WebSockets and Windows pipes,
 replacing only the external game's responses. Shared player scenarios launch
-both actual companions from the production bridge, use the same Python SDK and
-checkpoint policy, and test restart and reload. Live timings and memory results
+the packaged Rust executable from the production bridge, use the Python SDK and
+checkpoint policy, and test restart and reload. Python policy scenarios also
+use the actual Rust executable and named pipes. Live timings and memory results
 are recorded in [bridge performance](bridge-performance.md).
+
+## Rust-only migration verification, 2026-10-27
+
+The full build passed 328 C# scenarios, eight Rust transport scenarios and eight
+Python policy scenarios. C# executable line and branch coverage stayed at 100%.
+The removed Python service's transport contracts now run against Rust; policy
+scenarios use the release executable. Upgrade scenarios verify incomplete/running
+installation rejection, recoverable legacy-file retirement, unrelated-file
+preservation and repeated preparation.
+
+A fresh Enhanced 1.0.1158.16 Story launch automatically started the packaged Rust
+server without a selector. The installed Python environment contains nine packages,
+including the SDK, with no FastAPI/Uvicorn dependencies. The old launcher, service
+module and cached service bytecode were backed up with verified hashes and removed.
+Live checks observed 0.44 m of movement from 500 ms input, pause, screenshot capture,
+C# output, a Python checkpoint, rejection of a competing job and cancellation of
+a busy policy. Managed reload changed session while retaining the server PID/URL.
+
+A short check with five warmups and 50 samples per phase measured mean direct
+native latency of 13.90 ms over both HTTP and WebSocket, versus 55.51 ms through
+batch polling. Private server memory was 3.62–3.77 MiB during those phases. No
+request/response receipt files or dropped diagnostics were observed. This checks
+the migration; it does not replace the longer historical performance runs or
+the earlier full mission test.
+
+Local evidence and the install manifest are under
+`C:\Users\Helen\Documents\Codex\2026-10-27\gta-use-20261027-105340`,
+with controls, reload and timing results in `rust-only-validation`.

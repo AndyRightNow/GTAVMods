@@ -26,7 +26,7 @@ ThorTest/
 │   │   ├── InspectionAndPersistenceTests.cs
 │   │   ├── WorldStateDecisionTests.cs
 │   │   ├── ReactiveControlTests.cs
-│   │   ├── PythonServiceTests.cs
+│   │   ├── AgentServiceTests.cs
 │   │   └── ExternalClientTests.cs
 │   ├── ModLifecycle/
 │   │   ├── AgentReloadTests.cs
@@ -63,10 +63,10 @@ frame updates and lifecycle events. Only external game, device, storage and host
 boundaries are replaced. `PureFunctions` covers deterministic helpers with
 explicit inputs and results; stateful module tests do not belong there.
 
-The FastAPI and Python segment scenarios live in `tools/gta_use/tests`. They run
-real HTTP/WebSocket handlers and separate Python scripts, replacing only the
-external game boundary. `PythonServiceTests` launches both FastAPI and Axum, runs
-the same external Python client and checkpoint policy, and verifies service
+The Python segment scenarios live in `tools/gta_use/tests`. They run the shipped
+Rust executable, real HTTP/WebSockets, named pipes and separate Python scripts,
+replacing only the external game boundary. `AgentServiceTests` launches the
+packaged Rust server, runs an external Python client and checkpoint policy, and verifies service
 restart and managed reload. Rust transport scenarios in
 `tools/gta-use-server/src/scenarios.rs` exercise real loopback HTTP/WebSockets
 and Windows named pipes, including cancellation without replay.

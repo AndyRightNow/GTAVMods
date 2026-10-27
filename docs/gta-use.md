@@ -1,11 +1,7 @@
 # GTA use
 
-The optional [Rust/Axum companion](rust-service.md) supports the same Python SDK,
-HTTP/WebSocket operations and supervised policies. Select it with
-`Install-AgentService.ps1 -Backend Rust`; FastAPI remains the default.
-
 GTA use exposes **GTA V Enhanced Story Mode** through an automatically started
-**FastAPI HTTP/WebSocket service**, a Python 3.14 SDK and an in-game action scheduler.
+**[Rust/Axum HTTP/WebSocket service](rust-service.md)**, a Python 3.14 SDK and an in-game action scheduler.
 [uv](https://docs.astral.sh/uv/) prepares the locked Python environment. The mod
 itself continues to run on SHVDNE's .NET Framework 4.8 host.
 
@@ -27,8 +23,8 @@ names for source compatibility. ModUtils and Thor depend on GameBridge; the
 bridge has no dependency on either mod or on NAudio. This removes the former
 AgentBridge-to-ModUtils-to-GameBridge dependency chain.
 
-FastAPI remains a separate Python process because SHVDNE hosts .NET Framework
-4.8 and game calls must run on its script thread. This separation also lets
+The Rust server runs in a separate process; SHVDNE hosts .NET Framework
+4.8 and game calls must run on its script thread. This separation lets
 HTTP diagnostics and Python watchdogs respond when the game stops ticking.
 There is one managed bridge module and one public HTTP/WebSocket service;
 Python policies do not access the private pipe. Coverage still enforces the
@@ -36,12 +32,12 @@ engine namespace boundary inside the combined assembly.
 
 ## Install and automatic startup
 
-Build with the .NET 10 SDK, uv and .NET Framework 4.8:
+Build with the .NET 10 SDK, Rust, uv and .NET Framework 4.8:
 
 ~~~powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1
 # Optional explicit tool locations:
-# ... -DotNet 'C:\path\dotnet.exe' -Uv 'C:\path\uv.exe'
+# ... -DotNet 'C:\path\dotnet.exe' -Uv 'C:\path\uv.exe' -Cargo 'C:\path\cargo.exe'
 ~~~
 
 Close GTA, back up replaced files, and merge the package's scripts directory into
@@ -60,6 +56,12 @@ different environment location. This supports environments outside a sandboxed
 workspace; the interpreter must have ordinary user access to GTA's named pipe.
 Do not change Windows security labels or weaken the pipe ACL to fix an environment.
 
+Rust is the only server. The installer requires `scripts/GtaUse/gta-use-server.exe`
+and backs up/removes the obsolete Python server, its bytecode and backend selector
+from older packages. Backups and a SHA-256 manifest are kept under
+`%LOCALAPPDATA%/GTAVMods/Backups`. Python remains available for the SDK and policies;
+`uv sync --frozen` removes the old server dependencies from this dedicated environment.
+
 The bridge starts the prepared service invisibly, checks it every ten seconds,
 reuses it across script reloads, and restarts it after an exit. It never downloads
 dependencies from the game thread. A missing environment produces a file diagnostic
@@ -70,7 +72,7 @@ Discovery files are in %LOCALAPPDATA%\GTAVMods\Bridge:
 - bridge-<game PID>.json: current managed session, private pipe and session directory.
 - service-<game PID>.json: loopback URL, bearer token and companion process.
 - service-<game PID>.jsonl: rotating service diagnostics.
-- service-<game PID>-stdio.log: startup/import errors and interpreter version.
+- service-<game PID>-stdio.log: Rust startup failures and panic diagnostics.
 
 The service binds only 127.0.0.1, uses a fresh bearer token, and rejects Origin
 headers. The private named pipe grants the current Windows user access and denies
@@ -89,8 +91,8 @@ uv run --frozen gta-use request capture --process 12345
 
 The packaged project is scripts/GtaUse; use uv run --project <that folder> from
 elsewhere. Select --process when several discovery files exist. --discovery
-selects another discovery directory. The bridge starts the server automatically;
-gta-use serve is available for diagnostics.
+selects another discovery directory. The bridge starts the packaged Rust server
+automatically; the Python command utility does not host a server.
 
 For direct HTTP clients, read the discovery file and send
 Authorization: Bearer <token>. OpenAPI is available at /openapi.json.

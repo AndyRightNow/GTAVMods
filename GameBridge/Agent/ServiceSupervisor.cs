@@ -4,7 +4,7 @@ using System.IO;
 
 namespace GTAVMods.Agent
 {
-    /// <summary>Starts the uv-prepared companion without downloading or blocking on HTTP startup.</summary>
+    /// <summary>Starts the packaged Rust companion without downloading or blocking on HTTP startup.</summary>
     public sealed class ServiceSupervisor
     {
         private readonly string project, root;
@@ -31,11 +31,9 @@ namespace GTAVMods.Agent
                 string interpreterFile = Path.Combine(project, ".python-path");
                 string python = File.Exists(interpreterFile) ? File.ReadAllText(interpreterFile).Trim() : Path.Combine(project, ".venv", "Scripts", "python.exe");
                 if (!File.Exists(python)) throw new FileNotFoundException("Prepare the Python 3.14 environment with Install-AgentService.ps1 (uv sync --frozen) before starting GTA.", python);
-                string selection = Path.Combine(project, ".rust-server-path");
-                bool rust = File.Exists(selection);
-                string executable = rust ? File.ReadAllText(selection).Trim() : python;
-                if (!File.Exists(executable)) throw new FileNotFoundException("Selected Rust service is missing. Run Install-AgentService.ps1 -Backend Rust after extracting the complete package.", executable);
-                string arguments = rust ? "\"" + root + "\" " + gameProcess + " \"" + python + "\"" : "-u \"" + Path.Combine(project, "gta-service.py") + "\" \"" + root + "\" " + gameProcess;
+                string executable = Path.Combine(project, "gta-use-server.exe");
+                if (!File.Exists(executable)) throw new FileNotFoundException("Rust service is missing. Extract the complete package and run Install-AgentService.ps1.", executable);
+                string arguments = "\"" + root + "\" " + gameProcess + " \"" + python + "\"";
                 var info = new ProcessStartInfo(executable, arguments) {
                     UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, WorkingDirectory = project
                 };
@@ -47,7 +45,7 @@ namespace GTAVMods.Agent
         private static bool Running(int id)
         {
             if (id == 0) return false;
-            try { using (var process = Process.GetProcessById(id)) return process.ProcessName.StartsWith("python", StringComparison.OrdinalIgnoreCase) || process.ProcessName.Equals("gta-use-server", StringComparison.OrdinalIgnoreCase); }
+            try { using (var process = Process.GetProcessById(id)) return process.ProcessName.Equals("gta-use-server", StringComparison.OrdinalIgnoreCase); }
             catch (ArgumentException) { return false; }
         }
     }

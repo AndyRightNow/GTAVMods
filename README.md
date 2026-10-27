@@ -3,7 +3,7 @@
 C# Story Mode mod with Mjolnir throwing/recall, flight, lightning and an external
 agent console. [GTA use](docs/gta-use.md) provides timed controls, pause/inspection,
 screenshots, C# commands and script reload through an automatically started
-HTTP/WebSocket service (FastAPI or optional [Rust/Axum](docs/rust-service.md)),
+HTTP/WebSocket service powered by [Rust/Axum](docs/rust-service.md),
 with uv-managed Python 3.14 checkpoint scripts.
 
 On 2026-10-27, GTA use completed the full **Repossession** Story mission using
@@ -113,8 +113,9 @@ Mode testing.
    second bridge script. Preserve unrelated mods. The three WAV files
    belong in `scripts/Thor/`.
    With GTA still closed, run the packaged `Install-AgentService.ps1 -GameDirectory <game path>`
-   to prepare the uv environment. The bridge then starts and supervises FastAPI
-   automatically. Startup/import errors are written to the bridge log directory.
+   to prepare the Python SDK/policy environment and retire the old Python server.
+   The bridge starts and supervises the packaged Rust server automatically.
+   Startup errors are written to the bridge log directory.
 5. Install [DirectStorageFix 1.2](https://github.com/alloc8or/DirectStorageFix)
    beside the executable on Enhanced builds 1013.17 and later. It prevents
    DirectStorage from locking log/configuration files, including SHVDNE's log.
@@ -210,7 +211,7 @@ Ctrl+A+O to retry. Missing audio is logged once per clip and does not stop gamep
 
 ## GTA use: external agent controls
 
-F8 has been replaced by an automatically started FastAPI HTTP/WebSocket service
+F8 has been replaced by an automatically started Rust/Axum HTTP/WebSocket service
 and a Python 3.14 command utility/SDK. Prepare the locked environment once with
 uv through `Install-AgentService.ps1`; the bridge starts, reuses and supervises
 the server with the game. `describe` lists built-in and registered commands;
@@ -221,7 +222,7 @@ progress checks and file-based checkpoint evidence. See the
 [installation, protocol and examples](docs/gta-use.md).
 
 `scripts/Invoke-Gta.ps1` remains a direct local diagnostic client for inspecting
-the private game transport if the Python service cannot start.
+the private game transport if the Rust service cannot start.
 
 `state` returns a structured JSON world tree with player pose, nearby entities,
 weapons/ammo, vehicle condition, navigation markers and collision probes.
@@ -259,7 +260,7 @@ the compiled source inventory. CI preserves reports even on failure.
 Agents can use the repository [gta-use skill](.agents/skills/gta-use/SKILL.md)
 for session discovery, selective world observations, supervised Python policies,
 mission checkpoints and recovery. The managed scheduler and game adapters ship
-together in `GameBridge.dll`; the automatically started FastAPI companion hosts
+together in `GameBridge.dll`; the automatically started Rust companion hosts
 the Python-facing HTTP and WebSocket API.
 
 Gameplay runs against focused engine interfaces in tests. Scripted observations

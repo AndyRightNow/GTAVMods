@@ -1,6 +1,6 @@
 # Bridge performance and memory profiling
 
-Use `tools/profiling` to measure the installed bridge and its Python processes
+Use `tools/profiling` to measure the installed bridge, Rust server and Python policy processes
 against a real, backed-up Story Mode session. All reports go to a fresh directory
 outside Git. Keep the game scene, window focus, graphics settings, filters and
 request rates consistent between runs. Do not run builds or other benchmarks at
@@ -9,12 +9,13 @@ the same time. Readiness of HTTP does not establish game-thread readiness.
 The optimized implementation reads each bounded pipe frame asynchronously, then
 dispatches its game operation on Tick. It arms the next listener when the previous
 write completes. Successful/error responses are encoded once and returned without
-disk receipts. The Python companion caches Windows DLL/signature
-setup and returns already-decoded JSON directly, avoiding FastAPI's recursive
-object conversion. Python observation snapshots use one JSON write instead of
+disk receipts. Rust/Axum is now the sole HTTP/WebSocket server. Python observation
+snapshots use one JSON write instead of
 many tiny writes; atomic replacement preserves consistent visibility without a
 forced durable flush. See the [latest action measurements](#ephemeral-action-optimization-2026-10-27);
 earlier sections retain historical results from the receipt-based implementation.
+FastAPI comparisons below are historical evidence; that implementation and its
+dependencies have been removed.
 
 ## Normal measurements
 
@@ -66,29 +67,12 @@ For a policy, set `GTA_USE_PROFILE=1` before the policy command above and remove
 the environment variable afterward. The worker writes `worker.prof`,
 `worker-profile.txt`, `allocation-growth.txt` and traced current/peak memory.
 
-To profile the service while preserving its auto-start watchdog:
-
-1. Pause the game and finish all active jobs. Launch `profile_service.py` with
-   the prepared interpreter, discovery directory, game PID, fresh output directory
-   and `--wait-for-start`. Use `Start-Process -WindowStyle Hidden` with stdout/stderr
-   redirected to evidence files. Do not modify installed game DLLs while running.
-2. Wait for the output's `READY` file. It contains the actual profiler PID.
-   Read `service-<gamePID>.json` locally without printing its bearer token; stop
-   only its `serviceProcess`, then immediately create the profiler's `START` file.
-   Verify that discovery now names the PID in `READY` before sending workloads.
-   If the watchdog won the race, retain that failed attempt and try a fresh run.
-3. Run representative reads/streams for at least 60 seconds. These timings are
-   instrumented and must not be reported as normal latency. The profiler takes
-   its warm snapshot after 30 seconds and logs traced memory every 10 seconds.
-4. Create `STOP` to request graceful shutdown. Wait for `service.prof`,
-   `service.txt`, `warm.snapshot`, `final.snapshot`, `memory.jsonl` and
-   `allocation-growth.txt`. Verify the ordinary companion auto-starts afterward.
-
-Python 3.14 uses one interpreter-wide monitoring ID for `cProfile`; do not nest
-another profiler around pipe workers. The saved statistics include call counts
-and blocking waits. Large cumulative wall time in socket/pipe waits is not CPU
-utilization; use Windows process counters for that comparison. Inspect a profile
-with `uv run --frozen python -m pstats <path-to-service.prof>`.
+The Rust server's CPU and memory are measured by `profile_live.py` process
+counters. Python instrumentation applies only to policies. The historical
+FastAPI service profiler was removed with that server. Large cumulative wall
+time in socket waits is not CPU utilization; use Windows process counters for
+that comparison. Inspect policy profiles with
+`uv run --frozen python -m pstats <path-to-worker.prof>`.
 
 Methodology references: [Python profiling](https://docs.python.org/3.14/library/profile.html),
 [tracemalloc](https://docs.python.org/3.14/library/tracemalloc.html),
@@ -242,12 +226,10 @@ C# file output, managed reload retaining the service PID/URL, a Python checkpoin
 job, parallel-job rejection and cancellation of a CPU-bound policy. The earlier
 complete Repossession mission was not replayed for this backend comparison.
 
-FastAPI remains the default and provides generated interactive API documentation
-and a single Python service stack to maintain. Rust is selectable with
-`Install-AgentService.ps1 -Backend Rust`, retains the same Python SDK/policies,
-and provides the lower companion footprint measured here. It adds a Rust build
-toolchain and a second HTTP implementation to maintain; its OpenAPI document is
-compact and it has no Swagger UI. See [backend setup](rust-service.md).
+These measurements preceded removal of FastAPI. Rust is now the only server,
+retaining the Python SDK/policies and the lower companion footprint measured
+here. Its OpenAPI document is compact and it has no Swagger UI.
+See [server setup](rust-service.md).
 
 Raw evidence is outside Git at
 `C:\Users\Helen\Documents\Codex\2026-10-27\gta-use-rust-comparison`:

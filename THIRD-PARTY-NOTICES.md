@@ -1,19 +1,17 @@
 # Third-party components
 
-The optional Rust companion uses Axum, Tokio, Hyper, Tungstenite, Serde, UUID,
+The Rust companion uses Axum, Tokio, Hyper, Tungstenite, Serde, UUID,
 Windows bindings and their dependencies, pinned in
 `tools/gta-use-server/Cargo.lock`. The package includes their upstream license
 texts and the Rust standard-library notices in `scripts/GtaUse/rust-notices`.
 `dependencies.json` records names, versions, license identifiers and upstream
 repositories for the target's runtime and build dependencies.
 
-The external GTA use service uses uv-managed Python 3.14 and the Python packages
-locked in `uv.lock`: FastAPI, Starlette, Pydantic, Uvicorn, websockets, HTTPX and
+The GTA use SDK and policy runner use uv-managed Python 3.14 and the Python packages
+locked in `uv.lock`: websockets, HTTPX and
 their dependencies. They are installed separately by uv; wheels and the Python
 runtime are not included in the mod ZIP. Upstream notices are retained in the
 installed distributions. See [uv](https://docs.astral.sh/uv/),
-[FastAPI](https://github.com/fastapi/fastapi), [Starlette](https://github.com/encode/starlette),
-[Pydantic](https://github.com/pydantic/pydantic), [Uvicorn](https://github.com/encode/uvicorn),
 [websockets](https://github.com/python-websockets/websockets), and
 [HTTPX](https://github.com/encode/httpx).
 
