@@ -325,3 +325,5 @@ ASALocalRun/
 .deps/
 .dotnet/
 .python-path
+.rust-server-path
+**/target/

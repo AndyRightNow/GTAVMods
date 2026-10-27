@@ -1,0 +1,29 @@
+[package]
+name = "gta-use-server"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+description = "Axum/Tokio loopback companion for the GTA use game bridge"
+
+[dependencies]
+axum = { version = "0.8.9", features = ["ws"] }
+tokio = { version = "1.54", features = ["rt-multi-thread", "net", "io-util", "fs", "sync", "time", "process", "signal", "macros"] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures-util = { version = "0.3", features = ["sink"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+subtle = "2"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security", "Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+tempfile = "3"
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+tokio-tungstenite = "0.29"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+# A panic terminates the companion; the managed supervisor restarts it.
+panic = "abort"

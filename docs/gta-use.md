@@ -1,5 +1,9 @@
 # GTA use
 
+The optional [Rust/Axum companion](rust-service.md) supports the same Python SDK,
+HTTP/WebSocket operations and supervised policies. Select it with
+`Install-AgentService.ps1 -Backend Rust`; FastAPI remains the default.
+
 GTA use exposes **GTA V Enhanced Story Mode** through an automatically started
 **FastAPI HTTP/WebSocket service**, a Python 3.14 SDK and an in-game action scheduler.
 [uv](https://docs.astral.sh/uv/) prepares the locked Python environment. The mod

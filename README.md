@@ -3,7 +3,8 @@
 C# Story Mode mod with Mjolnir throwing/recall, flight, lightning and an external
 agent console. [GTA use](docs/gta-use.md) provides timed controls, pause/inspection,
 screenshots, C# commands and script reload through an automatically started
-FastAPI HTTP/WebSocket service, with uv-managed Python 3.14 checkpoint scripts.
+HTTP/WebSocket service (FastAPI or optional [Rust/Axum](docs/rust-service.md)),
+with uv-managed Python 3.14 checkpoint scripts.
 
 On 2026-10-27, GTA use completed the full **Repossession** Story mission using
 Python segments, observed world state, cover combat, driving and normal game
@@ -55,7 +56,8 @@ Sources: [Script Hook V](https://www.dev-c.com/gtav/scripthookv/),
 
 ## Build and test
 
-On Windows with the .NET 10 SDK, .NET Framework 4.8 and [uv](https://docs.astral.sh/uv/):
+On Windows with the .NET 10 SDK, .NET Framework 4.8, [uv](https://docs.astral.sh/uv/)
+and rustup (Rust 1.99.1 is selected by `rust-toolchain.toml`):
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1

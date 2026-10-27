@@ -19,11 +19,22 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             while (directory != null && !File.Exists(Path.Combine(directory.FullName, "pyproject.toml"))) directory = directory.Parent;
             return directory?.FullName ?? throw new InvalidOperationException("Run tests from a source checkout after uv sync --frozen.");
         }
-        [TestMethod]
-        public void StartingTheBridgeAutomaticallyEnablesPythonHttpAndWebSocketControlAndRestartsAFailedService()
+        private static string ServiceProject(AgentScene scene, bool rust)
+        {
+            if (!rust) return Project();
+            string project = Path.Combine(scene.Root, "service"); Directory.CreateDirectory(project);
+            File.Copy(Path.Combine(Project(), ".python-path"), Path.Combine(project, ".python-path"));
+            string built = Path.Combine(Project(), "artifacts", "rust", "release", "gta-use-server.exe");
+            string executable = Environment.GetEnvironmentVariable("GTA_USE_RUST_TEST_EXECUTABLE") ?? built;
+            CollectionAssert.AreEqual(File.ReadAllBytes(built), File.ReadAllBytes(executable), "The staged service must match this build.");
+            File.WriteAllText(Path.Combine(project, ".rust-server-path"), executable);
+            return project;
+        }
+        [TestMethod, DataRow(false), DataRow(true)]
+        public void StartingTheBridgeAutomaticallyEnablesPythonHttpAndWebSocketControlAndRestartsAFailedService(bool rust)
         {
             using (var s = new AgentScene())
-            using (var bridge = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), Project()))
+            using (var bridge = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), ServiceProject(s, rust)))
             {
                 string discovery = Path.Combine(s.Root, "service-" + Process.GetCurrentProcess().Id + ".json");
                 int server = 0, replacement = 0;
@@ -57,7 +68,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                     Assert.AreNotEqual(server, replacement);
                     // A managed reload publishes a new session but keeps the companion and URL.
                     bridge.Dispose();
-                    using (var reloaded = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), Project()))
+                    using (var reloaded = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), rust ? Path.Combine(s.Root, "service") : Project()))
                     using (var client = Process.Start(info))
                     {
                         var output = client.StandardOutput.ReadToEndAsync(); var error = client.StandardError.ReadToEndAsync();
@@ -78,15 +89,20 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 }
             }
         }
-        [TestMethod]
-        public void MissingPreparedPythonEnvironmentIsLoggedWhileThePlayerCanStillUseTheBridge()
+        [TestMethod, DataRow(false), DataRow(true)]
+        public void MissingPreparedServiceIsLoggedWhileThePlayerCanStillUseTheBridge(bool rust)
         {
             using (var s = new AgentScene())
             using (var bridge = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), s.Root))
             {
+                if (rust)
+                {
+                    File.Copy(Path.Combine(Project(), ".python-path"), Path.Combine(s.Root, ".python-path"));
+                    File.WriteAllText(Path.Combine(s.Root, ".rust-server-path"), Path.Combine(s.Root, "missing-server.exe"));
+                }
                 File.WriteAllText(Path.Combine(s.Root, "service-" + Process.GetCurrentProcess().Id + ".json"), Protocol.Encode(new { serviceProcess = Process.GetCurrentProcess().Id }));
                 bridge.Tick();
-                StringAssert.Contains(s.Events, "agent.service.start.failed"); StringAssert.Contains(s.Events, "uv sync --frozen");
+                StringAssert.Contains(s.Events, "agent.service.start.failed"); StringAssert.Contains(s.Events, rust ? "Selected Rust service is missing" : "uv sync --frozen");
                 var request = new { version = 1, id = Guid.NewGuid().ToString("N"), session = Protocol.Decode(Protocol.Encode(bridge.Status()))["session"], op = "status" };
                 Assert.AreEqual(true, Protocol.Decode(bridge.Dispatch(Protocol.Encode(request)))["ok"]);
             }

@@ -29,6 +29,9 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Invoke-Gta.ps1') -Destinati
 Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Install-AgentService.ps1') -Destination $stage
 $agent = Join-Path $scripts 'GtaUse'
 $null = New-Item -ItemType Directory -Path (Join-Path $agent 'tools/gta_use') -Force
+Copy-Item -LiteralPath (Join-Path $artifactRoot 'rust/release/gta-use-server.exe') -Destination $agent
+$rustNotices = (Get-Content -LiteralPath (Join-Path $artifactRoot 'rust/notices-path.txt') -Raw).Trim()
+Copy-Item -LiteralPath $rustNotices -Destination (Join-Path $agent 'rust-notices') -Recurse
 foreach ($name in @('pyproject.toml', 'uv.lock', '.python-version', 'gta-service.py')) {
     Copy-Item -LiteralPath (Join-Path $repoRoot $name) -Destination $agent
 }
@@ -38,6 +41,7 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/gta_use/examples') -Destinati
 $guides = Join-Path $stage 'docs'
 New-Item -ItemType Directory -Path $guides -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/gta-use.md'), (Join-Path $repoRoot 'docs/world-state.md') -Destination $guides
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/rust-service.md'), (Join-Path $repoRoot 'docs/bridge-performance.md') -Destination $guides
 $zip = Join-Path $artifactRoot 'GTAVMods-Enhanced.zip'
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
 Write-Host "Package: $zip"

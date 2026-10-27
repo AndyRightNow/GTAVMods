@@ -59,6 +59,10 @@ try {
     if (@(& $manifestScript -RepositoryRoot $fixture).Count -ne 2) {
         throw 'Manifest must detect a deleted project input.'
     }
+    'fn main() {}' | Set-Content -LiteralPath (Join-Path $fixture 'server.rs')
+    if (@(& $manifestScript -RepositoryRoot $fixture | Where-Object path -eq 'server.rs').Count -ne 1) {
+        throw 'Manifest must detect Rust companion source changes.'
+    }
     Write-Host 'Build input checks passed: mutation JSON roundtrip, new tests, changed content, deleted projects and ignored outputs.'
 } finally {
     $resolved = [IO.Path]::GetFullPath($fixture)

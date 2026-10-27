@@ -31,7 +31,12 @@ namespace GTAVMods.Agent
                 string interpreterFile = Path.Combine(project, ".python-path");
                 string python = File.Exists(interpreterFile) ? File.ReadAllText(interpreterFile).Trim() : Path.Combine(project, ".venv", "Scripts", "python.exe");
                 if (!File.Exists(python)) throw new FileNotFoundException("Prepare the Python 3.14 environment with Install-AgentService.ps1 (uv sync --frozen) before starting GTA.", python);
-                var info = new ProcessStartInfo(python, "-u \"" + Path.Combine(project, "gta-service.py") + "\" \"" + root + "\" " + gameProcess) {
+                string selection = Path.Combine(project, ".rust-server-path");
+                bool rust = File.Exists(selection);
+                string executable = rust ? File.ReadAllText(selection).Trim() : python;
+                if (!File.Exists(executable)) throw new FileNotFoundException("Selected Rust service is missing. Run Install-AgentService.ps1 -Backend Rust after extracting the complete package.", executable);
+                string arguments = rust ? "\"" + root + "\" " + gameProcess + " \"" + python + "\"" : "-u \"" + Path.Combine(project, "gta-service.py") + "\" \"" + root + "\" " + gameProcess;
+                var info = new ProcessStartInfo(executable, arguments) {
                     UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, WorkingDirectory = project
                 };
                 using (var process = Process.Start(info)) child = process.Id;
@@ -42,7 +47,7 @@ namespace GTAVMods.Agent
         private static bool Running(int id)
         {
             if (id == 0) return false;
-            try { using (var process = Process.GetProcessById(id)) return process.ProcessName.StartsWith("python", StringComparison.OrdinalIgnoreCase); }
+            try { using (var process = Process.GetProcessById(id)) return process.ProcessName.StartsWith("python", StringComparison.OrdinalIgnoreCase) || process.ProcessName.Equals("gta-use-server", StringComparison.OrdinalIgnoreCase); }
             catch (ArgumentException) { return false; }
         }
     }

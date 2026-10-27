@@ -65,8 +65,11 @@ explicit inputs and results; stateful module tests do not belong there.
 
 The FastAPI and Python segment scenarios live in `tools/gta_use/tests`. They run
 real HTTP/WebSocket handlers and separate Python scripts, replacing only the
-external game boundary. `PythonServiceTests` also launches the actual companion
-from the production bridge and exercises the SDK through the real Windows pipe.
+external game boundary. `PythonServiceTests` launches both FastAPI and Axum, runs
+the same external Python client and checkpoint policy, and verifies service
+restart and managed reload. Rust transport scenarios in
+`tools/gta-use-server/src/scenarios.rs` exercise real loopback HTTP/WebSockets
+and Windows named pipes, including cancellation without replay.
 
 Choose a case's home by its primary player expectation. For example, throwing
 despite a missing animation belongs under hammer throwing, while pausing after
