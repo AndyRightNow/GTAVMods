@@ -49,8 +49,9 @@ and negative axis directions depend on the control; test a short movement before
 assuming a direction. A batch can apply multiple simultaneous controls in a step,
 but its steps execute sequentially. Only one batch can run at a time.
 
-The SDK's action methods wait for batch completion. Ordinary `request("batch",
-steps=...)` returns acceptance; query the batch ID for completion. Wall-clock
+The SDK's action methods return immediate results in one request; timed actions
+wait for batch completion. Ordinary `request("batch", steps=...)` returns
+acceptance; query the batch ID for completion. Wall-clock
 controls still require game ticks. Game-time waits require resumed simulation.
 Use short actions within the Python observation deadline, not a 30-second action
 with a 10-second check deadline.
@@ -76,7 +77,7 @@ Plain top-level `cancel` outside a supervised run releases the bridge-owned paus
 it is not equivalent to runner cancellation, which leaves the game paused.
 
 Before reload, stop the current Python run and inspect its final outcome. Reload
-acceptance is persisted before SHVDNE Reload is invoked. Wait for a different
+acceptance is delivered before SHVDNE Reload is invoked. Wait for a different
 ready managed session, then recreate the Client and re-register extensions.
 The service process/URL normally stays the same. Reload invalidates old leases,
 handles and compiled commands; never continue the old policy silently. Native
@@ -89,7 +90,6 @@ ASI changes require a full game restart.
 | `service-<PID>-stdio.log` | Interpreter, imports and startup failures |
 | `service-<PID>.jsonl` | Rotating HTTP/WebSocket/service diagnostics |
 | Game `scripts/Logs/Thor-*.jsonl` | Shared mod/bridge events, exceptions, snapshots; fallback under LOCALAPPDATA/GTAVMods/Logs |
-| Session `request-*.json`, `response-*.json` | Requested operation and durable receipt; no receipt means uncertain outcome |
 | Session batch/status/step artifacts | Accepted work, progress, completion and output |
 | Run `run.json`, `script.py` | Entry script snapshot/hash, session and deadlines |
 | Run `state.json`, `progress.json`, `events.jsonl` | Last observation, responsiveness, meaningful progress and checkpoint evidence |
@@ -97,12 +97,14 @@ ASI changes require a full game restart.
 | New SHV/SHVDNE/DirectStorageFix logs | Actual host loading and runtime compatibility |
 
 Inspect timestamps, PID and session IDs before drawing conclusions. Console/Trace
-output is persisted. Repeated audit/storage failures stop action execution; check
-free space and actual writable paths. Session artifacts are retained, so frequent
-streams can consume substantial disk. Archive evidence outside Git; the diagnostic
+output is queued to files. Diagnostics use a bounded background queue; storage
+failures or overload drop records and increase `status.droppedRecords` without
+stopping actions. Requests/responses have no disk receipts or deduplication;
+IDs only correlate replies. Reusing an ID explicitly executes again. No bridge
+writer forces a durable disk flush. Batch/screenshot artifacts are retained. Archive evidence outside Git; the diagnostic
 collector excludes saves/accounts and makes screenshot collection opt-in.
 
-On an uncertain request, find its receipt/batch and inspect game state before
+On an uncertain request, inspect current game state and any batch diagnostics before
 deciding whether a new command is appropriate. Reconnecting never makes replay
 safe automatically. If game state requests hang while HTTP works, inspect the
 visible game: mission failure/save menus can stop SHVDNE ticks. Use normal Retry

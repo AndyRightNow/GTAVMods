@@ -40,7 +40,7 @@ class Client:
 
     def envelope(self, op, arguments):
         envelope = dict(arguments, version=1, id=uuid.uuid4().hex, session=self.session, op=op)
-        if self.token and op in ("batch", "reload"):
+        if self.token and op in ("batch", "reload", "action"):
             envelope["token"] = self.token
         return envelope
 
@@ -57,7 +57,7 @@ class Client:
         try:
             response = self.http("POST", "/v1/request", envelope)
         except httpx.TransportError as error:
-            raise UncertainOutcome(f"Inspect response-{envelope['id']}.json; no automatic replay.") from error
+            raise UncertainOutcome(f"Request {envelope['id']} lost its response; inspect game state before acting. No automatic replay.") from error
         return self.result(response, envelope["id"])
 
     def state(self, **filters):
@@ -65,6 +65,9 @@ class Client:
 
     def batch(self, steps, timeout=35):
         accepted = self.request("batch", steps=steps)
+        return self.wait_batch(accepted, timeout)
+
+    def wait_batch(self, accepted, timeout=35):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             status = self.http("GET", "/v1/batches/" + accepted["batch"])
@@ -76,7 +79,10 @@ class Client:
         raise UncertainOutcome(f"Batch {accepted['batch']} timed out; inspect or stop it before acting.")
 
     def action(self, op, **arguments):
-        return self.batch([dict(arguments, op=op)])[0]
+        response = self.request("action", steps=[dict(arguments, op=op)])
+        if response["completed"]:
+            return response["value"]
+        return self.wait_batch(response["batch"])[0]
 
     def command(self, code):
         return self.action("command", code=code)
@@ -119,7 +125,7 @@ class LiveClient:
         return self
 
     async def receive(self):
-        error = UncertainOutcome("WebSocket disconnected. Inspect command receipts before acting.")
+        error = UncertainOutcome("WebSocket disconnected. Inspect game state before acting.")
         try:
             async for frame in self.ws:
                 message = json.loads(frame)
@@ -150,7 +156,7 @@ class LiveClient:
             response = await asyncio.wait_for(future, self.client.timeout)
             return self.client.result(response, envelope["id"])
         except (TimeoutError, ConnectionError) as error:
-            raise UncertainOutcome(f"Inspect response-{envelope['id']}.json; command was not replayed.") from error
+            raise UncertainOutcome(f"Request {envelope['id']} lost its response; inspect game state. Command was not replayed.") from error
         finally:
             self.pending.pop(envelope["id"], None)
 
@@ -166,6 +172,9 @@ class LiveClient:
 
     async def batch(self, steps, timeout=35):
         accepted = await self.request("batch", steps=steps)
+        return await self.wait_batch(accepted, timeout)
+
+    async def wait_batch(self, accepted, timeout=35):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             response = await self.http.get("/v1/batches/" + accepted["batch"])
@@ -179,7 +188,10 @@ class LiveClient:
         raise UncertainOutcome(f"Batch {accepted['batch']} timed out; inspect before retrying.")
 
     async def action(self, op, **arguments):
-        return (await self.batch([dict(arguments, op=op)]))[0]
+        response = await self.request("action", steps=[dict(arguments, op=op)])
+        if response["completed"]:
+            return response["value"]
+        return (await self.wait_batch(response["batch"]))[0]
 
     async def native(self, name, *arguments, returns="void"):
         return await self.action("native", name=name, args=list(arguments), returns=returns)

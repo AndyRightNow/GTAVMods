@@ -95,7 +95,7 @@ def exchange(pipe, payload, timeout):
                 if dll.WaitForSingleObject(event, remaining) != 0:
                     dll.CancelIoEx(handle, c.byref(overlapped))
                     dll.GetOverlappedResult(handle, c.byref(overlapped), c.byref(count), True)
-                    raise TimeoutError("Bridge I/O timed out; inspect the request receipt before retrying.")
+                    raise TimeoutError("Bridge I/O timed out; inspect game state before acting.")
                 if not dll.GetOverlappedResult(handle, c.byref(overlapped), c.byref(count), False):
                     raise c.WinError(c.get_last_error())
             if count.value == 0:

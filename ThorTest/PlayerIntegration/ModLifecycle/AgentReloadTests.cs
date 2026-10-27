@@ -14,6 +14,31 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
     [TestClass, TestCategory("PlayerIntegration")]
     public class AgentReloadTests
     {
+        [TestMethod, DataRow(false), DataRow(true)]
+        public void ScriptAbortClosesPrefetchedConnectionsAndIgnoresLateResponseCompletion(bool replyBeforeAbort)
+        {
+            int opens = 0;
+            var connection = new AgentTransport { WriteSurvivesClose = true };
+            var next = new AgentTransport();
+            using (var s = new AgentScene(() => ++opens == 1 ? connection : next))
+            {
+                var request = s.Envelope("action"); request["steps"] = new[] { Step("pause") };
+                connection.Request(Protocol.Encode(request));
+                s.FramesUntil(() => connection.Outgoing != null);
+                if (replyBeforeAbort) connection.WriteCompleted.SetResult(true);
+                s.Bridge.Dispose();
+                int calls = s.Game.Native.Calls.Count;
+                if (!replyBeforeAbort) connection.WriteCompleted.SetResult(true);
+                s.Frame();
+                Assert.IsTrue(connection.Disposed);
+                Assert.AreEqual(replyBeforeAbort ? 2 : 1, opens);
+                Assert.AreEqual(replyBeforeAbort, next.Disposed);
+                Assert.AreEqual(calls, s.Game.Native.Calls.Count);
+                Assert.AreEqual(false, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                StringAssert.Contains(s.Published, "stopped");
+            }
+        }
+
         [TestMethod]
         public void ScriptAbortReleasesPauseClosesThePipeAndRefusesNewCommands()
         {

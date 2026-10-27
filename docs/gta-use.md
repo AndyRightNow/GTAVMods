@@ -21,7 +21,7 @@ state-selection and Python policy references.
 
 `GameBridge.dll` is the single managed bridge. `GTAVMods.Game` implements typed
 engine contracts and state observations; `GTAVMods.Agent` implements the action
-scheduler, commands, receipts, pipe host and companion supervision. Shared file
+scheduler, commands, diagnostics, pipe host and companion supervision. Shared file
 diagnostics live in `GameBridge/Diagnostics`, retaining the `ADModUtils` public
 names for source compatibility. ModUtils and Thor depend on GameBridge; the
 bridge has no dependency on either mod or on NAudio. This removes the former
@@ -98,17 +98,17 @@ Authorization: Bearer <token>. OpenAPI is available at /openapi.json.
 | Endpoint | Behavior |
 | --- | --- |
 | GET /v1/session | Current session/discovery, even when the game is unresponsive |
-| POST /v1/request | Versioned command envelope and durable receipt |
-| GET /v1/batches/{id} | Current batch status/results from files |
+| POST /v1/request | Versioned command envelope and correlated response |
+| GET /v1/batches/{id} | Per-batch status/results from files |
 | GET /v1/files/{relative-path} | Session artifacts; paths cannot escape the session |
 | POST /v1/jobs | Start a supervised local Python script; returns job ID |
 | GET /v1/jobs/{id} | Checkpoint/progress/final result |
 | DELETE /v1/jobs/{id} | Request cancellation |
-| WS /v1/ws | Concurrent command receipts and bounded state subscriptions |
+| WS /v1/ws | Correlated command responses and bounded state subscriptions |
 
-HTTP and WebSocket requests share the same scheduler, IDs, validation and receipt
-files. A stale session is rejected. No transport reconnect automatically repeats a
-mutation. A timeout means inspect its receipt and observed game state first.
+HTTP and WebSocket requests share the same scheduler, IDs, validation and response
+contract. A stale session is rejected. No transport reconnect automatically repeats a
+mutation. A timeout means inspect observed game state first.
 
 ## Python segments and checkpoints
 
@@ -225,12 +225,12 @@ Responses use type=response and the same request ID. The Python receiver
 correlates concurrent requests and retains only the latest pending observation.
 Slow readers are disconnected after a bounded send wait; queues are bounded.
 Screenshots and large historical files use HTTP rather than blocking the live
-control stream. After disconnect/reload, inspect receipts and create a fresh
+control stream. After disconnect/reload, inspect game state and create a fresh
 Client; action replay is never automatic.
 
-## Extensibility and durable execution
+## Extensibility and ephemeral execution
 
-Top-level operations: describe, status, state, observe, capture, batch, cancel,
+Top-level operations: describe, status, state, observe, capture, action, batch, cancel,
 reload and lease. Batch commands: pause, resume, wait, controls, aim, native,
 state, observe, capture, command and registered extensions.
 
@@ -249,20 +249,37 @@ Keep arbitrary C# short and nonblocking: it cannot safely be preempted.
 
 Mods can register namespaced CommandDefinition operations on
 BridgeScript.Active.Commands. Preparation validates arguments and returns an
-IAgentStep; Run executes each tick, Result is persisted, and Cancel releases
+IAgentStep; Run executes each tick, batch results are logged asynchronously, and Cancel releases
 owned resources. StatePack.Register adds named state sections. describe discovers
 both extensions, so future controls need no transport redesign.
 
 The private pipe uses length-prefixed UTF-8 JSON, with a 1 MiB request bound and
-4 MiB serialized response bound. Large programs stay in Python files. Requests,
-responses, batch definitions, step results, screenshots and console output are
-durable files. A saved request without a receipt has an uncertain outcome.
-Audit/storage failure stops unattended execution. The service log rotates at
-5 MiB with nine backups; gameplay JSONL retains its existing rotation policy.
-Historical session artifacts are retained until archived or deleted by the
-operator. Monitor disk use during frequent state capture.
+4 MiB serialized response bound. Large programs stay in Python files. Requests
+and responses are ephemeral: IDs correlate responses, with no persisted receipts,
+deduplication, recovery or replay. Explicitly submitting the same ID again executes
+again. A missing response means inspect the current game state before choosing
+another action; clients never automatically replay a submitted command.
 
-reload persists acceptance and delivers it to the companion before invoking
+Pipe connection, reads, writes and listener rearming run asynchronously. Only
+game operations wait for a script tick. The `action` operation accepts a one-item
+`steps` array. An `ImmediateStep` returns `{completed:true,value:...}` directly;
+a timed/custom step returns `{completed:false,batch:...}` and uses the existing
+scheduler. The SDK handles both through `action()`, `native()` and `command()`.
+Immediate actions respect the lease and cannot interrupt an active batch.
+
+Batch definitions, step results, screenshots and console output remain external
+artifacts. JSONL and batch/output files use an ordered background writer bounded
+to 2 Mi UTF-16 characters (about 4 MiB of text). It drops diagnostics on overload
+or storage failure, reports `status.droppedRecords`, and never blocks or rejects
+a game action for log durability. Files are atomically published for readers;
+none of the C#, Python or Rust bridge writers force data to physical storage.
+Queued diagnostics can be lost on crash/reload. Each batch has its own
+`batch-<id>-status.json` for polling; `batch-status.json` describes the latest batch.
+The service log rotates at 5 MiB with nine backups; gameplay JSONL retains its
+existing rotation policy. Historical batch/screenshot artifacts remain until
+archived or deleted by the operator.
+
+reload delivers acceptance to the companion before invoking
 SHVDNE's public Reload(). Confirm a new ready managed session afterward.
 A full game restart is still required for native ASI plugins. Reload invalidates
 old leases and compiled commands; a previous Python controller must not silently
@@ -299,7 +316,7 @@ available, but game commands time out and a watchdog cannot confirm a pause
 until ticks resume. Use the normal Retry UI, then reacquire the expired lease
 and inspect readiness. Releasing a lease intentionally pauses; resume only after
 release when proceeding without a supervisor. Do not automatically replay an
-action whose receipt is uncertain.
+action whose outcome is uncertain.
 
 ## Live verification: Repossession, 2026-10-27
 

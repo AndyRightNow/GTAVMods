@@ -9,7 +9,15 @@ from gta_use import Client
 async def main():
     game = Client(discovery=sys.argv[1], process=int(sys.argv[2]))
     assert "lease" in game.request("describe")["operations"]
+    # Immediate calls return their result in one RPC; no batch files or polling.
+    assert game.action("pause") == {"paused": True}
+    assert not list(game.directory.glob("batch-*.json"))
+    assert game.command("return new Vector3(4, 5, 6);") == {"x": 4, "y": 5, "z": 6}
     async with game.connect() as live:
+        assert await live.action("resume") == {"paused": False}
+        timed = await live.action("wait", ms=32)
+        assert timed["elapsedGameMs"] >= 32
+
         stream = live.states(hz=5, sections=["player"])
         initial = await anext(stream)
         assert initial["sections"]["player"]["entity"]["position"] == {"x": 1, "y": 2, "z": 3}

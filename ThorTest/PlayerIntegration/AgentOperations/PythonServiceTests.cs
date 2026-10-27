@@ -102,6 +102,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 }
                 File.WriteAllText(Path.Combine(s.Root, "service-" + Process.GetCurrentProcess().Id + ".json"), Protocol.Encode(new { serviceProcess = Process.GetCurrentProcess().Id }));
                 bridge.Tick();
+                Wait(() => s.Events.Contains("agent.service.start.failed"), bridge.Tick, 5000);
                 StringAssert.Contains(s.Events, "agent.service.start.failed"); StringAssert.Contains(s.Events, rust ? "Selected Rust service is missing" : "uv sync --frozen");
                 var request = new { version = 1, id = Guid.NewGuid().ToString("N"), session = Protocol.Decode(Protocol.Encode(bridge.Status()))["session"], op = "status" };
                 Assert.AreEqual(true, Protocol.Decode(bridge.Dispatch(Protocol.Encode(request)))["ok"]);

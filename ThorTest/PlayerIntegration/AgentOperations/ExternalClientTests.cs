@@ -32,8 +32,8 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 Assert.AreEqual(0, reply.ExitCode, reply.Error + reply.Output + string.Join("\n", Directory.GetFiles(s.Root, "request-*.json", SearchOption.AllDirectories).Select(File.ReadAllText)));
                 StringAssert.Contains(reply.Output, "completed"); StringAssert.Contains(reply.Output, "screenshot");
                 StringAssert.Contains(reply.Output, "missionActive");
-                Assert.HasCount(3, Directory.GetFiles(s.Root, "request-*.json", SearchOption.AllDirectories),
-                    "Waiting for a turn reads its atomic status file without generating a stream of durable polling requests.");
+                Assert.HasCount(0, Directory.GetFiles(s.Root, "request-*.json", SearchOption.AllDirectories),
+                    "Requests are ephemeral; batch outputs remain externally readable.");
                 Assert.IsTrue(s.Game.Native.Calls.Any(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
                 Assert.AreEqual(true, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
                 Assert.HasCount(1, Directory.GetFiles(s.Root, "frame-*.png", SearchOption.AllDirectories));
@@ -63,8 +63,8 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                     bridge.Tick();
                     if (held == null)
                     {
-                        status = Directory.GetFiles(s.Root, "batch-status.json", SearchOption.AllDirectories).SingleOrDefault();
-                        if (status != null && File.ReadAllText(status).Contains("completed"))
+                        status = Directory.GetFiles(s.Root, "batch-*-status.json", SearchOption.AllDirectories).SingleOrDefault();
+                        if (status != null && ReadShared(status).Contains("completed"))
                         {
                             held = status + ".withheld"; File.Move(status, held); unavailable.Start();
                         }
@@ -79,8 +79,14 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 StringAssert.Contains(reply.Output, "completed");
                 Assert.IsNotNull(held, "The storage interruption must have occurred.");
                 Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED));
-                Assert.HasCount(1, Directory.GetFiles(s.Root, "request-*.json", SearchOption.AllDirectories));
+                Assert.IsEmpty(Directory.GetFiles(s.Root, "request-*.json", SearchOption.AllDirectories));
             }
+        }
+
+        private static string ReadShared(string path)
+        {
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(stream)) return reader.ReadToEnd();
         }
 
         [TestMethod]

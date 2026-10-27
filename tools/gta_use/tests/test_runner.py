@@ -28,8 +28,10 @@ class ObservedCombat(ObservedGame):
             identifier = envelope["id"]
             for index, step in enumerate(envelope["steps"]):
                 save_json(self.directory / f"result-{identifier}-{index}.json", {"result": None})
-            save_json(self.directory / "batch-status.json", dict(batch=identifier, state="completed", total=len(envelope["steps"])))
+            save_json(self.directory / f"batch-{identifier}-status.json", dict(batch=identifier, state="completed", total=len(envelope["steps"])))
             result = {"batch": identifier}
+        elif envelope["op"] == "action":
+            result = {"completed": True, "value": None}
         elif envelope["op"] == "state":
             result = self.observations[0]
             if len(self.observations) > 1:
@@ -156,7 +158,7 @@ class CoverPolicyScenarios(unittest.TestCase):
                                    "ped": {"human": human, "inCombatWithPlayer": True}, "lineOfSight": True}]}}}
 
     def actions(self):
-        return [step for request in self.game.requests if request["op"] == "batch" for step in request["steps"]]
+        return [step for request in self.game.requests if request["op"] in ("batch", "action") for step in request["steps"]]
 
     def test_observed_animal_is_not_shot_even_when_engine_reports_combat(self):
         result, outcome = self.exercise([self.observation(human=False)])

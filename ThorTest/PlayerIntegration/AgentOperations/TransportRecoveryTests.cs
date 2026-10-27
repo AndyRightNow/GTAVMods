@@ -16,44 +16,66 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
     public class TransportRecoveryTests
     {
         [TestMethod]
-        public void BufferedPauseRequestExecutesOnTheGameThreadAndPersistsTheExactReceipt()
+        public void ConnectedAgentsCanPauseAndResumeOnConsecutiveTicksWithoutTransportOnlyFrames()
+        {
+            var first = new AgentTransport(); var second = new AgentTransport(); int opened = 0;
+            using (var s = new AgentScene(() => ++opened == 1 ? first : second))
+            {
+                s.Frame(); // Arm a listener before either client connects.
+                var pause = s.Envelope("action"); pause["steps"] = new[] { Step("pause") };
+                first.Request(Protocol.Encode(pause));
+                Assert.IsFalse(s.Game.Native.Calls.Any(), "Receiving bytes must never call GTA.");
+                s.Frame();
+                Assert.IsNotNull(first.Outgoing, "The next game tick executes the prepared request.");
+                Assert.AreEqual(true, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                first.WriteCompleted.SetResult(true);
+                Assert.AreEqual(2, opened, "Rearm without waiting for another game tick.");
+                var resume = s.Envelope("action"); resume["steps"] = new[] { Step("resume") };
+                second.Request(Protocol.Encode(resume));
+                Assert.AreEqual(1, s.Game.Native.Calls.Count);
+                s.Frame();
+                Assert.IsNotNull(second.Outgoing);
+                Assert.AreEqual(false, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+            }
+        }
+
+        [TestMethod]
+        public void BufferedPauseRequestExecutesOnTheGameThreadWithoutWritingReceipts()
         {
             var transport = new AgentTransport();
             using (var s = new AgentScene(() => transport))
             {
                 var request = s.Envelope("batch"); request["steps"] = new[] { Step("pause") };
                 transport.Request(Protocol.Encode(request));
-                s.Frame(); // Start only I/O; a worker must never dispatch game actions.
                 Assert.IsFalse(s.Game.Native.Calls.Any());
                 s.FramesUntil(() => transport.Outgoing != null);
                 Assert.AreEqual(true, Protocol.Decode(transport.Response)["ok"]);
                 Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED));
-                Assert.AreEqual(transport.Response, File.ReadAllText(Path.Combine(s.Root, "response-" + request["id"] + ".json")));
+                s.Journal.Drain();
+                Assert.IsEmpty(Directory.GetFiles(s.Root, "response-*.json"));
                 transport.WriteCompleted.SetResult(true); s.Frame();
                 Assert.IsTrue(transport.Disposed);
             }
         }
 
         [TestMethod]
-        public void PartialPipeReadsExecuteOnceAndDuplicateRequestReturnsTheSavedReceipt()
+        public void PartialPipeReadsExecuteOnceAndRequestIdsOnlyCorrelateResponses()
         {
             var transport = new AgentTransport { Chunk = 1 };
             using (var s = new AgentScene(() => transport))
             {
                 var request = s.Envelope("batch"); request["steps"] = new[] { Step("pause") };
                 string json = Protocol.Encode(request); transport.Request(json);
-                s.Frame();
-                Assert.IsNull(transport.Outgoing, "Transport work must not dispatch gameplay on a worker.");
+                Assert.IsNull(transport.Outgoing);
                 Assert.IsFalse(s.Game.Native.Calls.Any());
                 s.FramesUntil(() => transport.Outgoing != null);
                 Assert.IsNotNull(transport.Outgoing);
                 Assert.AreEqual(true, Protocol.Decode(transport.Response)["ok"]);
                 Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED));
                 transport.WriteCompleted.SetResult(true); s.Frame(); Assert.IsTrue(transport.Disposed);
-                Assert.AreEqual(transport.Response, s.Bridge.Dispatch(json));
-                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED));
-                Assert.AreEqual(json, File.ReadAllText(Path.Combine(s.Root, "request-" + request["id"] + ".json")));
-                StringAssert.Contains(File.ReadAllText(Path.Combine(s.Root, "response-" + request["id"] + ".json")), "\"ok\":true");
+                Assert.AreEqual(true, Protocol.Decode(s.Bridge.Dispatch(json))["ok"]); s.Frame();
+                Assert.AreEqual(2, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED));
+                Assert.IsEmpty(Directory.GetFiles(s.Root, "request-*.json"));
             }
         }
 
@@ -150,15 +172,13 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
 
         [TestMethod]
-        public void MissingProtocolVersionAndUncertainPriorExecutionAreNeverReplayed()
+        public void MissingProtocolVersionIsRejectedBeforeAnyPlayerAction()
         {
             using (var s = new AgentScene())
             {
                 var request = s.Envelope("cancel"); request.Remove("version");
                 StringAssert.Contains((string)Protocol.Decode(s.Bridge.Dispatch(Protocol.Encode(request)))["error"], "Unsupported protocol");
-                request["version"] = 1;
-                s.Journal.Save("request-" + request["id"], request);
-                StringAssert.Contains((string)Protocol.Decode(s.Bridge.Dispatch(Protocol.Encode(request)))["error"], "uncertain");
+
                 Assert.IsFalse(s.Game.Native.Calls.Any());
             }
         }

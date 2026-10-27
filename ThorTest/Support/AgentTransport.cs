@@ -13,7 +13,7 @@ namespace GTAVMods.Tests.Support
         internal readonly TaskCompletionSource<bool> WriteCompleted = new TaskCompletionSource<bool>();
         internal byte[] Incoming = Array.Empty<byte>(), Outgoing;
         internal int Chunk = int.MaxValue, Consumed;
-        internal bool ReadStalls, Disposed;
+        internal bool ReadStalls, Disposed, WriteSurvivesClose;
         private readonly TaskCompletionSource<int> stalled = new TaskCompletionSource<int>();
         internal void Request(string json)
         {
@@ -37,7 +37,8 @@ namespace GTAVMods.Tests.Support
         {
             Disposed = true;
             stalled.TrySetException(new IOException("Connection closed."));
-            Connected.TrySetCanceled(); WriteCompleted.TrySetCanceled();
+            Connected.TrySetCanceled();
+            if (!WriteSurvivesClose) WriteCompleted.TrySetCanceled();
         }
     }
 }

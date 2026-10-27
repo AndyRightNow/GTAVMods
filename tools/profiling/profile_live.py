@@ -1,8 +1,8 @@
 """Repeatable live GTA-use benchmark. Run from uv: python tools/profiling/profile_live.py --help.
 
-Uses the installed bridge, real HTTP/WS, durable logs and Windows process counters.
+Uses the installed bridge, real HTTP/WS, file diagnostics and Windows process counters.
 Pauses the backed-up Story session and disables Thor for a stable observation load.
-Raw observations stay in the bridge artifacts; this report stores timings/costs only.
+Raw observations are ephemeral; this report stores timings/costs only.
 """
 import argparse
 import asyncio

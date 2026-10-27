@@ -101,7 +101,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 var extra = Read(s, ("sections", new[] { "mission.clock" }));
                 Assert.AreEqual(0, Object(Sections(extra)["mission.clock"])["time"]);
                 Assert.ThrowsExactly<ArgumentException>(() => s.World.StatePack.Register("player", c => null));
-                StringAssert.Contains(string.Join("\n", Directory.GetFiles(s.Root, "response-*.json").Select(File.ReadAllText)), "gta.world-state/1");
+                Assert.IsEmpty(Directory.GetFiles(s.Root, "response-*.json"));
             }
         }
 

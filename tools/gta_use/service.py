@@ -100,7 +100,7 @@ def make_app(link, token, log):
         except (OSError, TimeoutError, EOFError, ValueError) as error:
             log.exception("uncertain %s %s", identifier, error)
             return dict(id=identifier, session=envelope.get("session"), ok=False, uncertain=True,
-                        error=f"{error}; inspect response-{identifier}.json before retrying.")
+                        error=f"{error}; inspect game state before acting; request {identifier} was not replayed.")
 
     @app.get("/v1/session")
     async def session():
@@ -133,7 +133,7 @@ def make_app(link, token, log):
         if uuid.UUID(identifier).hex != identifier:
             raise ValueError("Invalid batch ID.")
         directory = link.directory
-        status = read_json(directory / "batch-status.json")
+        status = read_json(directory / f"batch-{identifier}-status.json")
         if status["batch"] != identifier:
             return {"batch": identifier, "state": "superseded", "error": "Inspect historical result files; do not replay."}
         if status["state"] == "completed":

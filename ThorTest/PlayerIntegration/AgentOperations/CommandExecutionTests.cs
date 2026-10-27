@@ -18,6 +18,39 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
     public class CommandExecutionTests
     {
         [TestMethod]
+        public void ImmediateActionsReturnTheObservedResultWithoutStartingABatchAndHonorTheControllerLease()
+        {
+            using (var s = new AgentScene())
+            {
+                string token = Guid.NewGuid().ToString("N");
+                s.Request("lease", ("action", "acquire"), ("token", token));
+                Assert.AreEqual(false, s.Request("action", ("steps", new[] { Step("pause") }))["ok"]);
+                var response = s.Request("action", ("token", token), ("steps", new[] { Step("pause") }));
+                StringAssert.Contains(Protocol.Encode(response), "\"completed\":true,\"value\":{\"paused\":true}");
+                Assert.AreEqual(true, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                StringAssert.Contains(s.Status, "\"state\":\"idle\"");
+                s.Journal.Drain();
+                Assert.IsEmpty(Directory.GetFiles(s.Root, "batch-*.json"));
+                Assert.IsEmpty(Directory.GetFiles(s.Root, "result-*.json"));
+            }
+        }
+
+        [TestMethod]
+        public void TimedActionsReturnABatchAndRejectInterleavedActionsUntilItFinishes()
+        {
+            using (var s = new AgentScene())
+            {
+                var response = s.Request("action", ("steps", new[] { Step("wait", ("ms", 100)) }));
+                StringAssert.Contains(Protocol.Encode(response), "\"completed\":false");
+                Assert.AreEqual(false, s.Request("action", ("steps", new[] { Step("pause") }))["ok"]);
+                s.Frame(); s.Frame(100);
+                Assert.HasCount(1, s.Results);
+                Assert.AreEqual(100, ((System.Collections.Generic.Dictionary<string, object>)s.Results[0]["result"])["elapsedGameMs"]);
+                Assert.AreEqual(true, s.Request("action", ("steps", new[] { Step("pause") }))["ok"]);
+            }
+        }
+
+        [TestMethod]
         public void ConsoleReturnsNestedGameVectorsRotationsAndHandlesWithoutTraversingLiveNativeProperties()
         {
             using (var s = new AgentScene())
@@ -62,6 +95,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 StringAssert.Contains(result, "\"quaternion\":{\"x\":0.1,\"y\":0.2,\"z\":0.3,\"w\":0.4}");
                 StringAssert.Contains(result, "\"screen\":{\"x\":0.125,\"y\":0.875}");
                 StringAssert.Contains(result, "\"screen\":null");
+                s.Journal.Drain();
                 string output = string.Join("\n", Directory.GetFiles(s.Root, "output-*.json").Select(File.ReadAllText));
                 foreach (string text in new[] { "world observed", "hello 世界", "warning", "utf-8", "trace-event" }) StringAssert.Contains(output, text);
                 Assert.AreSame(stdout, Console.Out); Assert.AreSame(stderr, Console.Error);

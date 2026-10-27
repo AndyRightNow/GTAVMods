@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using GTA.Native;
 using GTAVMods.Agent;
 using GTAVMods.Tests.Support;
@@ -48,72 +49,86 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 var response = s.Request("capture");
                 Assert.AreEqual(false, response["ok"]); StringAssert.Contains((string)response["error"], message);
                 Assert.IsEmpty(Directory.GetFiles(s.Root, "frame-*.png"));
-                var receipt = Directory.GetFiles(s.Root, "response-*.json").Single();
-                Assert.AreEqual(Protocol.Encode(response), File.ReadAllText(receipt));
-            }
-        }
-
-        [TestMethod]
-        public void CannotRecordRequestMeansNoPlayerActionAndAUsefulFileError()
-        {
-            using (var s = new AgentScene())
-            {
-                s.Files.BeforeSave = path => { if (Path.GetFileName(path).StartsWith("request-")) throw new IOException("disk full"); };
-                var response = s.Batch(Step("pause")); s.Frame();
-                Assert.AreEqual(false, response["ok"]); StringAssert.Contains((string)response["error"], "disk full");
-                Assert.IsFalse(s.Game.Native.Calls.Any()); StringAssert.Contains(s.Events, "agent.request.failed");
+                StringAssert.Contains(s.Events, "agent.request.failed");
+                Assert.IsEmpty(Directory.GetFiles(s.Root, "response-*.json"));
             }
         }
 
         [TestMethod]
         [DataRow(false)] [DataRow(true)]
-        public void LostResultOrCompletionStatusStopsSequenceAndPausesForInspection(bool completionStatus)
+        public void UnavailableArtifactStorageDoesNotRejectOrStopPlayerActions(bool denied)
         {
             using (var s = new AgentScene())
             {
-                s.Batch(Step("pause"));
-                bool failed = false;
-                s.Files.BeforeSave = path => {
-                    if (!failed && (completionStatus ? Path.GetFileName(path) == "batch-status.json" : Path.GetFileName(path).StartsWith("result-")))
-                    { failed = true; throw new IOException("volume became unavailable"); }
-                };
-                s.Frame();
-                StringAssert.Contains(s.Status, "\"state\":\"failed\"");
-                StringAssert.Contains(File.ReadAllText(Path.Combine(s.Root, "batch-status.json")), "volume became unavailable");
-                Assert.AreEqual(true, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
-                Assert.AreEqual(completionStatus ? 1 : 0, s.Results.Length);
+                s.Files.BeforeSave = path => { if (denied) throw new UnauthorizedAccessException("read only"); throw new IOException("disk full"); };
+                Assert.AreEqual(true, s.Batch(Step("pause"))["ok"]); s.Frame();
+                StringAssert.Contains(s.Status, "\"state\":\"completed\"");
+                var response = s.Request("action", ("steps", new[] { Step("resume") }));
+                Assert.AreEqual(true, response["ok"]);
+                Assert.AreEqual(false, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                s.Journal.Drain();
+                Assert.IsGreaterThan(0L, s.Journal.DroppedRecords);
+                StringAssert.Contains(s.Events, "agent.file.failed");
             }
         }
 
         [TestMethod]
-        public void UnwritableAuditLogStopsControlSubmissionAndReportsTheLostRecord()
+        public void BlockedStorageUsesABoundedQueueWhileActionsAndObservationsKeepWorking()
+        {
+            using (var entered = new ManualResetEventSlim())
+            using (var release = new ManualResetEventSlim())
+            using (var s = new AgentScene(journalCharacters: 4096))
+            {
+                s.Files.BeforeSave = path => { entered.Set(); release.Wait(); };
+                try
+                {
+                    s.Batch(Step("pause"));
+                    Assert.IsTrue(entered.Wait(5000), "The external storage boundary must be stalled.");
+                    s.Frame();
+                    Assert.IsFalse(s.Journal.Drain(0));
+                    for (int i = 0; i < 100; i++) Assert.AreEqual(true, s.Request("state")["ok"]);
+                    Assert.IsGreaterThan(0L, s.Journal.DroppedRecords);
+                    Assert.AreEqual(true, s.Request("action", ("steps", new[] { Step("resume") }))["ok"]);
+                    Assert.AreEqual(false, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                    Assert.IsEmpty(Directory.GetFiles(s.Root, "request-*.json"));
+                }
+                finally { release.Set(); s.Journal.Drain(); }
+                s.Request("status");
+                StringAssert.Contains(s.Events, "agent.response");
+                Assert.HasCount(1, s.Results);
+            }
+        }
+
+        [TestMethod]
+        public void UnwritableDiagnosticLogReportsDropsWithoutStoppingPlayerControls()
         {
             var storage = new MemoryLogStorage();
             using (var s = new AgentScene(logStorage: storage))
             {
-                s.Batch(Step("pause"), Step("controls", ("inputs", new[] { Step("", ("control", "Sprint")) })));
-                s.Frame();
+                s.Journal.Drain();
                 storage.BeforeAppend = path => throw new IOException("log drive unavailable");
                 storage.BeforeCreate = path => throw new IOException("log drive unavailable");
-                s.Frame();
-                Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
-                StringAssert.Contains(s.Status, "audit log unavailable"); StringAssert.Contains(s.Status, "\"state\":\"failed\"");
-                Assert.AreEqual(true, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
-                Assert.IsGreaterThan(0L, s.Log.DroppedRecords);
+                s.Batch(Step("resume"), Step("controls", ("ms", 10), ("inputs", new[] { Step("", ("control", "Sprint")) })));
+                s.Frame(); s.Frame(); s.Frame(10); s.Journal.Drain();
+                Assert.IsTrue(s.Game.Native.Calls.Any(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                StringAssert.Contains(s.Status, "\"state\":\"completed\"");
+                Assert.IsGreaterThan(0L, s.Journal.DroppedRecords);
                 storage.BeforeAppend = null; storage.BeforeCreate = null; s.Clock.ElapsedMilliseconds += 6000;
             }
         }
 
         [TestMethod]
-        public void RejectedBatchHasADurableReceiptAndRepeatingItsIdDoesNotRetry()
+        public void RejectedActionDoesNotCacheTheRequestIdOrPersistReceipts()
         {
             using (var s = new AgentScene())
             {
-                var request = s.Envelope("batch"); request["steps"] = new[] { Step("misspelling") };
-                string response = s.Bridge.Dispatch(Protocol.Encode(request));
-                Assert.AreEqual(false, Protocol.Decode(response)["ok"]);
-                Assert.AreEqual(response, s.Bridge.Dispatch(Protocol.Encode(request)));
-                Assert.IsFalse(s.Game.Native.Calls.Any());
+                var request = s.Envelope("action"); request["steps"] = new[] { Step("misspelling") };
+                Assert.AreEqual(false, Protocol.Decode(s.Bridge.Dispatch(Protocol.Encode(request)))["ok"]);
+                request["steps"] = new[] { Step("pause") };
+                Assert.AreEqual(true, Protocol.Decode(s.Bridge.Dispatch(Protocol.Encode(request)))["ok"]);
+                Assert.AreEqual(true, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                s.Journal.Drain();
+                Assert.IsEmpty(Directory.GetFiles(s.Root, "response-*.json"));
             }
         }
     }

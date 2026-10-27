@@ -29,7 +29,7 @@ identifies this implementation. Use `Client(process=...)` as before.
 ## Interface and resource limits
 
 Both backends support session discovery, versioned requests, streamed states,
-correlated WebSocket requests, artifact downloads, durable batch results and
+correlated WebSocket requests, artifact downloads, externally readable batch results and
 Python job start/status/cancellation. Rust provides a compact OpenAPI discovery
 document; FastAPI additionally provides its generated interactive documentation.
 See [GTA use](gta-use.md) for the operation and state contracts.
@@ -46,7 +46,7 @@ open the pipe or send requests after its caller times out. See Microsoft's
 [WaitNamedPipe contract](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-waitnamedpipew).
 The actor queue holds at most 64 requests; each WebSocket allows 16 outstanding
 commands and one subscription, at most 10 Hz. Slow sends time out after two
-seconds. Transport failures report uncertainty and point to the durable receipt.
+seconds. Transport failures report uncertainty; inspect current game state before acting.
 
 JSON artifacts are read with Windows delete sharing, allowing atomic game-side
 replacement. Downloads are confined to the current session, including resolved
@@ -72,7 +72,7 @@ build. The build copies the release there, and the integration test verifies
 that its bytes match. This avoids changing the workspace or game's access rules.
 The release statically links its runtime so neither build requires compiler DLLs
 on the game machine. A panic terminates the companion after a file diagnostic;
-the managed supervisor can restart it. Clients must inspect uncertain receipts.
+the managed supervisor can restart it. Clients must inspect game state after an uncertain outcome.
 
 Rust scenarios exercise actual loopback HTTP/WebSockets and Windows pipes,
 replacing only the external game's responses. Shared player scenarios launch

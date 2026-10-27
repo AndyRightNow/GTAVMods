@@ -149,7 +149,7 @@ async fn artifact(State(s): State<Service>, Path(relative): Path<String>) -> Res
 async fn batch(State(s): State<Service>, Path(id): Path<String>) -> Result<Json<Value>> {
     identifier(&id)?;
     let root = s.link.directory()?;
-    let mut status = read_json(&root.join("batch-status.json"))?;
+    let mut status = read_json(&root.join(format!("batch-{id}-status.json")))?;
     if status["batch"] != id {
         return Ok(Json(
             json!({"batch":id,"state":"superseded","error":"Inspect historical result files; do not replay."}),

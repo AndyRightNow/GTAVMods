@@ -15,10 +15,8 @@ def save_json(path, value):
     temporary = path.with_suffix(".tmp")
     with temporary.open("w", encoding="utf-8") as stream:
         # Encode in one pass instead of thousands of Python-level chunk writes.
-        # Keep the same durable flush and atomic publication contract.
+        # Atomic visibility for external readers; these observations need no durable flush.
         stream.write(json.dumps(value, ensure_ascii=False, allow_nan=False))
-        stream.flush()
-        os.fsync(stream.fileno())
     deadline = time.monotonic() + .5
     while True:
         try:
@@ -43,8 +41,6 @@ class Segment:
         record = dict(data, event=event, utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
         with (self.directory / "events.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
-            stream.flush()
-            os.fsync(stream.fileno())
 
     def check(self, **filters):
         if (self.directory / "cancel").exists():

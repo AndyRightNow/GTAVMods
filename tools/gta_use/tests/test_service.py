@@ -65,7 +65,7 @@ class ServiceScenarios(unittest.TestCase):
         self.game.failure = TimeoutError("game frame stalled")
         response = self.client.post("/v1/request", json=self.envelope("batch")).json()
         self.assertTrue(response["uncertain"])
-        self.assertIn("inspect response-", response["error"])
+        self.assertIn("inspect game state", response["error"])
         self.assertEqual(1, len(self.game.requests))
 
     def test_invalid_or_oversized_requests_never_reach_game_thread(self):
@@ -82,13 +82,16 @@ class ServiceScenarios(unittest.TestCase):
         self.assertEqual(403, self.client.get("/v1/files/..%5Coutside.json").status_code)
         self.assertEqual(404, self.client.get("/v1/files/missing.png").status_code)
 
-    def test_completed_batch_reads_durable_results_and_never_mistakes_a_later_batch_for_it(self):
+    def test_completed_batch_reads_published_results_and_never_mistakes_a_later_batch_for_it(self):
         identifier = uuid.uuid4().hex
-        (self.game.directory / "batch-status.json").write_text(json.dumps(dict(batch=identifier, state="completed", total=1)))
+        (self.game.directory / f"batch-{identifier}-status.json").write_text(json.dumps(dict(batch=identifier, state="completed", total=1)))
         (self.game.directory / f"result-{identifier}-0.json").write_text('{"result":{"paused":true}}')
         result = self.client.get("/v1/batches/" + identifier).json()
         self.assertEqual([{"paused": True}], result["results"])
-        self.assertEqual("superseded", self.client.get("/v1/batches/" + uuid.uuid4().hex).json()["state"])
+        # A later batch may publish before this caller reads its completed result.
+        (self.game.directory / "batch-status.json").write_text(json.dumps(dict(batch=uuid.uuid4().hex, state="running")))
+        self.assertEqual([{"paused": True}], self.client.get("/v1/batches/" + identifier).json()["results"])
+        self.assertEqual(400, self.client.get("/v1/batches/" + uuid.uuid4().hex).status_code)
         self.assertEqual([], self.game.requests)
 
     def test_inspection_recovers_from_a_briefly_unavailable_replaced_status_without_replaying_actions(self):
@@ -96,7 +99,7 @@ class ServiceScenarios(unittest.TestCase):
         (self.game.directory / f"result-{identifier}-0.json").write_text('{"result":{"paused":true}}')
         def publish():
             time.sleep(.04)
-            (self.game.directory / "batch-status.json").write_text(json.dumps(dict(batch=identifier, state="completed", total=1)))
+            (self.game.directory / f"batch-{identifier}-status.json").write_text(json.dumps(dict(batch=identifier, state="completed", total=1)))
         writer = threading.Thread(target=publish)
         writer.start()
         try:

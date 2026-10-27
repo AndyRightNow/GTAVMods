@@ -41,8 +41,6 @@ namespace GTAVMods.Tests.Support
     {
         private readonly AgentFiles disk = new AgentFiles();
         public Action<string> BeforeSave;
-        public bool Exists(string path) => disk.Exists(path);
-        public string Read(string path) => disk.Read(path);
         public void Save(string path, string text) { BeforeSave?.Invoke(path); disk.Save(path, text); }
     }
 
@@ -60,8 +58,9 @@ namespace GTAVMods.Tests.Support
         internal readonly AgentWorld World;
         internal string Published;
         internal Blip[] Blips = new[] { new Blip(90) };
-        internal AgentScene(Func<IAgentConnection> open = null, Func<IEnumerable<Assembly>> assemblies = null, ILogStorage logStorage = null, int compilationLimit = 128)
+        internal AgentScene(Func<IAgentConnection> open = null, Func<IEnumerable<Assembly>> assemblies = null, ILogStorage logStorage = null, int compilationLimit = 128, int journalCharacters = 2 * 1024 * 1024)
         {
+            Directory.CreateDirectory(Root);
             Game.AddEntity(10).Position = new Vector3(1, 2, 3);
             Game.AddEntity(20).Position = new Vector3(20, 0, 0);
             Game.AddEntity(30).Position = new Vector3(5, 0, 0);
@@ -94,7 +93,7 @@ namespace GTAVMods.Tests.Support
             Game.Native.Returns(Hash.IS_PED_IN_COVER, false);
             Game.Native.Returns(Hash.IS_PED_RELOADING, false);
             Log = new DiagnosticLog(new SessionLog(Path.Combine(Root, "logs"), Path.Combine(Root, "fallback"), logStorage ?? new FileLogStorage(), Clock), () => Clock.ElapsedMilliseconds);
-            Journal = new AgentJournal(Root, SessionId, Files, Log);
+            Journal = new AgentJournal(Root, SessionId, Files, Log, journalCharacters);
             World = new AgentWorld(Game.Services, new NativeInvoker(Game.Native, Game.Native), () => Blips);
             var capture = new ScreenCapture(new WindowPixels(Pixels), Root);
             Bridge = new BridgeSession(World, Journal, () => Clock.ElapsedMilliseconds, open ?? (() => new IdleAgentConnection()),
@@ -133,8 +132,12 @@ namespace GTAVMods.Tests.Support
             Microsoft.VisualStudio.TestTools.UnitTesting.Assert.IsTrue(observed(), "Expected transport/game outcome did not arrive within five seconds.");
         }
         internal string Status => Protocol.Encode(Bridge.Status());
-        internal string Events => File.ReadAllText(Log.FilePath);
-        internal Dictionary<string, object>[] Results => Directory.GetFiles(Root, "result-*.json").Select(path => Protocol.Decode(File.ReadAllText(path))).OrderBy(row => (int)row["step"]).ToArray();
+        internal string Events { get {
+            Journal.Drain();
+            using (var stream = new FileStream(Log.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(stream)) return reader.ReadToEnd();
+        } }
+        internal Dictionary<string, object>[] Results { get { Journal.Drain(); return Directory.GetFiles(Root, "result-*.json").Select(path => Protocol.Decode(File.ReadAllText(path))).OrderBy(row => (int)row["step"]).ToArray(); } }
         public void Dispose()
         {
             Files.BeforeSave = null;

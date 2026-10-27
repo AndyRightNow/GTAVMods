@@ -58,7 +58,7 @@ impl Link {
                     Ok(value) => value,
                     Err(error) => {
                         json!({"id":identifier,"session":session,"ok":false,"uncertain":true,
-                        "error":format!("{error}; inspect response-{}.json before retrying.", request["id"].as_str().unwrap_or_default())})
+                        "error":format!("{error}; inspect game state before acting; request was not replayed.")})
                     }
                 };
                 let _ = worker_log.record(
@@ -96,19 +96,17 @@ impl Link {
         {
             return Err("Request exceeds 1 MiB.".into());
         }
-        self.log
-            .record(
-                "request",
-                json!({"id":request["id"],"session":request["session"],"op":request["op"]}),
-            )
-            .map_err(|e| e.to_string())?;
+        let _ = self.log.record(
+            "request",
+            json!({"id":request["id"],"session":request["session"],"op":request["op"]}),
+        );
         let (reply, result) = oneshot::channel();
         self.sender
             .try_send(Work { request, reply })
             .map_err(|_| "Bridge queue full or closed; request was not submitted.".to_string())?;
         result
             .await
-            .map_err(|_| "Bridge worker stopped; inspect receipt before retrying.".to_string())
+            .map_err(|_| "Bridge worker stopped; inspect game state before acting.".to_string())
     }
 }
 async fn exchange(root: &std::path::Path, process: u32, request: &Value) -> io::Result<Value> {

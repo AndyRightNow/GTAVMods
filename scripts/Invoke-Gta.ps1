@@ -35,7 +35,7 @@ function Read-GtaBytes($Stream, [int]$Count, [int]$Timeout) {
     $offset = 0
     while ($offset -lt $Count) {
         $read = Wait-GtaIo ($Stream.ReadAsync($bytes, $offset, $Count - $offset)) $Timeout
-        if ($read -eq 0) { throw 'Bridge disconnected. Check the request file and current session before retrying.' }
+        if ($read -eq 0) { throw 'Bridge disconnected. Inspect game state and current session before acting.' }
         $offset += $read
     }
     ,$bytes
@@ -113,7 +113,7 @@ if ($Operation -eq 'reload' -and -not $NoWait) {
     while ($true) {
         if ($timer.Elapsed.TotalSeconds -ge $TimeoutSeconds) { throw "Batch $batch has not completed. Use status/cancel; it was not resubmitted." }
         Start-Sleep -Milliseconds 50
-        try { $state = Read-GtaRecord (Join-Path $bridge.bridge.directory 'batch-status.json') }
+        try { $state = Read-GtaRecord (Join-Path $bridge.bridge.directory "batch-$batch-status.json") }
         catch [IO.FileNotFoundException] { continue } # A replacement can briefly hide the directory entry on the game volume.
         if ($state.batch -ne $batch) { throw 'Another client replaced the current batch. Inspect saved results.' }
         if ($state.state -ne 'running') { break }

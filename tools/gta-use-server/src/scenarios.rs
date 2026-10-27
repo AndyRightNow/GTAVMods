@@ -157,7 +157,7 @@ async fn a_stalled_game_returns_an_uncertain_receipt_without_replaying_the_actio
         receipt["error"]
             .as_str()
             .unwrap()
-            .contains("inspect response-")
+            .contains("inspect game state")
     );
     reply.send(json!({"ok":true,"id":action["id"]})).unwrap();
     assert!(
@@ -323,6 +323,41 @@ async fn artifact_inspection_survives_session_replacement_and_confines_downloads
         s.get("/v1/files/frame.png").send().await.unwrap().status(),
         404
     );
+}
+
+#[tokio::test]
+async fn a_temporarily_locked_batch_result_is_read_without_resubmitting_the_action() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let mut s = Scene::start().await;
+    let id = "a".repeat(32);
+    let status = s.root.path().join(format!("batch-{id}-status.json"));
+    std::fs::write(
+        &status,
+        json!({"batch":id,"state":"completed","total":1}).to_string(),
+    )
+    .unwrap();
+    std::fs::write(
+        s.root.path().join(format!("result-{id}-0.json")),
+        r#"{"result":{"paused":true}}"#,
+    )
+    .unwrap();
+    // ReplaceFile/scanners can briefly deny sharing. This is a real Windows
+    // handle, not a mocked ErrorKind (sharing violations are not PermissionDenied).
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&status)
+        .unwrap();
+    let unlock = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(75));
+        drop(held);
+    });
+    let response = s.get(&format!("/v1/batches/{id}")).send().await.unwrap();
+    unlock.join().unwrap();
+    assert_eq!(response.status(), 200);
+    let result: Value = response.json().await.unwrap();
+    assert_eq!(result["results"], json!([{"paused":true}]));
+    assert!(s.observations.try_recv().is_err());
 }
 
 #[tokio::test]

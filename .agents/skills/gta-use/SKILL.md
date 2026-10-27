@@ -45,7 +45,7 @@ automatically; do not start competing servers.
    advances; missing entities and hostile relationship numbers are not sufficient
    evidence of success or target identity.
 5. On failure, inspect `result.json`, `state.json`, `events.jsonl`, stderr and
-   request receipts. Recover the actual game checkpoint, change the policy, then
+   bridge diagnostics and current game state. Recover the actual game checkpoint, change the policy, then
    rerun from fresh observations. Never blindly replay an uncertain mutation.
 6. Preserve screenshots and script/log evidence outside Git. Report what was
    actually observed, including retries and unverified mechanics. A script's

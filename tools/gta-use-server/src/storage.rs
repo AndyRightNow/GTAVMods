@@ -25,10 +25,11 @@ pub fn read_json(path: &Path) -> io::Result<Value> {
         })();
         match read {
             Err(ref error)
-                if matches!(
+                if (matches!(
                     error.kind(),
                     io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied
-                ) && Instant::now() < deadline =>
+                ) || matches!(error.raw_os_error(), Some(32 | 33)))
+                    && Instant::now() < deadline =>
             {
                 std::thread::sleep(Duration::from_millis(5))
             }
@@ -41,7 +42,6 @@ pub fn save_json(path: &Path, value: &Value) -> io::Result<()> {
     let temporary = path.with_extension("json.tmp");
     let mut file = File::create(&temporary)?;
     serde_json::to_writer(&mut file, value)?;
-    file.sync_all()?;
     drop(file);
     // On Windows rename uses MoveFileExW(REPLACE_EXISTING).
     fs::rename(temporary, path)

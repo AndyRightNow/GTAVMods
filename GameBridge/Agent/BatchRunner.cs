@@ -80,6 +80,13 @@ namespace GTAVMods.Agent
             try { if (index < steps.Length) steps[index].Cancel(); }
             finally { finish(); }
         }
-        private void Persist() => journal.Save("batch-status", Status());
+        private void Persist()
+        {
+            // Publish each batch independently: acceptance may arrive before its
+            // background writes, and a previous batch's status must never be mistaken for it.
+            var status = Status();
+            journal.Save("batch-" + Id + "-status", status);
+            journal.Save("batch-status", status);
+        }
     }
 }

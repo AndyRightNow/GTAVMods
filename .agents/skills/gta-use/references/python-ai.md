@@ -118,7 +118,7 @@ actual game's completion signal, normally a screenshot of Mission Passed.
 
 `ctx.uncertain(reason)` raises a stop condition. Include enough context in logs to
 decide the next action. Do not catch it and continue the policy. Do not suppress
-`UncertainOutcome` and retry a timed-out mutation: inspect its receipt and state.
+`UncertainOutcome` and retry a timed-out mutation: inspect current game state and available diagnostics.
 
 ## Async policies and timing
 
@@ -152,7 +152,7 @@ for detecting stalls. A suspended game timer must not disable all timeout paths.
 
 ## Iterate from evidence
 
-Read the failed run's last state, progress, stdout/stderr, events and receipts.
+Read the failed run's last state, progress, stdout/stderr, events and current game state.
 Classify the failure: invalid schema, stale identity, missing observation, task
 not completed, physics/pathfinding mismatch, poor policy, suspended game ticks,
 or transport/storage failure. Fix that cause and rerun from the observed checkpoint.

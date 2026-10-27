@@ -217,7 +217,7 @@ the server with the game. `describe` lists built-in and registered commands;
 `step` advances a timed action, pauses and returns game state; `capture` saves
 a PNG; `command` executes trusted local C#; `reload` requests a fresh managed
 session. Python segments support continuous reactive control with deadlines,
-progress checks and durable checkpoint evidence. See the
+progress checks and file-based checkpoint evidence. See the
 [installation, protocol and examples](docs/gta-use.md).
 
 `scripts/Invoke-Gta.ps1` remains a direct local diagnostic client for inspecting
@@ -228,10 +228,12 @@ weapons/ammo, vehicle condition, navigation markers and collision probes.
 Select walking/driving/combat profiles or individual sections and bounds to
 avoid unnecessary scans. See [state packs and query filters](docs/world-state.md).
 
-Requests, receipts, step results, screenshots and console output are files under
+Requests and responses are ephemeral. Immediate actions return in one RPC;
+timed sequences retain step results, screenshots and console output under
 `%LOCALAPPDATA%\GTAVMods\Bridge`. Its discovery file points to the current session
-and JSONL log. Native input, batches and pause/cleanup all run on the script
-thread. The upstream SHVDNE F4 console remains a separate runtime feature.
+and JSONL log. Diagnostics use a bounded background writer with no forced durable
+flushes. Native input, batches and pause/cleanup run on the script thread. The
+upstream SHVDNE F4 console remains a separate runtime feature.
 
 ## Broader gameplay checks
 
@@ -264,7 +266,7 @@ Gameplay runs against focused engine interfaces in tests. Scripted observations
 and recorded primitive commands exercise the real recall, catch, throw, flight,
 targeting, ropes, cameras, health, input interpretation and cleanup logic.
 External console, timed batches, real named-pipe/PowerShell clients, transport
-failures, durable results, audio ownership, numerical helpers and diagnostics
+failures, file results, audio ownership, numerical helpers and diagnostics
 are also covered.
 Only pure utility functions have unit tests. All other cases are player
 integration scenarios using the real cooperating mod components and adapters,

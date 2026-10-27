@@ -138,7 +138,7 @@ Trusted C# uses the active injected world for P/PED, PLAYER, V and POS aliases.
 Its output and results are persisted to files. Arbitrary user-supplied native
 calls are not shipped mod behavior and are outside the typed-contract guarantee.
 Keep such commands bounded and nonblocking; the game thread cannot preempt them.
-See [gta-use.md](gta-use.md) for durable receipts, cancellation, reload and leases.
+See [gta-use.md](gta-use.md) for ephemeral actions, cancellation, reload and leases.
 
 ## Enforcement and failure attribution
 

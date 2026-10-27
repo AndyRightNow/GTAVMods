@@ -8,11 +8,13 @@ the same time. Readiness of HTTP does not establish game-thread readiness.
 
 The optimized implementation reads each bounded pipe frame asynchronously, then
 dispatches its game operation on Tick. It arms the next listener when the previous
-write completes. Successful/error responses are encoded once and the exact bytes
-are both persisted and returned. The Python companion caches Windows DLL/signature
+write completes. Successful/error responses are encoded once and returned without
+disk receipts. The Python companion caches Windows DLL/signature
 setup and returns already-decoded JSON directly, avoiding FastAPI's recursive
 object conversion. Python observation snapshots use one JSON write instead of
-many tiny writes; atomic replacement and `fsync` remain enabled.
+many tiny writes; atomic replacement preserves consistent visibility without a
+forced durable flush. See the [latest action measurements](#ephemeral-action-optimization-2026-10-27);
+earlier sections retain historical results from the receipt-based implementation.
 
 ## Normal measurements
 
@@ -21,6 +23,7 @@ From the repository root, with the locked Python 3.14 uv environment prepared:
 ```powershell
 $gameProcess = Get-Process GTA5_Enhanced -ErrorAction Stop
 uv run --frozen python tools/profiling/profile_live.py --process $gameProcess.Id --output C:/evidence/gta-baseline --seconds 15 --soak-blocks 8
+uv run --frozen python tools/profiling/profile_actions.py --process $gameProcess.Id --output C:/evidence/actions.json --samples 300
 uv run --frozen python tools/profiling/profile_policy.py run tools/profiling/policy_workload.py --process $gameProcess.Id --output C:/evidence/policy-baseline --timeout 180 --stuck-timeout 120 --check-timeout 10
 ```
 
@@ -52,8 +55,8 @@ Interpret the counters carefully:
 - Saturated tests can consume more CPU after an optimization because they perform
   more work. Compare CPU seconds per request and fixed-rate streams as well.
 - A short stable-memory soak is evidence for that workload, not proof against
-  leaks over hours, script reloads or every mission. Receipt files intentionally
-  grow on disk; preserve/archive them outside the game after a session.
+  leaks over hours, script reloads or every mission. Batch, screenshot and policy
+  evidence files accumulate on disk; archive them outside the game after a session.
 
 ## CPU and allocation attribution
 
@@ -258,3 +261,93 @@ after the previous result was written but before its supervisor exited. The
 server correctly returned 409; the revised harness waits after this confirmed
 rejection. Earlier partial-axis movement checks are also retained; full-axis
 input produced observed movement. No uncertain mutation was blindly replayed.
+
+
+## Ephemeral action optimization (2026-10-27)
+
+The comparisons above measured the earlier receipt-based bridge. The current
+bridge removes request/response artifacts and all forced durable flushes. File
+diagnostics move to a bounded background writer; failures do not stop game
+commands. Async pipe I/O rearms the next listener without waiting for another
+script tick. Only game dispatch needs the tick. Python `action`, `native` and
+`command` return immediate results in one RPC instead of creating and polling a
+batch. Timed actions still use the sequence scheduler. Reusing an ID explicitly
+executes again; clients never retry a submitted request automatically.
+
+### Final paired results
+
+The final package ran in GTA Enhanced 1.0.1158.16, PID 75248, using one paused
+Story session for Rust then FastAPI. Thor was disabled. Each action phase used
+five warmups and 300 measured calls; state phases lasted five seconds and each
+soak comprised 24 five-second blocks. No builds or test suites ran during these
+measurements. Steam offline mode allowed the unchanged executable to launch
+despite a queued update. No graphics or headless changes were made.
+
+| Measurement | FastAPI | Rust / Axum |
+| --- | ---: | ---: |
+| Player-state HTTP mean / p95, 300 calls | 13.86 / 15.08 ms | 13.85 / 14.65 ms |
+| Direct native HTTP mean / p95 | 13.98 / 15.02 ms | 13.88 / 14.51 ms |
+| Direct native WebSocket mean / p95 | 13.89 / 14.58 ms | 13.89 / 14.55 ms |
+| Same native through batch polling, mean / p95 | 71.13 / 102.50 ms | 55.69 / 59.08 ms |
+| Service CPU per direct HTTP native | 3.96 ms | 1.09 ms |
+| Service CPU per direct WebSocket native | 1.77 ms | 1.04 ms |
+| Soak private memory | 48.73–48.84 MiB | 4.29–4.34 MiB |
+| Soak working set | 84.86–84.93 MiB | 32.54–32.58 MiB |
+| Soak handles | 231–241 | 171–172 |
+| Two-minute soak completed reads | 8,629 | 8,646 |
+
+The direct SDK path was **4.0× faster with Rust and 5.1× with FastAPI** than
+sending the identical native through the batch path in these runs. This is a
+comparison of the two paths in the new build, not an old-build action benchmark.
+Player-state latency fell about **67–69%** from the earlier 42–45 ms runs, which
+used another game process. That historical comparison does not isolate each
+optimization. The remaining approximately 14 ms round trip is largely script-tick
+scheduling; GTA calls still execute exclusively on the script thread. The native
+used here, `GET_FRAME_COUNT`, freezes while paused: its recorded zero strides are
+not evidence of script cadence or engine FPS.
+
+The five-second minimal/combat/full HTTP phases averaged 13.87 / 13.95 / 25.13 ms
+through FastAPI and 13.83 / 13.61 / 13.65 ms through Rust. Query costs matched:
+combat returned 15 peds/LOS tests from 607 candidates; full returned 48 entities
+and LOS tests from 627 candidates, five rays, 114 inventory checks and 15 blips.
+Full capture itself averaged 3.87 / 3.37 ms (FastAPI / Rust). These short sequential
+phases are scene-specific, and a little extra host work can miss the next tick;
+they do not establish universal full-state latency. At a requested 10 Hz, minimal
+streams delivered 48 / 47 observations in about 5.2 seconds; these intervals are
+intentional stream pacing, not command latency.
+
+Post-GC managed heaps were 2.01 / 1.96 MiB (FastAPI / Rust), with 1.45 MiB surviving
+in the monitored AppDomain. Private service memory at cooldown was 48.73 / 4.34 MiB.
+Python policies each completed 100 checks in 10.04 seconds; observation plus
+snapshot publication averaged 21.63 / 20.00 ms, with p95 33.77 / 34.01 ms. Their
+workers still used about 30 MiB and supervisors about 29 MiB each. Rust saves the
+HTTP interpreter's resident cost; it does not replace the Python policy runtime.
+These are short workload measurements, not a long-session leak guarantee.
+
+### Verification and evidence
+
+The complete build passed **329 C# scenarios, 17 Python scenarios and seven Rust
+scenarios**, including actual external HTTP/WS/pipe clients, stalled storage,
+repeated correlation IDs, lease authorization, consecutive-tick controls and
+reload/abort races. The strict C# gate remains 100%: GameBridge 1059/1059 lines,
+579/579 branches; ModUtils 274/274, 90/90; Thor 1496/1496, 610/610. No gate or
+primitive exclusion was weakened.
+
+Live final-binary checks passed 500 ms movement (0.48 m observed), pause, capture,
+C# output, a Python checkpoint job, concurrent-job rejection and cancellation of
+a busy worker. Reload through both backends changed the managed session while
+retaining each companion PID/URL. Both soaks completed with zero dropped records
+and no request/response receipt files. The earlier full Repossession mission was
+not replayed for this performance change.
+
+Raw evidence is outside Git at
+`C:\Users\Helen\Documents\Codex\2026-10-27\gta-use-ephemeral-performance`.
+`rust-actions-final.json`, `fastapi-actions-final.json`, `rust-final`,
+`fastapi-final`, `policy-rust-final`, `policy-fastapi-final`, `summary-final.json`
+and `methodology-final.json` identify final measurements and binary hashes.
+`controls-rust-final`, `reload-rust-final` and `reload-fastapi-final` retain live
+verification. `fastapi-actions.json` is excluded because it overlapped a build.
+`reload/smoke-before-reload.json` preserves a failed development run: Windows
+temporarily locked a batch status file. The final Rust server retries only that
+artifact read, covered by a real Windows file-lock scenario; it never resubmits
+the game action. The final rerun passed.
