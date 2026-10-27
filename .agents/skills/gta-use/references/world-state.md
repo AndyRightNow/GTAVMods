@@ -59,7 +59,10 @@ Use `cost` counters and `captureMilliseconds` to justify changing query frequenc
   does not establish a useful muzzle angle from cover; verify target damage.
 - Native GPS route queries can be unavailable even when the HUD draws a route.
   Target positions and nearby road context remain useful. Blip sprites are icon
-  types, not mission titles. Requery when the objective changes.
+  types, not mission titles. After identifying a moving target, track its blip/
+  entity identity and fresh position. Crossing an arbitrary selection radius does
+  not mean disappearance. Requery when the objective changes; identical colors
+  can belong to unrelated markers.
 - `playerAvailable:false`, null player sections or cutscene/control flags can
   indicate loading or transitions. Wait with bounded checks or stop for inspection;
   do not dereference absent player data or keep executing an old combat policy.

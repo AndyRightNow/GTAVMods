@@ -82,12 +82,20 @@ $api.doc.members.member | Where-Object { $_.name.StartsWith('M:GTA.TaskInvoker.F
 
 Do not assume that an absent `TASK_*` XML search means no movement API exists.
 For raw natives, verify the upstream signature before using `game.native`.
+Convert observed handles with `Entity.FromHandle(handle) as Vehicle` (or `as Ped`),
+then check null, existence and current role. Do not guess public `new Vehicle(handle)`
+or `new Ped(handle)` constructors; they are unavailable in the pinned API.
 
 Submit a navigation task once per goal, then observe progress. The in-game C#
 compiler has a 128-attempt budget per managed session; state loops belong in
 Python and should use state packs, not compile new C# on every observation.
 A long route can continue while Python checks health, position and the goal.
 Avoid clear/reissue loops when the same task is making progress.
+For a moving vehicle target, also inspect `M:GTA.TaskInvoker.VehicleChase(GTA.Ped)`.
+Its contract requires both peds in vehicles. A chase task tracks a moving target;
+repeated routes to its old coordinates can waste acceleration and pathfinding.
+Expected target motion should update or transition the current policy, with
+bounded recovery, rather than stop the run after every small displacement.
 
 A straight-line task does not route around a building. Use navmesh movement for
 walkable routes, then inspect `PED.GetNavMeshRouteResult()` when position stalls:
