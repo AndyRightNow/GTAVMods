@@ -152,6 +152,8 @@ change. Examples: distance reduces beyond a tolerance; a new road cell is reache
 cover is first acquired; confirmed target health decreases; objective stage changes;
 cutscene time advances during a bounded wait. A long cutscene can exceed the stall
 timeout even while observations keep arriving; report its actual time progression.
+When following a moving companion, distance can stay constant during useful
+movement; track actual world positions or new route cells as well as separation.
 Do not call it unconditionally in every loop, for repeated retries, or merely
 because the controller is alive. Avoid metrics that permit endless circles.
 

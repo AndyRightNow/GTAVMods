@@ -37,6 +37,8 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
         private static void Traffic(AgentScene s)
         {
+            s.Game.Entity(10).ModelHash = unchecked((int)PedHash.Franklin);
+            s.Game.Entity(30).ModelHash = unchecked((int)PedHash.MexGoon01GMY);
             s.Game.AddEntity(40).Position = new Vector3(30, 2, 3);
             s.Game.AddEntity(99).Exists = false;
             s.Game.World.Nearby = (position, radius) => new[] { 10, 20, 30, 40, 99 };
@@ -188,12 +190,13 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             }
         }
 
-        [TestMethod]
-        public void DrivingDecisionIncludesVehicleConditionAndFiltersPedestrianWorkOutOfTrafficScan()
+        [TestMethod, DataRow(unchecked((int)VehicleHash.Bison), "Bison"), DataRow(123456, null)]
+        public void DrivingDecisionIncludesVehicleConditionAndFiltersPedestrianWorkOutOfTrafficScan(int model, string modelName)
         {
             using (var s = new AgentScene())
             {
                 Traffic(s); Route(s);
+                s.Game.Entity(20).ModelHash = model;
                 s.Game.Native.Returns(Hash.GET_VEHICLE_PED_IS_IN, 20);
                 s.Game.Entity(10).InVehicle = true;
                 s.Game.Native.Returns(Hash.GET_ENTITY_SPEED, 14f);
@@ -209,11 +212,15 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 s.Game.World.RaycastObservation = (from, to, flags, ignored) => new RayHit(false, 0, Vector3.Zero);
                 var state = Read(s, ("profile", "driving"), ("types", new[] { "vehicle" }), ("radius", 35));
                 var vehicle = Object(Sections(state)["vehicle"]);
+                Assert.AreEqual(model, Object(vehicle["entity"])["model"]);
+                Assert.AreEqual(modelName, Object(vehicle["entity"])["modelName"], "Known vehicle names aid selection; custom hashes must remain unknown.");
+                Assert.AreEqual("Franklin", Object(Object(Sections(state)["player"])["entity"])["modelName"]);
                 Assert.AreEqual(347, vehicle["engineHealth"]); Assert.AreEqual(14, vehicle["speed"]);
                 Assert.AreEqual(1, vehicle["passengerCount"]);
                 var nearby = Object(Sections(state)["nearby"]);
                 Assert.AreEqual(1, nearby["total"]); Assert.AreEqual(0, Object(nearby["counts"])["peds"]);
                 Assert.AreEqual(20, Object(Rows(nearby["nodes"])[0]["entity"])["handle"]);
+                Assert.AreEqual(modelName, Object(Rows(nearby["nodes"])[0]["entity"])["modelName"]);
                 Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.GET_RELATIONSHIP_BETWEEN_PEDS || c.Hash == Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY));
                 Assert.AreEqual(5, Object(state["cost"])["raycasts"]);
                 Assert.AreEqual(20, Object(s.Request("observe")["result"])["vehicle"]);
@@ -234,10 +241,12 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 var weapons = Object(Sections(state)["weapons"]);
                 Assert.AreEqual(42, weapons["totalAmmo"]); Assert.AreEqual(7, weapons["ammoInClip"]); Assert.AreEqual(12, weapons["clipCapacity"]);
                 Assert.AreEqual(30, Object(weapons["aimTarget"])["handle"]);
+                Assert.IsNull(Object(weapons["aimTarget"])["modelName"], "An untyped aim target must not be mislabeled as a pedestrian.");
                 var nearby = Object(Sections(state)["nearby"]);
                 Assert.AreEqual(3, nearby["total"]); Assert.AreEqual(true, nearby["truncated"]);
                 foreach (string key in new[] { "peds", "vehicles", "objects" }) Assert.AreEqual(1, Object(nearby["counts"])[key]);
                 var nodes = Rows(nearby["nodes"]);
+                Assert.AreEqual("MexGoon01GMY", Object(nodes[0]["entity"])["modelName"]);
                 Assert.AreEqual(true, Object(nodes[0]["ped"])["inCombatWithPlayer"]);
                 Assert.AreEqual("MicroSMG", Object(nodes[0]["ped"])["weapon"]);
                 Assert.AreEqual(true, nodes[0]["lineOfSight"]); Assert.AreEqual(false, nodes[1]["lineOfSight"]);

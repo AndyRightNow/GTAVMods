@@ -283,9 +283,12 @@ complete; never ship automatic teleport/camera test harnesses.
   counts. Snapshots occur every five seconds and performance summaries every ten.
   Files rotate near 5 MiB and retain the newest ten per log directory.
 - Keep logging bounded: record transitions, throttle recurring errors, and avoid
-  disk writes on every frame. Agent requests/results/output are durable files
-  under `%LOCALAPPDATA%\GTAVMods\Bridge`; see `docs/gta-use.md` for protocol and
-  controls. Do not put console history or diagnostic-only output in memory.
+  disk writes on every frame. Individual agent actions are ephemeral: no request/
+  response receipt files, replay cache or durable flush. Diagnostics and console
+  output use bounded asynchronous file logging; batch, screenshot and supervised
+  policy evidence lives under `%LOCALAPPDATA%\GTAVMods\Bridge`. See
+  `docs/gta-use.md` for protocol and controls. Do not retain an in-memory console
+  history or diagnostic archive.
   Logging failures must not crash gameplay.
 - On a managed exception Thor logs the failure and pauses; Ctrl+A+O retries.
   Missing audio is logged once per clip without stopping gameplay.

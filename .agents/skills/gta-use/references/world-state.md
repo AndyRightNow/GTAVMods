@@ -46,6 +46,10 @@ Use `cost` counters and `captureMilliseconds` to justify changing query frequenc
 - A ped's hostile relationship does not prove it is a mission enemy. Require
   `ped.human` plus observed combat or objective-confirmed identity. Animals can
   belong to hostile groups. Target absence is not proof of death.
+- `modelName` identifies known ped/vehicle models (for example `Franklin` or
+  `Bison`) alongside the original numeric `model`. Unknown/custom models and
+  untyped entities may be null. A model name does not establish a mission role;
+  verify the objective marker, rider, occupancy and actual movement.
 - `ped.vehicle` identifies a rider's current vehicle; inspect it again during
   pursuit. Actual player occupancy/driver seat must be observed before driving.
 - Check selected weapon, clip/total ammo and reload state separately. Inventory

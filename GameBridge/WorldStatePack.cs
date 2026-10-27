@@ -84,7 +84,7 @@ namespace GTAVMods.Game
         }
 
         private object Player(StateContext c) => new {
-            entity = Entity(c.Player, c), maxHealth = game.Peds.MaxHealth(c.Player),
+            entity = Entity(c.Player, c, 1), maxHealth = game.Peds.MaxHealth(c.Player),
             armor = native.Call<int>(Hash.GET_PED_ARMOUR, c.Player),
             inVehicle = game.Peds.IsInVehicle(c.Player), vehicle = CurrentVehicle(c.Player),
             walking = game.Peds.IsWalking(c.Player), running = game.Peds.IsRunning(c.Player), sprinting = game.Peds.IsSprinting(c.Player),
@@ -101,7 +101,7 @@ namespace GTAVMods.Game
         {
             int vehicle = CurrentVehicle(c.Player);
             if (vehicle == 0 || !game.Entities.Exists(vehicle)) return null;
-            return new { entity = Entity(vehicle, c),
+            return new { entity = Entity(vehicle, c, 2),
                 speed = native.Call<float>(Hash.GET_ENTITY_SPEED, vehicle),
                 engineHealth = native.Call<float>(Hash.GET_VEHICLE_ENGINE_HEALTH, vehicle),
                 bodyHealth = native.Call<float>(Hash.GET_VEHICLE_BODY_HEALTH, vehicle),
@@ -160,7 +160,7 @@ namespace GTAVMods.Game
                     inVehicle = game.Peds.IsInVehicle(e.handle), vehicle = CurrentVehicle(e.handle) };
                 bool? sight = null;
                 if (c.Query.LineOfSight) { c.Cost.lineOfSightTests++; sight = native.Call<bool>(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, c.Player, e.handle, 17); }
-                return new { entity = Entity(e.handle, c), kind = TypeName(e.type), ped, lineOfSight = sight };
+                return new { entity = Entity(e.handle, c, e.type), kind = TypeName(e.type), ped, lineOfSight = sight };
             }).ToArray();
             return new { radius = c.Query.Radius, total = all.Length, returned = nodes.Length, truncated = all.Length > nodes.Length,
                 counts = new { peds = all.Count(e => e.type == 1), vehicles = all.Count(e => e.type == 2), objects = all.Count(e => e.type == 3) }, nodes };
@@ -209,10 +209,18 @@ namespace GTAVMods.Game
         // Never interpret that handle alone as current occupancy.
         private int CurrentVehicle(int player) => game.Peds.IsInVehicle(player) ? native.Call<int>(Hash.GET_VEHICLE_PED_IS_IN, player, false) : 0;
         private object Camera(StateContext c) => new { position = Vector(game.Cameras.GameplayPosition), direction = Vector(game.Cameras.GameplayDirection), rotation = Vector(game.Cameras.GameplayRotation) };
-        private object Entity(int handle, StateContext c) => new { handle, model = game.Entities.ModelHash(handle),
+        private object Entity(int handle, StateContext c, int type = 0)
+        {
+            int model = game.Entities.ModelHash(handle);
+            return new { handle, model, modelName = ModelName(model, type),
             position = Vector(game.Entities.Position(handle)), relative = Relative(game.Entities.Position(handle), c),
             velocity = Vector(game.Entities.Velocity(handle)), rotation = Vector(game.Entities.Rotation(handle)),
             health = game.Entities.Health(handle), dead = game.Entities.IsDead(handle) };
+        }
+        // Resolve the already-read hash locally. Unknown/custom models and untyped
+        // aim targets stay explicit nulls; a model name does not identify a mission role.
+        private static string ModelName(int model, int type) => type == 1 ? Enum.GetName(typeof(PedHash), unchecked((uint)model))
+            : type == 2 ? Enum.GetName(typeof(VehicleHash), unchecked((uint)model)) : null;
         private static string TypeName(int type) => type == 1 ? "ped" : type == 2 ? "vehicle" : "object";
         private static object Relative(Vector3 position, StateContext c)
         {

@@ -17,6 +17,14 @@ measured capture time. The default `minimal` profile reads only the player.
 | `probes` | Bounded collision ray fan with hit/miss, range, direction, position, hit distance and entity; entity zero can mean terrain |
 | `camera` | Position, direction and rotation |
 
+Entity records preserve the numeric `model` hash and include `modelName` when
+the selected section knows the entity is a ped or vehicle and SHVDNE recognizes
+its model (for example, `Franklin`, `Bison` or `Bati`). Names are SDK symbols,
+not localized display text or mission roles. Custom/unknown models, objects and
+untyped aim targets have `modelName:null`; do not infer a mission bike or enemy
+from a model name alone. Name lookup uses the already-read hash without adding
+native queries.
+
 ```powershell
 $gta = '.\scripts\Invoke-Gta.ps1'
 & $gta state -StateJson '{"sections":["player","navigation"],"blipLimit":8}'
