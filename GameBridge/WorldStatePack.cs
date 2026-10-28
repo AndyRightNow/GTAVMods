@@ -93,6 +93,9 @@ namespace GTAVMods.Game
             jumping = native.Call<bool>(Hash.IS_PED_JUMPING, c.Player), falling = native.Call<bool>(Hash.IS_PED_FALLING, c.Player),
             swimming = native.Call<bool>(Hash.IS_PED_SWIMMING, c.Player),
             inCover = native.Call<bool>(Hash.IS_PED_IN_COVER, c.Player, false),
+            goingIntoCover = native.Call<bool>(Hash.IS_PED_GOING_INTO_COVER, c.Player),
+            aimingFromCover = native.Call<bool>(Hash.IS_PED_AIMING_FROM_COVER, c.Player),
+            coverFacingLeft = native.Call<bool>(Hash.IS_PED_IN_COVER_FACING_LEFT, c.Player),
             reloading = native.Call<bool>(Hash.IS_PED_RELOADING, c.Player),
             heightAboveGround = game.Entities.HeightAboveGround(c.Player)
         };
@@ -125,6 +128,7 @@ namespace GTAVMods.Game
                 ammoInClip = hasClip ? (int?)clip : null,
                 clipCapacity = native.Call<int>(Hash.GET_MAX_AMMO_IN_CLIP, c.Player, (uint)weapon, true),
                 shooting = native.Call<bool>(Hash.IS_PED_SHOOTING, c.Player),
+                readyToShoot = native.Call<bool>(Hash.IS_PED_WEAPON_READY_TO_SHOOT, c.Player),
                 reloading = native.Call<bool>(Hash.IS_PED_RELOADING, c.Player),
                 freeAiming = native.Call<bool>(Hash.IS_PLAYER_FREE_AIMING, game.Host.PlayerHandle),
                 aimTarget = hasTarget && game.Entities.Exists(target) ? Entity(target, c) : null };

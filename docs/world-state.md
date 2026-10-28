@@ -8,9 +8,9 @@ measured capture time. The default `minimal` profile reads only the player.
 
 | Section | Decision data |
 | --- | --- |
-| `player` | Handle/model, coordinates, velocity, heading, health/max health, armor, actual vehicle occupancy, movement, climbing/vaulting/jumping/falling, cover, reload, swimming and height above ground |
+| `player` | Handle/model, coordinates, velocity, heading, health/max health, armor, actual vehicle occupancy, movement, climbing/vaulting/jumping/falling, cover/entry/peek/facing side, reload, swimming and height above ground |
 | `vehicle` | Current vehicle, speed, engine/body health, driveability, wheels/rollover, engine, driver and passenger counts; null on foot |
-| `weapons` | Selected weapon/hash, total ammo, clip ammo/capacity, shooting/reloading, aiming and observed aim target |
+| `weapons` | Selected weapon/hash, total ammo, clip ammo/capacity, shooting/readiness/reloading, aiming and observed aim target |
 | `inventory` | Owned known SHVDNE weapons and ammo; opt-in enumeration, excluded from combat defaults |
 | `nearby` | Distance-sorted entity nodes, relative right/forward/up and bearing, type counts, truncation, ped human/animal classification, weapons, relationships, combat and current vehicle handle; optional visibility |
 | `navigation` | Zone/street/crossing, GPS route availability/length, routed targets, waypoint and map markers with world/relative positions |
@@ -66,6 +66,14 @@ objective. A nearby-pool omission does not prove death or despawn: reacquire an
 objective through its blip and inspect it, or take another observation. Selecting
 a weapon and owning its ammo are separate facts; check both weapon and inventory
 sections when a pickup does not equip automatically.
+
+Cover observations are `player.inCover`, `goingIntoCover`, `aimingFromCover` and
+`coverFacingLeft`; weapon readiness is `weapons.readyToShoot`. Entry is distinct
+from completed cover, and aiming from cover is distinct from being tucked behind
+it. A tucked-position LOS failure can resolve through an aim-only peek. Sample
+transient aim/readiness flags while time advances: pausing can clear them while
+the image still shows the aiming pose. Aim action counters retain observations
+across that interval. These flags do not establish companion clearance or a hit.
 
 Providers can be added through `AgentWorld.StatePack.Register(name,
 Func<StateContext,object>)`. They appear in `describe.stateSections` and can be

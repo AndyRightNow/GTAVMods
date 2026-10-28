@@ -55,7 +55,12 @@ Use `cost` counters and `captureMilliseconds` to justify changing query frequenc
 - Check selected weapon, clip/total ammo and reload state separately. Inventory
   ownership does not imply the pickup equipped that weapon. Null results mean
   unknown, not zero ammo or a negative observation.
-- Cover input/task acceptance does not establish `player.inCover`. LOS alone
+- Cover input/task acceptance does not establish `player.inCover`;
+  `goingIntoCover` can still be true. `aimingFromCover`, `coverFacingLeft` and
+  `weapons.readyToShoot` describe current cover/weapon transitions. Inspect them
+  during the held action; pause can clear transient flags. Tucked-position LOS
+  can be blocked by the player's own cover, so use a bounded aim-only peek before
+  rejecting that angle. LOS alone
   does not establish a useful muzzle angle from cover; verify target damage.
   When a fresh `weapons.aimTarget` names a different entity, treat that as
   evidence of a possible obstruction; null is not proof of a clear shot.

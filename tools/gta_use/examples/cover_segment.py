@@ -34,6 +34,7 @@ def run(ctx):
         ctx.uncertain("GTA_USE_ALLIES must be a JSON list of positive ped handles.")
     allies = set(ally_values)
     observed_health = {}
+    peeked = set()
     cover_started = None
     clear_started = None
     low_started = None
@@ -67,6 +68,7 @@ def run(ctx):
             continue
         clear_started = None
         if not player["inCover"]:
+            peeked.clear()
             if cover_started is None:
                 game.action("controls", ms=200, inputs=[{"control": "Cover"}])
                 cover_started = time.monotonic()
@@ -84,9 +86,6 @@ def run(ctx):
             time.sleep(.25)
             continue
         low_started = None
-        visible = [n for n in targets if n["lineOfSight"]]
-        if not visible:
-            ctx.uncertain("No clear firing line. Inspect a cover edge or another protected position.")
         weapon = state["sections"]["weapons"]
         if weapon["totalAmmo"] == 0:
             ctx.uncertain("No ammo in selected weapon. Inspect inventory and pickups.")
@@ -110,11 +109,20 @@ def run(ctx):
                 obstacles.append(blips[0]["position"])
             else:
                 ctx.uncertain("An identified companion cannot be located reliably.")
-        safe = [n for n in visible if not any(near_segment(player["entity"]["position"],
+        safe = [n for n in targets if not any(near_segment(player["entity"]["position"],
                 n["entity"]["position"], point) for point in obstacles)]
         if not safe:
             ctx.uncertain("A companion or unknown human may be in the line of fire.")
         target = min(safe, key=lambda n: n["entity"]["relative"]["distance"])
+        handle = target["entity"]["handle"]
+        if handle not in peeked:
+            # Tucked-position LOS can be blocked by the player's own cover.
+            # Aim without firing to peek, then refresh identity and companion positions.
+            result = game.action("aim", entity=handle, bone=31086, ms=800, shoot=False)
+            ctx.log("cover-peek", target=handle, result=result)
+            if result["targetAvailable"]:
+                peeked.add(handle)
+            continue
         ctx.log("before-aim", target=target["entity"]["handle"],
                 targetHealth=target["entity"]["health"], playerHealth=health,
                 ammo=weapon["totalAmmo"], ammoInClip=weapon["ammoInClip"])

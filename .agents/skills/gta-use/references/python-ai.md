@@ -47,11 +47,13 @@ model interaction. Keep pause/inspect as the fallback for an uncertain scene.
 Use the shipped policies as concrete starting points:
 
 - [cover_segment.py](../../../../tools/gta_use/examples/cover_segment.py): normal
-  cover input, health checks, confirmed human targets, LOS, reload and short
-  head-aim/fire actions. `GTA_USE_TARGETS` can carry a JSON list of handles verified
+  cover input, health checks, confirmed human targets, an aim-only peek, reload
+  and gated head-aim/fire actions. `GTA_USE_TARGETS` can carry a JSON list of handles verified
   for the current objective. Set `GTA_USE_ALLIES` to the currently identified
   companion handles (or [] after checking none are present). It withholds fire
   for possible friendly obstruction and uses `requireAimTarget=True`.
+  Its conservative 2D companion filter can reject a clear shot above a crouched
+  companion; inspect actual 3D muzzle geometry before refining that filter.
   Its no-visible-targets checkpoint does not prove
   mission completion. Its health thresholds are an example policy, not universal
   tuning. It deliberately stops when cover geometry or firing angle is uncertain.
@@ -182,6 +184,39 @@ Pause stops time; it does not erase a persistent native task before the next res
 `cutscenePlaying` and advancing `cutsceneTime` to establish playback. If time
 does not advance, inspect focus and the visible UI before retrying. Record any
 temporary focus-loss setting change and restore the original value afterward.
+
+## Shoot from cover by observing the peek transition
+
+Tucked-position LOS can be blocked by the player's own cover. Do not require it
+before trying a bounded **aim-only** peek at a confirmed target. Use normal Cover
+input, allow `player.goingIntoCover` to finish, and verify `player.inCover`.
+Hold aim without firing (the example uses 800 ms), then refresh target identity,
+health, ammunition and companion positions before a gated firing interval.
+The duration is an example, not proof that a particular animation has completed.
+
+Observe `player.aimingFromCover`, `player.coverFacingLeft`, `weapons.freeAiming`
+and `weapons.readyToShoot` during the action, using state requests alongside an
+accepted batch or a stream. Aim results retain `inCoverFrames`,
+`aimingFromCoverFrames` and `weaponReadyFrames` plus their last observations.
+Pause can reset transient aim/readiness flags while freezing the aiming pose;
+a paused false value does not prove that the player never aimed from cover.
+Older deployments can query the corresponding GTA natives or register a bounded
+read-only provider through `((GTAVMods.Game.AgentWorld)CONTEXT.World).StatePack`.
+
+Verify companion clearance separately. A 2D corridor is a conservative first
+filter; it cannot distinguish a crouched companion below the muzzle from an
+obstruction at gun height. For ambiguous geometry, inspect fresh 3D positions
+and a ray from the actual weapon muzzle to the target bone, ignoring the player.
+Check the ray completed and which entity it hit first. A missing muzzle bone,
+incomplete ray or unknown companion position is unresolved, not a clear shot.
+Recheck when either entity moves; a ray sample is not a future hit guarantee.
+
+Then fire a bounded interval with `requireAimTarget=True` and measure whole-
+interval ammo and target health. Requested Attack frames can precede a shot or
+occur during a transition. One short interval with no ammo spent does not prove
+that cover firing is unsupported. Continue a bounded verified transition or
+change the protected angle based on evidence; do not abandon cover solely because
+the initial tucked LOS was false. Log waiting as waiting, not as progress.
 
 ## Observe, progress, checkpoint
 

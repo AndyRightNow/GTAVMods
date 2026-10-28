@@ -1,8 +1,8 @@
 # GTA use agent evaluations
 
-## Comparison: DeepSeek 1017 Max and GPT-6.1 Terra Max
+## Initial comparison: DeepSeek 1017 Max and GPT-6.1 Terra Max
 
-**Neither model completed Repossession.** DeepSeek reached the pursuit but needed
+**Neither model completed its initial Repossession attempt.** DeepSeek reached the pursuit but needed
 repeated host intervention; Terra handled its own recovery after setup, stayed in
 cover during its combat sequence, and stopped earlier at an unresolved firing
 angle. Neither trial has a Mission Passed screenshot.
@@ -89,6 +89,62 @@ all deployed files match their manifest. Final graphics comparison found only
 the window-mode value differed from the pretrial backup. With GTA closed, that
 value was restored and the complete graphics file again matched the original
 hash. The cause of that window-mode change was not established.
+
+## Terra continuation and cover-fire diagnosis
+
+The user requested a separate Terra Max continuation on 2026-10-28. Runtime turn
+records confirm `gpt-6.1-terra` and `effort:max` for both the initial run and the
+continuation. The user subsequently corrected its travel strategy: prioritize
+vehicles and ordinary in-game carjacking. After that assistance, a continuous
+policy acquired a nearby car, drove to Simeon and entered the briefing. That
+preference is now in the skill; it was a planning correction, not a missing
+driving primitive. The continuation remains separate from the table above.
+
+At the garage, its first covered combat policy waited for clear entity LOS while
+tucked behind cover and sent **no aim or Attack**. Its next two shots were from
+outside cover. One round was spent without observed target damage; subsequent
+aim feedback identified the Bison as the aimed entity. Neither attempt tested
+shooting from cover. The shipped cover example shared the premature LOS filter.
+
+After an explicit paused/lease-free handoff, the parent performed seven short
+supervised diagnostic runs in the same mission. Normal movement and Cover input
+reacquired the original cover. `IS_PED_GOING_INTO_COVER` was true before entry
+completed; `IS_PED_IN_COVER` became true after additional animation time. An
+aim-only peek then produced 158 matching-target frames out of 161 and camera
+angular error near 0.01 degree. `IS_PED_AIMING_FROM_COVER` became true during the
+action and reset on pause even while the image retained the aiming pose.
+
+A completed ray from the actual pistol `gun_muzzle` bone to the selected
+attacker's head hit that attacker first. Lamar's crouched head was below the
+sampled muzzle path; a broad 2D corridor had obscured that distinction. One
+400 ms gated interval requested Attack in 18 frames but spent no ammo, so the
+receipt alone did not establish firing. The next bounded gated action fired
+one round: ammo **144 → 143**, target health **130 → 0**, Franklin **182 → 182**,
+Lamar **482 → 482**, with `inCover=true` throughout the sampled action. The
+screenshot captured the red hit marker. The action ended when the target died.
+Earlier Lamar health loss was already present before this shot; its cause was
+not established.
+
+This verifies a covered shot in this geometry using the existing deployed bridge,
+not universal cover clearance or completion of the mission. It is **parent
+gameplay assistance**, including the defeat of one attacker, not an autonomous
+Terra kill. Control was returned to Terra with the same paused session. Temporary
+read-only diagnostic providers were removed, and no DLL was replaced during play.
+
+The source changes add cover-entry/peek/facing observations, weapon readiness and
+bounded per-aim cover/readiness counts. The example now performs an aim-only peek
+before judging tucked-position LOS and refreshes companion positions before
+firing. New scenarios protect the peek and prevent a shot when a companion enters
+the corridor during it. Readiness remains telemetry; firing behavior is unchanged.
+Evidence is retained under `artifacts/cover-fire-investigation` outside Git.
+
+The full build/test/package workflow for these changes passed **332 C#**,
+**15 Python** and **8 Rust** cases. C# executable line/branch coverage remains
+100%: GameBridge 1092/1092 and 601/601; ModUtils 274/274 and 90/90; Thor
+1496/1496 and 610/610. The skill validator and whitespace checks also passed.
+The new package has not been deployed into the active mission; its additional
+observations are integration-tested, while the covered shot above used the
+previously deployed bridge and temporary diagnostic queries.
 
 ## DeepSeek 1017 Max trial
 

@@ -167,12 +167,13 @@ class CoverPolicyScenarios(unittest.TestCase):
     def test_confirmed_cover_fire_stops_after_observed_target_death_without_claiming_mission_pass(self):
         alive = self.observation()
         dead = self.observation(target_health=0)
-        result, outcome = self.exercise([alive, dead])
+        result, outcome = self.exercise([alive, alive, dead])
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("no-visible-combat-targets", outcome["checkpoint"])
         self.assertTrue(outcome["paused"])
         shots = [step for step in self.actions() if step["op"] == "aim"]
-        self.assertEqual([dict(op="aim", entity=20, bone=31086, ms=350, shoot=True, requireAimTarget=True)], shots)
+        self.assertEqual([False, True], [step["shoot"] for step in shots])
+        self.assertTrue(shots[1]["requireAimTarget"])
         self.assertEqual({"20": 0}, outcome["evidence"]["previousTargets"])
 
     def test_companion_in_shot_corridor_prevents_fire_despite_clear_entity_los(self):
@@ -204,7 +205,7 @@ class CoverPolicyScenarios(unittest.TestCase):
         alive, dead = self.observation(), self.observation(target_health=0)
         alive["sections"]["navigation"]["blips"] = [{"entity": 30, "position": {"x": 6, "y": 7, "z": 0}}]
         dead["sections"]["weapons"] = {"totalAmmo": 19, "ammoInClip": 7}
-        result, outcome = self.exercise([alive, dead], allies="[30]")
+        result, outcome = self.exercise([alive, alive, dead], allies="[30]")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(outcome["paused"])
         events = [json.loads(line) for line in (self.root / "run/events.jsonl").read_text().splitlines()]
@@ -217,8 +218,28 @@ class CoverPolicyScenarios(unittest.TestCase):
             last=dict(aimTarget=30, lineOfSight=True)))
         self.assertEqual(1, result.returncode)
         self.assertTrue(outcome["paused"])
-        self.assertEqual(1, sum(step["op"] == "aim" for step in self.actions()))
+        self.assertEqual([False, True], [step["shoot"] for step in self.actions() if step["op"] == "aim"])
         self.assertIn("Fire withheld", (self.root / "run/stderr.log").read_text())
+
+    def test_tucked_cover_los_does_not_prevent_an_aim_only_peek_before_gated_fire(self):
+        tucked, peeking, dead = self.observation(), self.observation(), self.observation(target_health=0)
+        tucked["sections"]["nearby"]["nodes"][0]["lineOfSight"] = False
+        result, outcome = self.exercise([tucked, peeking, dead])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(outcome["paused"])
+        aims = [step for step in self.actions() if step["op"] == "aim"]
+        self.assertEqual([False, True], [step["shoot"] for step in aims])
+        self.assertTrue(aims[1]["requireAimTarget"])
+
+    def test_companion_entering_corridor_during_peek_prevents_the_following_shot(self):
+        tucked, crossed = self.observation(), self.observation()
+        tucked["sections"]["navigation"]["blips"] = [{"entity": 30, "position": {"x": 6, "y": 7, "z": 0}}]
+        crossed["sections"]["navigation"]["blips"] = [{"entity": 30, "position": {"x": 0, "y": 7, "z": 0}}]
+        result, outcome = self.exercise([tucked, crossed], allies="[30]")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertEqual([False], [step["shoot"] for step in self.actions() if step["op"] == "aim"])
+        self.assertIn("line of fire", (self.root / "run/stderr.log").read_text())
 
 
 if __name__ == "__main__":

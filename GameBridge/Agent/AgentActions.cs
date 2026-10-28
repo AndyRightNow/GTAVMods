@@ -69,11 +69,14 @@ namespace GTAVMods.Agent
         private readonly TimedControls duration;
         private AimObservation observation = new AimObservation(true, null, null, false);
         private int frames, lineOfSightFrames, aimTargetMatchFrames, unknownAimTargetFrames, attackRequestedFrames;
+        private int inCoverFrames, aimingFromCoverFrames, weaponReadyFrames;
         public TrackingAim(IAgentWorld world, int target, int bone, bool shoot, bool requireAimTarget, TimedControls duration)
         { this.world = world; this.target = target; this.bone = bone; this.shoot = shoot; this.requireAimTarget = requireAimTarget; this.duration = duration; }
         public object Result => new { entity = target, targetAvailable = observation.Available, timing = duration.Result,
             requireAimTarget, frames, lineOfSightFrames, aimTargetMatchFrames, unknownAimTargetFrames, attackRequestedFrames,
-            last = new { targetAvailable = observation.Available, lineOfSight = observation.LineOfSight, aimTarget = observation.AimTarget, attackRequested = observation.AttackRequested } };
+            inCoverFrames, aimingFromCoverFrames, weaponReadyFrames,
+            last = new { targetAvailable = observation.Available, lineOfSight = observation.LineOfSight, aimTarget = observation.AimTarget, attackRequested = observation.AttackRequested,
+                inCover = observation.InCover, aimingFromCover = observation.AimingFromCover, weaponReady = observation.WeaponReady } };
         public bool Run()
         {
             if (duration.Run()) return true;
@@ -83,6 +86,9 @@ namespace GTAVMods.Agent
             if (observation.AimTarget == target) aimTargetMatchFrames++;
             if (observation.AimTarget == null) unknownAimTargetFrames++;
             if (observation.AttackRequested) attackRequestedFrames++;
+            if (observation.InCover == true) inCoverFrames++;
+            if (observation.AimingFromCover == true) aimingFromCoverFrames++;
+            if (observation.WeaponReady == true) weaponReadyFrames++;
             return !observation.Available;
         }
         public void Cancel() { }

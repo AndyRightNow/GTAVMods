@@ -91,6 +91,10 @@ namespace GTAVMods.Tests.Support
             Game.Native.Returns(Hash.IS_PED_JUMPING, false);
             Game.Native.Returns(Hash.IS_PED_FALLING, false);
             Game.Native.Returns(Hash.IS_PED_IN_COVER, false);
+            Game.Native.Returns(Hash.IS_PED_GOING_INTO_COVER, false);
+            Game.Native.Returns(Hash.IS_PED_AIMING_FROM_COVER, false);
+            Game.Native.Returns(Hash.IS_PED_IN_COVER_FACING_LEFT, false);
+            Game.Native.Returns(Hash.IS_PED_WEAPON_READY_TO_SHOOT, false);
             Game.Native.Returns(Hash.IS_PED_RELOADING, false);
             Log = new DiagnosticLog(new SessionLog(Path.Combine(Root, "logs"), Path.Combine(Root, "fallback"), logStorage ?? new FileLogStorage(), Clock), () => Clock.ElapsedMilliseconds);
             Journal = new AgentJournal(Root, SessionId, Files, Log, journalCharacters);

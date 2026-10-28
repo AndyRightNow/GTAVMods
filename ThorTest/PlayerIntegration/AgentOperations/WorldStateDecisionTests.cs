@@ -60,6 +60,58 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
 
         [TestMethod]
+        public void CoverEntryAndAimOnlyPeekRemainDistinguishableAfterPauseClearsTransientAimFlags()
+        {
+            using (var s = new AgentScene())
+            {
+                Arm(s);
+                s.Game.Native.Returns(Hash.GET_PED_BONE_COORDS, Vector3.UnitY);
+                s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_HEADING, 0f);
+                s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH, 0f);
+                s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, false);
+                s.Batch(Step("controls", ("ms", 200), ("inputs", new[] { Step("", ("control", "Cover")) })),
+                    Step("aim", ("entity", 20), ("ms", 300)), Step("pause"));
+                s.Frame();
+                s.Game.Native.Returns(Hash.IS_PED_GOING_INTO_COVER, true);
+                var entering = Object(Sections(Read(s))["player"]);
+                Assert.AreEqual(true, entering["goingIntoCover"]);
+                Assert.AreEqual(false, entering["inCover"], "A cover input is not completed cover entry.");
+                s.Frame(200);
+                s.Game.Native.Returns(Hash.IS_PED_GOING_INTO_COVER, false);
+                s.Game.Native.Returns(Hash.IS_PED_IN_COVER, true);
+                s.Game.Native.Returns(Hash.IS_PED_IN_COVER_FACING_LEFT, true);
+                s.Frame(); // Tucked cover can hide the target while aim input begins the peek.
+                s.Game.Native.Returns(Hash.IS_PED_AIMING_FROM_COVER, true);
+                s.Game.Native.Returns(Hash.IS_PED_WEAPON_READY_TO_SHOOT, true);
+                s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, true);
+                s.Game.Outputs.AimValid = true; s.Game.Outputs.AimEntity = 20;
+                s.Frame(100);
+                var peeking = Sections(Read(s, ("sections", new[] { "player", "weapons" })));
+                Assert.AreEqual(true, Object(peeking["player"])["inCover"]);
+                Assert.AreEqual(true, Object(peeking["player"])["aimingFromCover"]);
+                Assert.AreEqual(true, Object(peeking["player"])["coverFacingLeft"]);
+                Assert.AreEqual(false, Object(peeking["player"])["goingIntoCover"]);
+                Assert.AreEqual(true, Object(peeking["weapons"])["readyToShoot"]);
+                s.Frame(200); s.Frame();
+                s.Game.Native.Returns(Hash.IS_PED_AIMING_FROM_COVER, false);
+                s.Game.Native.Returns(Hash.IS_PLAYER_FREE_AIMING, false);
+                s.Game.Native.Returns(Hash.IS_PED_WEAPON_READY_TO_SHOOT, false);
+                var paused = Sections(Read(s, ("sections", new[] { "player", "weapons" })));
+                Assert.AreEqual(false, Object(paused["player"])["aimingFromCover"]);
+                Assert.AreEqual(false, Object(paused["weapons"])["readyToShoot"]);
+                var result = Object(s.Results.Single(row => (string)row["op"] == "aim")["result"]);
+                Assert.AreEqual(2, result["inCoverFrames"]);
+                Assert.AreEqual(1, result["aimingFromCoverFrames"]);
+                Assert.AreEqual(1, result["weaponReadyFrames"]);
+                Assert.AreEqual(1, result["lineOfSightFrames"]);
+                Assert.AreEqual(true, Object(result["last"])["aimingFromCover"]);
+                Assert.AreEqual(0, result["attackRequestedFrames"]);
+                Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.Attack),
+                    "An aim-only peek must not shoot even after the engine reports a clear target and ready weapon.");
+            }
+        }
+
+        [TestMethod]
         public void MissionDecisionDistinguishesLoadedCutsceneFromPlaybackAndCompletion()
         {
             using (var s = new AgentScene())

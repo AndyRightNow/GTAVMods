@@ -20,12 +20,17 @@ namespace GTAVMods.Game
 
     public readonly struct AimObservation
     {
-        public AimObservation(bool available, bool? lineOfSight, int? aimTarget, bool attackRequested)
-        { Available = available; LineOfSight = lineOfSight; AimTarget = aimTarget; AttackRequested = attackRequested; }
+        public AimObservation(bool available, bool? lineOfSight, int? aimTarget, bool attackRequested,
+            bool? inCover = null, bool? aimingFromCover = null, bool? weaponReady = null)
+        { Available = available; LineOfSight = lineOfSight; AimTarget = aimTarget; AttackRequested = attackRequested;
+            InCover = inCover; AimingFromCover = aimingFromCover; WeaponReady = weaponReady; }
         public bool Available { get; }
         public bool? LineOfSight { get; }
         public int? AimTarget { get; }
         public bool AttackRequested { get; }
+        public bool? InCover { get; }
+        public bool? AimingFromCover { get; }
+        public bool? WeaponReady { get; }
     }
 
     /// <summary>Agent operations use the same observed game boundary as the player abilities.</summary>
@@ -70,7 +75,10 @@ namespace GTAVMods.Game
             int? aimTarget = game.Outputs.AimTarget(game.Host.PlayerHandle, out int aimed) && game.Entities.Exists(aimed) ? (int?)aimed : null;
             bool attackRequested = shoot && lineOfSight && (!requireAimTarget || aimTarget == target);
             if (attackRequested) SetControl(0, (int)Control.Attack, 1);
-            return new AimObservation(true, lineOfSight, aimTarget, attackRequested);
+            return new AimObservation(true, lineOfSight, aimTarget, attackRequested,
+                native.Call<bool>(Hash.IS_PED_IN_COVER, game.Host.PlayerPed, false),
+                native.Call<bool>(Hash.IS_PED_AIMING_FROM_COVER, game.Host.PlayerPed),
+                native.Call<bool>(Hash.IS_PED_WEAPON_READY_TO_SHOOT, game.Host.PlayerPed));
         }
         public object Observe(float radius, int limit)
         {

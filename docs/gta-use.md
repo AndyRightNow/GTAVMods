@@ -228,19 +228,25 @@ policies from observed state, and should verify cover before firing.
 Set `requireAimTarget=True` to additionally withhold Attack unless the game's
 current aim-target handle matches the requested entity. A different, missing or
 stale aim target withholds fire. The default is false for compatibility. Cover
-animations or free-aim transitions can yield unknown observations; inspect and
-reposition instead of assuming the gate will always permit a shot.
+animations or free-aim transitions can yield unknown observations. Start with a
+bounded aim-only peek at a confirmed target: tucked-position LOS may be blocked
+by the player's own cover. Observe the transition before deciding to reposition.
 
 The result keeps `entity`, `targetAvailable` and `timing`, and adds `frames`,
 `lineOfSightFrames`, `aimTargetMatchFrames`, `unknownAimTargetFrames`,
-`attackRequestedFrames` and `last` (targetAvailable, lineOfSight, aimTarget,
-attackRequested). These are bounded counters and the last frame observation;
+`attackRequestedFrames`, `inCoverFrames`, `aimingFromCoverFrames`,
+`weaponReadyFrames` and `last` (targetAvailable, lineOfSight, aimTarget,
+attackRequested, inCover, aimingFromCover, weaponReady). These are bounded counters and the last frame observation;
 there is no per-frame file output or retained sample list. Unknown LOS/aim data
 is null, including when a target becomes unavailable. An Attack request is not
 an observed shot or hit, and matching aim does not prove companion clearance or
 a clear muzzle path. Observe ammo and target health before and after the entire
 aim/fire interval. The cover policy example records both and checks companion
 and unknown-human positions before using the optional gate.
+Cover/readiness counters preserve the action's observed transitions when pause
+clears transient state flags. Readiness is telemetry, not an additional firing
+gate. A short Attack interval can finish before a shot occurs; inspect the
+transition and ammo before concluding that firing is unsupported.
 
 native accepts a known GTA.Native.Hash name or 0x hexadecimal hash, a scalar args
 array, and returns: void, bool, int, uint, float, string or vector3. Integer-looking
