@@ -65,7 +65,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                     if (held == null)
                     {
                         status = Directory.GetFiles(s.Root, "batch-*-status.json", SearchOption.AllDirectories).SingleOrDefault();
-                        if (status != null && ReadShared(status).Contains("completed"))
+                        if (status != null && ReadShared(status)?.Contains("completed") == true)
                         {
                             held = status + ".withheld";
                             if (locked) denied = new FileStream(status, FileMode.Open, FileAccess.Read, FileShare.None);
@@ -93,8 +93,15 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
 
         private static string ReadShared(string path)
         {
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            using (var reader = new StreamReader(stream)) return reader.ReadToEnd();
+            // The background publisher can replace the directory entry after
+            // enumeration. Wait for the completed record before injecting the
+            // deliberate interruption; this is not a replay of the game action.
+            try
+            {
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (var reader = new StreamReader(stream)) return reader.ReadToEnd();
+            }
+            catch (FileNotFoundException) { return null; }
         }
 
         [TestMethod]

@@ -15,7 +15,7 @@ namespace GTAVMods.Game
         object State(StateQuery query);
         string[] StateSections { get; }
         object Invoke(GTA.Native.Hash hash, string result, object[] arguments);
-        AimObservation AimAt(int target, int bone, bool shoot, bool requireAimTarget);
+        AimObservation AimAt(int target, int bone, bool shoot, bool requireAimTarget, float height = 0);
     }
 
     public readonly struct AimObservation
@@ -60,10 +60,13 @@ namespace GTAVMods.Game
                 default: native.Call(hash, arguments); return null;
             }
         }
-        public AimObservation AimAt(int target, int bone, bool shoot, bool requireAimTarget)
+        public AimObservation AimAt(int target, int bone, bool shoot, bool requireAimTarget, float height = 0)
         {
             if (!game.Entities.Exists(target) || game.Entities.IsDead(target)) return default;
-            Vector3 point = native.Call<Vector3>(Hash.GET_PED_BONE_COORDS, target, bone, 0f, 0f, 0f);
+            Vector3 point = native.Call<int>(Hash.GET_ENTITY_TYPE, target) == 1
+                ? native.Call<Vector3>(Hash.GET_PED_BONE_COORDS, target, bone, 0f, 0f, 0f)
+                : game.Entities.Position(target);
+            point.Z += height;
             Vector3 delta = point - game.Cameras.GameplayPosition;
             float yaw = (float)(System.Math.Atan2(-delta.X, delta.Y) * 180 / System.Math.PI);
             float pitch = (float)(System.Math.Atan2(delta.Z, System.Math.Sqrt(delta.X * delta.X + delta.Y * delta.Y)) * 180 / System.Math.PI);
@@ -71,10 +74,16 @@ namespace GTAVMods.Game
             native.Call(Hash.SET_GAMEPLAY_CAM_RELATIVE_HEADING, native.Call<float>(Hash.GET_GAMEPLAY_CAM_RELATIVE_HEADING) + difference);
             native.Call(Hash.SET_GAMEPLAY_CAM_RELATIVE_PITCH, native.Call<float>(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH) + pitch - game.Cameras.GameplayRotation.X, 1f);
             SetControl(0, (int)Control.Aim, 1);
+            bool inVehicle = game.Peds.IsInVehicle(game.Host.PlayerPed);
+            if (inVehicle) SetControl(0, (int)Control.VehicleAim, 1);
             bool lineOfSight = native.Call<bool>(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, game.Host.PlayerPed, target, 17);
             int? aimTarget = game.Outputs.AimTarget(game.Host.PlayerHandle, out int aimed) && game.Entities.Exists(aimed) ? (int?)aimed : null;
             bool attackRequested = shoot && lineOfSight && (!requireAimTarget || aimTarget == target);
-            if (attackRequested) SetControl(0, (int)Control.Attack, 1);
+            if (attackRequested)
+            {
+                SetControl(0, (int)Control.Attack, 1);
+                if (inVehicle) SetControl(0, (int)Control.VehicleAttack, 1);
+            }
             return new AimObservation(true, lineOfSight, aimTarget, attackRequested,
                 native.Call<bool>(Hash.IS_PED_IN_COVER, game.Host.PlayerPed, false),
                 native.Call<bool>(Hash.IS_PED_AIMING_FROM_COVER, game.Host.PlayerPed),

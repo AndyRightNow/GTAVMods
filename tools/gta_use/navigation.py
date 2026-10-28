@@ -16,7 +16,7 @@ def _float(value):
     return {"type": "float", "value": value}
 
 
-def navigate_to(ctx, destination, *, waypoints=(), parkour=True, radius=.75,
+def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="navmesh", radius=.75,
                 timeout=60, stall_timeout=2.5, max_climbs=3, climb_timeout=7,
                 minimum_health=100, move_blend_ratio=2.5, check_interval=.2):
     """Run a short route, climbing nearby obstacles only when progress stalls.
@@ -25,10 +25,14 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, radius=.75,
     pause on success. Explicit waypoints should describe the intended route,
     including the far side of a fence. Requires an on-foot, controllable player.
     Native task acceptance and climb animation alone never count as arrival.
+    Use direct mode only for observed short crossings: each leg is limited to
+    30 m and may use the same bounded obstacle recovery instead of a navmesh detour.
     """
     points = [_point(p) for p in (*waypoints, destination)]
     if not 1 <= len(points) <= 32 or not isinstance(parkour, bool):
         raise ValueError("Use at most 32 route points and a boolean parkour option.")
+    if route_mode not in ("navmesh", "direct"):
+        raise ValueError("route_mode must be navmesh or direct.")
     if isinstance(max_climbs, bool) or not isinstance(max_climbs, int) or not 0 <= max_climbs <= 12:
         raise ValueError("max_climbs must be an integer from 0 through 12.")
     for name, value, low, high in (("radius", radius, .2, 5), ("timeout", timeout, 1, 600),
@@ -74,21 +78,29 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, radius=.75,
 
     def route(point):
         nonlocal owns_task
-        # Pinned SHVDNE default final heading is 40000; -1 disables timeout warping.
-        # ENAV_NEVER_ENTER_WATER=32. No persistent ped path settings are changed.
-        game.native("TASK_FOLLOW_NAV_MESH_TO_COORD", identity[0], *map(_float, point),
-                    _float(move_blend_ratio), -1, _float(.25), 32, _float(40000))
+        if route_mode == "direct":
+            heading = math.degrees(math.atan2(position[0] - point[0], point[1] - position[1])) % 360
+            game.native("TASK_GO_STRAIGHT_TO_COORD", identity[0], *map(_float, point),
+                        _float(move_blend_ratio), -1, _float(heading), _float(.25))
+        else:
+            # Pinned SHVDNE default final heading is 40000; -1 disables timeout warping.
+            # ENAV_NEVER_ENTER_WATER=32. No persistent ped path settings are changed.
+            game.native("TASK_FOLLOW_NAV_MESH_TO_COORD", identity[0], *map(_float, point),
+                        _float(move_blend_ratio), -1, _float(.25), 32, _float(40000))
         owns_task = True
 
     try:
         _, player, position = observe()
         if not settled(player) or player["inCover"]:
             ctx.uncertain("Start navigation settled on foot and out of cover.")
+        if route_mode == "direct" and any(math.dist(a, b) > 30 for a, b in zip([position, *points], points)):
+            raise ValueError("Direct crossings require observed route legs no longer than 30 m.")
         game.action("resume")
         for index, goal in enumerate(points):
             route(goal)
             anchor, moved_at = position, time.monotonic()
             best = math.dist(position, goal)
+            direct_best = best
             visited = {tuple(round(v / 2) for v in position)}
             while True:
                 _, player, position = observe()
@@ -97,7 +109,9 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, radius=.75,
                     clear()
                     ctx.progress("Reached navigation waypoint", waypoint=index, position=position, remaining=remaining)
                     break
-                if math.dist(position, anchor) >= .5:
+                if route_mode == "direct" and remaining < direct_best - .5:
+                    direct_best, moved_at = remaining, time.monotonic()
+                elif route_mode == "navmesh" and math.dist(position, anchor) >= .5:
                     anchor, moved_at = position, time.monotonic()
                 cell = tuple(round(v / 2) for v in position)
                 if remaining < best - 1 or (cell not in visited and len(visited) < 512):
@@ -116,17 +130,34 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, radius=.75,
                 if horizontal < .2:
                     ctx.uncertain("Destination is on another level; supply an observed stair, ladder or climb approach.")
                 yaw = (math.degrees(math.atan2(dx, dy)) + player["entity"]["rotation"]["z"] + 180) % 360 - 180
-                # One forward probe only on a stall, not a costly scan on every poll.
+                # A narrow fan catches a fence edge blocking the ped's body even
+                # when the centre ray passes through the adjacent opening.
                 sensed, player, position = observe(probeHeight=.25,
-                    rays=[{"yaw": yaw, "pitch": 0, "distance": min(6, horizontal)}])
-                hit = sensed["sections"]["probes"][0]
-                if not hit["hit"] or hit["position"] is None:
+                    rays=[{"yaw": (yaw + offset + 180) % 360 - 180, "pitch": 0,
+                           "distance": min(6, horizontal)} for offset in (0, -20, 20)])
+                probes = sensed["sections"]["probes"]
+                hit = next((p for p in probes if p["hit"] and p["position"] is not None), None)
+                if hit is None:
+                    # Entity origin is near the pelvis. The upper fan can pass
+                    # over a low garden fence that still blocks walking.
+                    sensed, player, position = observe(probeHeight=-.4,
+                        rays=[{"yaw": (yaw + offset + 180) % 360 - 180, "pitch": 0,
+                               "distance": min(6, horizontal)} for offset in (0, -20, 20)])
+                    probes = [*probes, *sensed["sections"]["probes"]]
+                    hit = next((p for p in probes if p["hit"] and p["position"] is not None), None)
+                ctx.log("navigation-obstacle-probe", waypoint=index, position=position, goal=goal, probes=probes)
+                if hit is None:
                     ctx.uncertain("No nearby obstacle was observed; inspect the route or add an approach waypoint.")
                 obstacle = _point(hit["position"])
                 entity = hit["entity"]
                 if entity and game.native("GET_ENTITY_TYPE", entity, returns="int") != 3:
                     ctx.uncertain("A ped or vehicle blocks the route; do not climb a moving actor.")
-                direction = (dx / horizontal, dy / horizontal)
+                dx, dy = obstacle[0] - position[0], obstacle[1] - position[1]
+                length = math.hypot(dx, dy)
+                if length < .05:
+                    ctx.uncertain("Obstacle probe starts inside collision; inspect a clear approach.")
+                direction = (dx / length, dy / length)
+                facing_point = (obstacle[0] + direction[0], obstacle[1] + direction[1], goal[2])
                 clear()
                 if math.hypot(obstacle[0] - position[0], obstacle[1] - position[1]) > 1.6:
                     approach = (obstacle[0] - direction[0] * .8,
@@ -143,7 +174,7 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, radius=.75,
                         _, player, position = observe()
                     clear()
                 # Turn naturally before asking the engine to find a nearby climbable edge.
-                game.native("TASK_TURN_PED_TO_FACE_COORD", identity[0], *map(_float, goal), 500)
+                game.native("TASK_TURN_PED_TO_FACE_COORD", identity[0], *map(_float, facing_point), 500)
                 owns_task = True
                 turn_deadline = time.monotonic() + .65
                 while time.monotonic() < turn_deadline:
@@ -151,7 +182,8 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, radius=.75,
                     _, player, position = observe()
                 if not settled(player):
                     ctx.uncertain("Player became unstable before the obstacle attempt.")
-                facing = (math.degrees(math.atan2(dx, dy)) + player["entity"]["rotation"]["z"] + 180) % 360 - 180
+                facing = (math.degrees(math.atan2(facing_point[0] - position[0], facing_point[1] - position[1]))
+                          + player["entity"]["rotation"]["z"] + 180) % 360 - 180
                 if abs(facing) > 35:
                     ctx.uncertain("Player did not face the obstacle; inspect the approach before jumping.")
                 before, before_distance = position, math.dist(position, goal)
@@ -178,6 +210,7 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, radius=.75,
                         displacement=math.dist(before, position), remaining=math.dist(position, goal))
                 route(goal)
                 anchor, moved_at = position, time.monotonic()
+                direct_best = math.dist(position, goal)
         return {"arrived": True, "position": dict(zip(("x", "y", "z"), position)),
                 "remaining": math.dist(position, points[-1]), "waypoints": len(points), "climbAttempts": climbs}
     except UncertainOutcome:

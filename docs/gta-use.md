@@ -221,6 +221,20 @@ Durations are frame-granular, 1–30000 ms. Wall-clock controls can be used for 
 but they still need SHVDNE ticks. Simulation stalls fail after a bounded wait.
 
 aim tracks the specified ped bone every frame using observed camera rotation.
+For vehicles and props it tracks the entity origin instead. Optional `height`
+adds a world-Z offset (-20..20 metres) to either target; choose a visible point
+instead of assuming an entity origin is above the road or an obstruction.
+Vehicle occupants also receive VehicleAim/VehicleAttack inputs. `warmupMs`
+(default 0, at most `ms`) keeps aim held without firing during the first part of
+the same action; `ms` includes that interval. For example,
+`game.action("aim", entity=car, height=1.5, warmupMs=1000, ms=2200,
+shoot=True, requireAimTarget=True)` provides continuous preparation and gated
+fire. Observe ammo and entity health; vehicle body/engine health alone can miss
+a bullet hit. The interval is tuning, not a guarantee of readiness or a hit.
+Check `session.phoneCall` and the selected weapon first: an incoming call can
+interrupt vehicle weapon use. Handle mission calls according to the objective.
+For a rider, target the ped's bone rather than the bike's origin; an aim match
+on the rider does not satisfy a fire gate aimed at the bike.
 Firing requires line of sight; a disappeared/dead target ends tracking.
 It does not find cover, select enemies or change health. Python decides those
 policies from observed state, and should verify cover before firing.
@@ -360,8 +374,10 @@ evidence.
 
 `gta_use.navigation.navigate_to(ctx, destination, waypoints=(), parkour=True)`
 provides bounded on-foot access routing using the existing native bridge. It
-starts a normal navmesh run, checks player progress and inspects one obstacle
-probe only after a stall. A nearby static obstacle can trigger an approach,
+starts a normal navmesh run, checks player progress and inspects a narrow three-ray obstacle
+fan only after a stall. If the upper fan misses, a lower fan checks for low
+fences: at most six probes per recovery, none during ordinary movement.
+A nearby static obstacle can trigger an approach,
 natural turn and GTA climb/vault task; the helper then observes landing and
 resumes the route. It uses no C# compilation or timeout warp. Repeated failed
 climbs, state/control changes and uncertain receipts stop for inspection.
@@ -370,6 +386,13 @@ far-side waypoints beyond that radius when crossing a fence. It cannot discover
 every mission route or guarantee arbitrary walls, ladders and gaps are traversable.
 Success returns arrival evidence and leaves simulation running, so a policy can
 continue to normal bike/car entry. The segment runner pauses on completion.
+
+Default `route_mode="navmesh"` allows GTA to take a detour. For an explicitly
+observed fence shortcut, `route_mode="direct"` uses straight movement and the
+same bounded climb recovery, with each route leg limited to 30 m. Position
+oscillation cannot postpone recovery when it makes no progress toward the goal.
+Choose a crossing through the panel and a visible landing, away from moving gate
+hinges; this mode does not plan around buildings, water or cliffs.
 
 Use `tools/gta_use/examples/navigate_to.py` with JSON `GTA_USE_DESTINATION` and
 optional `GTA_USE_WAYPOINTS` for a standalone route. Configurable bounds include
@@ -396,11 +419,38 @@ claiming a mission passed. A
 normal cover input worked in the live mission where the NPC cover task did not;
 moving along a cover edge was necessary for rooftop sightlines.
 
-`tools/gta_use/examples/drive_to.py` accepts a JSON `GTA_USE_DESTINATION` with x/y/z
-coordinates and checks occupancy, condition, position and route progress. It is
-a starting policy, not a promise that GTA's pathfinder can navigate every chase
-or entrance. New road cells count as progress to allow detours; revisiting the
-same cells indefinitely does not keep the watchdog alive.
+`gta_use.driving.drive_to(ctx, destination)` keeps a road trip in one continuous
+policy. The default alerted mode (`786469`) avoids traffic and ignores lights
+while retaining braking. It requests 28 m/s, slows to 6 m/s near the goal and
+requires distance <=5 m and speed <=1.5 m/s before reporting arrival. Tune speed
+and radius for the vehicle and scene. Player/vehicle observations run at 2.5 Hz;
+no C# compilation or repeated route submission is needed. A 12-second motion
+stall or a finite overall deadline stops with evidence. New road cells allow
+detours; bounded cell tracking prevents endless revisits from resetting progress.
+The callback `on_tick(ctx, state)` can request a policy transition without a model
+handoff. It must not replace the helper's driving task.
+
+`pursue_vehicle(ctx, rider, vehicle, rider_model=..., vehicle_model=...)` uses a
+moving-target task and checks the identified rider continuously. Desired separation
+defaults to 8 m. Its `on_tick(ctx, state, target)` supports bounded engagement
+inside the chase; it does not stop simply for reaching shooting distance. Closing
+or target-health reduction counts as progress; constant-gap road travel does not.
+It stops after 25 seconds without effect or 180 seconds overall by default.
+Rider exit/death returns a transition, not a mission-completion claim. Vehicle
+shooting remains subject to live verification; Attack receipts alone prove nothing.
+
+Both helpers return evidence and leave simulation running for the next action.
+`drive_to` returns `transition` if mission control or a cutscene takes over and
+preserves the mission's tasks. `wait_for_control(ctx, timeout=90)` then observes
+cutscene playback and control return, allowing the mission flag to clear. A
+Mission Passed screenshot is still required. These helpers do not guarantee
+pathfinder success at arbitrary entrances or select the mission's intended route.
+The example `tools/gta_use/examples/drive_to.py` reads JSON `GTA_USE_DESTINATION`.
+
+Native contracts: [driving flags](https://github.com/citizenfx/natives/blob/master/TASK/SetDriveTaskDrivingStyle.md),
+[long-range driving](https://github.com/citizenfx/natives/blob/master/TASK/TaskVehicleDriveToCoordLongrange.md),
+[cruise speed](https://github.com/citizenfx/natives/blob/master/TASK/SetDriveTaskCruiseSpeed.md),
+and [vehicle chase](https://github.com/citizenfx/natives/blob/master/TASK/TaskVehicleChase.md).
 
 Run either with the prepared interpreter: `python -m gta_use run <script> --process <PID> --timeout 180
 --stuck-timeout 30 --check-timeout 10`. Both files are included in the package's

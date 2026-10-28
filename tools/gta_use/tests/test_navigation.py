@@ -21,7 +21,8 @@ def observation(y=0, z=0, **flags):
 
 class ObservedTraversal(ObservedGame):
     """Explicit engine observations after submitted tasks, with no simulated motion."""
-    def __init__(self, root, routes, climbs=(), probe=None, uncertain_climb=False, approach=()):
+    def __init__(self, root, routes, climbs=(), probe=None, uncertain_climb=False, approach=(),
+                 route_name="TASK_FOLLOW_NAV_MESH_TO_COORD", low_probe=None):
         super().__init__(root)
         self.observations = deque([observation()])
         self.routes = deque(routes)
@@ -29,6 +30,8 @@ class ObservedTraversal(ObservedGame):
         self.probe = probe or dict(hit=True, entity=0, position=dict(x=0, y=1, z=.25), distance=1)
         self.uncertain_climb = uncertain_climb
         self.approach = approach
+        self.route_name = route_name
+        self.low_probe = low_probe
 
     def request(self, envelope):
         self.requests.append(envelope)
@@ -38,13 +41,16 @@ class ObservedTraversal(ObservedGame):
             if len(self.observations) > 1:
                 self.observations.popleft()
             if "probes" in envelope.get("sections", []):
-                result = dict(result, sections=dict(result["sections"], probes=[self.probe]))
+                probes = self.probe if isinstance(self.probe, list) else [self.probe]
+                if envelope.get("probeHeight", 0) < 0 and self.low_probe is not None:
+                    probes = [self.low_probe]
+                result = dict(result, sections=dict(result["sections"], probes=probes))
         elif envelope["op"] == "action":
             step = envelope["steps"][0]
             value = None
             if step["op"] == "native":
                 name = step["name"]
-                if name == "TASK_FOLLOW_NAV_MESH_TO_COORD" and self.routes:
+                if name == self.route_name and self.routes:
                     self.observations = deque(self.routes.popleft())
                 elif name == "TASK_GO_STRAIGHT_TO_COORD" and self.approach:
                     self.observations = deque(self.approach)
@@ -71,8 +77,9 @@ class NavigationScenarios(unittest.TestCase):
         self.storage = tempfile.TemporaryDirectory(prefix="GTAVMods-navigation-test-")
         self.root = Path(self.storage.name)
 
-    def exercise(self, routes, climbs=(), probe=None, uncertain_climb=False, destination=None, options="", approach=()):
-        self.game = ObservedTraversal(self.root, routes, climbs, probe, uncertain_climb, approach)
+    def exercise(self, routes, climbs=(), probe=None, uncertain_climb=False, destination=None, options="", approach=(),
+                 route_name="TASK_FOLLOW_NAV_MESH_TO_COORD", low_probe=None):
+        self.game = ObservedTraversal(self.root, routes, climbs, probe, uncertain_climb, approach, route_name, low_probe)
         self.start_server()
         point = destination or dict(x=0, y=4, z=0)
         source = f'''from gta_use.navigation import navigate_to
@@ -121,6 +128,44 @@ def run(ctx):
         self.assertEqual(2, sum(n["name"] == "TASK_CLIMB" for n in self.natives()))
         self.assertFalse(any(e["event"] in ("checkpoint", "progress") for e in self.events()))
         self.assertEqual("CLEAR_PED_TASKS", self.natives()[-1]["name"])
+
+    def test_observed_direct_crossing_climbs_instead_of_requesting_a_navmesh_detour(self):
+        # Explicit engine observations: the ped shuffles against an edge while
+        # the centre ray misses it. Motion alone must not postpone recovery.
+        result, outcome = self.exercise([[observation(y) for y in (0, -1) * 20]],
+            probe=[dict(hit=False, entity=None, position=None, distance=None),
+                   dict(hit=True, entity=0, position=dict(x=0, y=1, z=.25), distance=1)],
+            climbs=[[observation(1, 1, climbing=True, inAir=True), observation(4)]],
+            options=", route_mode='direct'", route_name="TASK_GO_STRAIGHT_TO_COORD")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, outcome["evidence"]["climbAttempts"])
+        self.assertEqual(dict(x=0, y=4, z=0), outcome["evidence"]["position"])
+        self.assertFalse(any(n["name"] == "TASK_FOLLOW_NAV_MESH_TO_COORD" for n in self.natives()))
+        path = self.natives()[0]
+        self.assertEqual("TASK_GO_STRAIGHT_TO_COORD", path["name"])
+        self.assertEqual(-1, path["args"][5], "Direct crossing may not warp after a timeout.")
+        scan = next(r for r in self.game.requests if "probes" in r.get("sections", []))
+        self.assertEqual(3, len(scan["rays"]), "A bounded fan must cover the body's edge collision.")
+
+    def test_direct_mode_rejects_cross_town_travel_before_moving(self):
+        result, outcome = self.exercise([], destination=dict(x=0, y=100, z=0), options=", route_mode='direct'")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertFalse(self.natives())
+        self.assertIn("no longer than 30 m", (self.root / "run/stderr.log").read_text())
+
+    def test_low_fence_gets_a_lower_probe_before_normal_vault_and_observed_landing(self):
+        result, outcome = self.exercise([[observation()]],
+            probe=dict(hit=False, entity=None, position=None, distance=None),
+            low_probe=dict(hit=True, entity=0, position=dict(x=0, y=1, z=-.4), distance=1),
+            climbs=[[observation(1, 1, vaulting=True, inAir=True), observation(4)]],
+            options=", route_mode='direct'", route_name="TASK_GO_STRAIGHT_TO_COORD")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, outcome["evidence"]["climbAttempts"])
+        scans = [r for r in self.game.requests if "probes" in r.get("sections", [])]
+        self.assertEqual(2, len(scans))
+        self.assertGreater(scans[0]["probeHeight"], 0)
+        self.assertLess(scans[1]["probeHeight"], 0)
 
     def test_observed_obstacle_beyond_reach_gets_a_bounded_approach_before_climbing(self):
         result, outcome = self.exercise([[observation()]],

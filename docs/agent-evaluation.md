@@ -47,6 +47,132 @@ patch was inspected before applying the narrow documentation and policy changes.
 
 ## Changes from the Terra findings
 
+### Later assisted continuation: mission completed
+
+The separate Terra 6.1 Max continuation subsequently captured **Mission Passed:
+Repossession** on 2026-10-28 at 17:59 UTC. The parent inspected the image
+`artifacts/terra-61-max-continuation/mission-passed-repossession.png`; its SHA-256
+is `42017a22b35cb3dc3b6ca2f73aa1757651bf25a5b850e925bffef01032019de7`.
+This does not change either initial trial's result above.
+
+| Continuation metric, through Mission Passed | Observed result |
+| --- | --- |
+| First run start through run 074 end | 3h 42m 8s (14:17:11–17:59:20 UTC) |
+| Sum of runner elapsed time | 49m 43s |
+| Runs / checkpoint results / failed results | 74 / 46 / 28 |
+| Actual GTA checkpoint retries | 1 (biker escaped) |
+| Managed script reloads | 1 (C# compilation budget) |
+| Separate parent live diagnostics | 7 cover-fire runs, including one attacker defeat |
+
+Times come from retained `run.json.started` and `result.json.elapsedSeconds`,
+with a reproducible per-run export in `parent-mission-timing.json`. Runner time
+includes I/O/waits; the remaining wall time includes reasoning, tool calls,
+inspection and pauses. Post-mission helper tests are excluded. User assistance
+included vehicle-first travel, normal carjacking, and the fence/bike pursuit route.
+The parent also gave API/tactical guidance and initially misdirected vehicle
+selection before the intended route was established. This is assisted completion.
+
+### Pursuit and return efficiency findings
+
+Repeated short pursuit/fire segments handed control back to the model at about
+25 m separation instead of continuing engagement. Runs 063/064 requested 30/36
+permitted firing frames but spent no rounds; an earlier round damaged the bike
+without reducing rider health. The cause of those no-shot windows remains
+unresolved. A close native chase eventually observed the rider dead off the bike;
+the exact cause was not captured and is not attributed to a shot or impact.
+
+The prolonged chase produced a **10,136 m** GPS return route. Return runs 069–071
+took **705.6 + 337.3 + 158.2 seconds**, about 20 minutes of runner time before
+inter-run pauses. Stopping for traffic/lights and conservative cruise speeds
+contributed. A 35-second timer treated a red light as a stall; a later junction
+barely moved for over a minute. The ending cutscene lasted 26.6 seconds, but a
+25-second approach timer paused its control-return phase. A subsequent observer
+incorrectly required the mission flag still to be set.
+
+The Python SDK now supplies continuous `drive_to`, `pursue_vehicle` and
+`wait_for_control` helpers. Driving defaults to alerted avoidance with braking
+but no light waits, slows near the destination and verifies a stopped arrival.
+Pursuit uses a moving target, keeps an engagement callback in the same policy and
+ends on bounded lack of closing/damage rather than counting road travel as success.
+Transition observation follows cutscene playback and permits a cleared mission
+flag. These helpers use the existing native bridge without a DLL deployment or
+repeated C# compilation. Their contract is in the skill and `docs/gta-use.md`.
+Live optimization measurements are separate from the completed mission baseline;
+an integration test or requested speed alone does not establish a faster mission.
+
+Post-mission run 091 compared the same A-to-B endpoints with the prior 16 m/s,
+traffic-light-aware style and the new 28 m/s alerted style. Results were 29.688 s
+versus 29.318 s. Observed paths were 170.70 m versus 294.73 m, so heading,
+traffic and route choice confound the comparison; this does **not** establish a
+material elapsed-time improvement. The new leg caused no additional vehicle
+damage and Franklin retained 200 health. Continuous control removes model
+handoffs, but the full optimized mission has not been replayed for a speed claim.
+
+Vehicle-fire diagnostics 089/090 separated control delivery from actual effect.
+Holding both normal and vehicle aim controls through preparation spent one round;
+raising the point to 1.5 m above the selected car's origin then produced 75 target
+matches in 78 frames and reduced its entity health from 1000 to 974. Body/engine
+health stayed 1000. A three-second `TASK_DRIVE_BY` attempt became active but spent
+no ammunition. These are stationary-car observations, not moving-rider accuracy.
+The general `aim` command now supplies vehicle inputs, a bounded `warmupMs`
+interval and a `height` offset without a custom C# controller; its target/LOS
+fire gate remains intact.
+
+The navigation helper reached two live destinations with full player health,
+but GTA routed around the open access in both directions. Those are valid plain
+navigation observations, not verification of the bounded climb-recovery path.
+The test scripts correctly failed their stronger climb assertion. Evidence is in
+continuation runs 078/079; automatic climb recovery remains unverified there.
+
+### Final packaged controls and helper validation
+
+After a backed-up deployment and fresh game launch, parent run 018 used the
+packaged `aim` command with a 1-second warm-up and 2.2-second total interval.
+It recorded 38 matching/Attack frames, spent one round and reduced the selected
+stationary car's entity health from 1000 to 974. Run 017 had instead been
+interrupted by an incoming Simeon phone call. The guide now checks phone state,
+weapon selection and the intended target identity before repeated firing.
+
+In parent run 021, `pursue_vehicle` remained active while a gated ped-bone aim
+interval spent three rounds and reduced the selected rider's health from 200 to
+110. The car moved only 0.905 m and was nearly stopped afterward; the stricter
+moving-fire predicate correctly failed. Subsequent rider death occurred with no
+new Attack requests or ammo use, so its cause is not assigned to another shot.
+This verifies vehicle-seat fire during a chase task, not sustained accuracy at
+speed. Run 020's earlier checkpoint label is rejected as hit evidence: its gate
+requested zero Attack frames, despite ammo loss and a one-point bike-health
+change. Labels and incidental damage do not establish successful aimed fire.
+These isolated diagnostics temporarily supplied a pistol, removed it in cleanup,
+and are separate from ordinary mission equipment and mission-completion evidence.
+
+Parent run 013 verified the actual navigation recovery helper over a low fence.
+The original upper probe missed the fence, so recovery now uses a lower fan only
+when the upper fan misses. `route_mode="direct"` supports an observed short
+crossing, limited to 30 m per leg, and does not count shuffling as route progress.
+Two bounded climb attempts produced an observed climb and settled far-side arrival
+in 20.198 seconds, 0.629 m from the destination, with health unchanged at 200.
+Before/during/after screenshots and explicit climbing observations are retained in
+`artifacts/parent-efficiency/run-013-low-fence`. The tested navigation source hash
+is `b3cce8311ba30c48597e498396d90cfafdf04ef70da46f75a36cde75967b98cc`.
+Earlier route-around and moving-gate failures remain in the trace. This is one
+verified low-fence crossing, not a claim of arbitrary parkour capability.
+
+The final full build/package workflow passed **335 C#**, **41 Python** and
+**8 Rust** cases. Executable C# coverage remains 100%: GameBridge 1108/1108 lines
+and 613/613 branches; ModUtils 274/274 and 90/90; Thor 1496/1496 and 610/610.
+Coverage evidence is under `artifacts/coverage/20261028-191824-825f497bbc7a486da6ad30f849e34a4b`.
+Scenarios cover continuous pursuit and delivery, stopped arrival, no-effect
+deadlines, cutscene handoff, identity/health changes, uncertain receipts, vehicle
+aim warm-up and gate behavior, and explicit low-fence probe/climb observations.
+
+GTA exited normally after Autosave and Pause Game On Focus Loss were restored
+to On. Both original Story save hashes and the full graphics-settings hash still
+match their pretest values. No account/profile configuration was replaced.
+Failed diagnostic policies and the cleanup respawn are retained separately from
+mission retries; the test session was discarded without saving its gameplay state.
+
+### Initial follow-up changes
+
 - `aim` now returns constant-space frame counts and the last observed LOS,
   aim-target handle and requested Attack state. A snapshot taken after releasing
   aim can miss what happened during the action; counters preserve that evidence

@@ -85,6 +85,39 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
 
         [TestMethod]
+        public void VehicleFireHoldsAimThroughPreparationTracksRaisedTargetAndKeepsTheFireGate()
+        {
+            using (var s = new AgentScene())
+            {
+                s.Game.Entity(10).InVehicle = true;
+                s.Game.Entity(20).Position = new Vector3(0, 10, 0);
+                s.Game.Native.Returns(Hash.GET_ENTITY_TYPE, 2);
+                s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_HEADING, 0f);
+                s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH, 0f);
+                s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, true);
+                s.Game.Outputs.AimValid = true; s.Game.Outputs.AimEntity = 20;
+                Assert.AreEqual(true, s.Batch(Step("aim", ("entity", 20), ("height", 10), ("warmupMs", 100),
+                    ("ms", 400), ("shoot", true), ("requireAimTarget", true)))["ok"]);
+                s.Frame(); s.Frame(99);
+                Assert.AreEqual(2, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAim));
+                Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && ((int)c.Arguments[1] == (int)Control.Attack || (int)c.Arguments[1] == (int)Control.VehicleAttack)));
+                Assert.AreEqual(45f, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAMEPLAY_CAM_RELATIVE_PITCH).Arguments[0]);
+                Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.GET_PED_BONE_COORDS), "A vehicle must not be queried as a ped skeleton.");
+                s.Frame(1);
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAttack));
+                s.Game.Outputs.AimEntity = 30; s.Frame(50);
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAttack));
+                s.Frame(250);
+                var result = (System.Collections.Generic.Dictionary<string, object>)s.Results.Single()["result"];
+                Assert.AreEqual(1, result["attackRequestedFrames"]);
+                Assert.AreEqual(100, result["warmupMs"]);
+                int inputs = s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME);
+                s.Frame(100);
+                Assert.AreEqual(inputs, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+            }
+        }
+
+        [TestMethod]
         public void AimWithoutFireExpiresOrCancelsWithoutLeavingHeldControlsAndRejectsInvalidTargets()
         {
             using (var s = new AgentScene())
@@ -94,6 +127,8 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, true);
                 Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("shoot", "yes")))["ok"]);
                 Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("requireAimTarget", "yes")))["ok"]);
+                Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("ms", 10), ("warmupMs", 11)))["ok"]);
+                Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("height", 21)))["ok"]);
                 Assert.AreEqual(false, s.Batch(Step("aim"))["ok"]);
                 s.Batch(Step("aim", ("entity", 20), ("ms", 10))); s.Frame(); s.Frame(10);
                 StringAssert.Contains(s.Status, "completed");

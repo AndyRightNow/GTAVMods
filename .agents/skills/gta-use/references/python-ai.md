@@ -110,6 +110,89 @@ also a reason to reconsider transport, not just generate more foot waypoints.
 Handle expected calls and objective changes within the policy rather than
 starting a new model interaction for every brief input.
 
+## Continuous driving and pursuit
+
+Use `gta_use.driving.drive_to(ctx, destination)` for an observed road destination.
+Its default speed is 28 m/s and its alerted driving style (`786469`) goes around
+traffic and ignores lights while retaining braking. Slow down deliberately for
+terrain, fragile vehicles or passengers; do not default to obeying traffic lights
+in a time-sensitive mission. Speed is a request to GTA's pathfinder, not a promise
+of safe cornering. It slows to 6 m/s near the goal and requires both distance
+within 5 m and speed at most 1.5 m/s. Tune those parameters from the scene.
+
+It submits one normal driving task, observes only player/vehicle at 2.5 Hz, and
+leaves the game running on return. Reaching an intermediate distance is not a
+reason to stop for the model. `on_tick(ctx, state)` may return True for a policy
+transition; callbacks must not replace the helper's driving task. A 12-second
+motion stall stops with evidence rather than resubmitting the same route. Select
+an accessible road/entrance waypoint after inspecting the obstruction; do not
+increase every timeout or force a straight-line path through unknown geometry.
+
+```python
+from gta_use.driving import drive_to, wait_for_control
+
+result = drive_to(ctx, destination, timeout=600)
+if result["outcome"] == "transition":
+    state = wait_for_control(ctx, timeout=90)
+# Continue the observed objective in this same policy. Capture the actual result;
+# control returning, a cleared mission flag, or arrival alone is not Mission Passed.
+```
+
+`drive_to` returns `arrived`, `transition` (mission control/cutscene), or `policy`.
+It does not clear a mission's new task during a cutscene. `wait_for_control`
+observes actual cutscene-time progression, allows the mission flag to clear,
+and keeps checking through the control-return phase. Give the enclosing runner
+an overall budget that includes the transition, instead of applying a short
+approach timeout to the ending cutscene.
+
+For an identified moving rider use `pursue_vehicle(ctx, rider, vehicle,
+rider_model=..., vehicle_model=..., on_tick=engage)`. This checks both entity
+identities, driver occupancy and health, uses one native moving-target chase,
+and continues through engagement range. The default desired separation is 8 m;
+it is a task request, not enforced collision clearance. Do not treat reaching
+25 m as a completed objective and hand back to the model while the rider escapes.
+`engage(ctx, state, target)` runs inside the same continuous loop; use bounded
+shooting/repositioning actions and return True only for a deliberate transition.
+It must not replace the driving task, hide uncertain receipts or loop indefinitely.
+The helper ends when the rider leaves the vehicle, control changes, or a policy
+predicate succeeds. None of those proves a mission pass.
+
+Closing distance or actual target-health loss resets the pursuit's 25-second
+no-effect budget. Road travel, repeated aim matches and requested Attack do not.
+Keep the overall chase deadline finite (180 s default); ordinary target movement
+belongs inside the controller. Use target identity rather than a selection-radius
+cutoff. The helper uses small native target queries and a player/vehicle pack;
+add expensive nearby/LOS/probe observations only at engagement cadence.
+
+The general `aim` command now adds VehicleAim/VehicleAttack when the player is
+seated. Use `warmupMs=1000, ms=2200` as a bounded starting interval to keep aim
+held through preparation before firing; the total includes warm-up. Ped targets
+use their bone; vehicles/props use their origin plus optional `height` in world-Z
+metres. Choose an observed visible point, for example `height=1.5` on the tested
+car. For a rider, target the ped's bone; aiming at the bike while the engine
+reports the rider correctly withholds fire. Check `session.phoneCall` and the
+selected weapon first: an incoming call can interrupt vehicle weapon use. Handle
+mission calls according to the objective rather than blindly cancelling them.
+Keep `requireAimTarget=True` for target confirmation. Inspect `describe --command aim`
+before using these parameters on an older installation. This is normal control
+input, not forced damage. One stationary-car test hit spent a round and reduced
+entity health from 1000 to 974 while body/engine health remained 1000. A later
+ped-bone interval during pursuit spent three rounds and reduced rider health
+from 200 to 110, but the car nearly stopped. Sustained accuracy at speed remains
+unverified. Neither aim matches nor incidental damage establish successful fire;
+correlate requested Attack, ammo and the intended target's health.
+
+Vehicle shooting has different timing from on-foot `aim`. The latter's aim and
+Attack receipts do not prove vehicle weapon discharge. Preserve enough continuous
+time for equipping/aiming and measure ammo spent AND the intended target's health
+across the interval. A shot into the bike is not a hit on the rider. After two
+bounded permitted windows with no ammo change, inspect the active vehicle weapon,
+controls and task interaction or switch a verified tactic; do not repeat dozens
+of half-second trials. A three-second TASK_DRIVE_BY diagnostic became active but spent no ammo; do not
+substitute it for verified player input. Any new native firing task requires live validation and
+explicit cancellation when the target or firing geometry changes.
+
+
 ## Run and climb short access routes
 
 Use `gta_use.navigation.navigate_to(ctx, destination, ...)` for a fixed on-foot
@@ -128,9 +211,17 @@ arrival = navigate_to(ctx, destination, waypoints=approach_points,
 ctx.checkpoint("access-route-reached", **arrival)
 ```
 
-It resumes once, submits a normal navmesh run with no timeout warp, and polls
-only player state. On a stall it reads the route result and one forward obstacle
-probe. A nearby static obstacle may trigger a short approach, natural turn and
+Default `route_mode="navmesh"` lets GTA route around obstacles. For an observed
+short fence crossing where that detour is undesirable, use `route_mode="direct"`
+with an approach and landing point across the panel, away from a gate hinge.
+Every direct leg is limited to 30 m. It uses normal straight movement and the
+same bounded climb recovery; shuffling without getting closer cannot reset the
+stall timer. A three-ray fan runs only on a stall; if it misses, a lower fan
+checks for low fences (at most six rays per recovery). If both miss, inspect
+and select a clearer crossing instead of repeating the same failed waypoint.
+Direct mode does not plan around buildings, water or cliffs; inspect the landing.
+It resumes once, submits the selected movement task with no timeout warp, and
+polls only player state. On a stall it reads the route result and bounded probes. A nearby static obstacle may trigger a short approach, natural turn and
 normal GTA climb/vault task, followed by observed landing and resumed routing.
 Task acceptance, an animation or an attempted climb is not arrival. It stops on
 bounded unsuccessful attempts, health/control/identity changes or uncertain I/O;
@@ -354,6 +445,7 @@ Keep failure artifacts so a successful retry does not erase the evidence.
 
 The Repossession test showed useful limits: cover input succeeded where an NPC
 cover task did not; rooftop shots needed cover-edge repositioning; hostile groups
-included animals; naive pursuit and a navmesh shortcut failed; vehicle shooting
-was not verified effective. Prefer the proven on-foot aim control or explicitly
-test a new mechanic instead of assuming native task acceptance proves success.
+included animals; naive pursuit and a navmesh shortcut failed. Later isolated
+tests verified vehicle-seat fire and a low-fence climb, with evidence limits in
+the evaluation report. Verify each mechanic in the current scene instead of
+assuming native task acceptance proves success.

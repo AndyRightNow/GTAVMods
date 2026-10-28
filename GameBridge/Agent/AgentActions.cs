@@ -22,16 +22,18 @@ namespace GTAVMods.Agent
                     object[] parameters = array.Cast<object>().Select(NativeArgument).ToArray();
                     return new ImmediateStep(() => world.Invoke(hash, result, parameters));
                 }));
-            registry.Register(new CommandDefinition("aim", "Track an observed ped bone every frame, optionally firing only with clear line of sight. Ends when the target disappears/dies or duration expires.",
-                new { entity = "ped handle", bone = "bone ID; default 31086 (head)", ms = "1..30000", shoot = "boolean; default false", requireAimTarget = "boolean; default false. Withhold Attack unless the engine aim target matches; unknown also withholds. Returns bounded frame observations, not hits." }, args => {
-                    Protocol.Fields(args, "entity", "bone", "ms", "shoot", "requireAimTarget");
+            registry.Register(new CommandDefinition("aim", "Track an observed entity every frame with on-foot or vehicle controls; optional aim-only warm-up before gated fire. Ends when target disappears/dies or duration expires.",
+                new { entity = "entity handle", bone = "ped bone ID; default 31086 (head); non-peds use entity origin", height = "world Z offset in metres; -20..20; default 0", ms = "1..30000 total duration including warmup", warmupMs = "0..ms aim-only preparation; default 0", shoot = "boolean; default false", requireAimTarget = "boolean; default false. Withhold Attack unless the engine aim target matches; unknown also withholds. Returns bounded frame observations, not hits." }, args => {
+                    Protocol.Fields(args, "entity", "bone", "height", "ms", "warmupMs", "shoot", "requireAimTarget");
                     if (!args.ContainsKey("entity")) throw new ArgumentException("Missing target entity.");
                     bool shoot = false;
                     if (args.TryGetValue("shoot", out var value)) shoot = value is bool flag ? flag : throw new ArgumentException("shoot must be boolean.");
                     bool requireAimTarget = false;
                     if (args.TryGetValue("requireAimTarget", out var gate)) requireAimTarget = gate is bool required ? required : throw new ArgumentException("requireAimTarget must be boolean.");
+                    int milliseconds = Protocol.Integer(args, "ms", 1, 30000, 300);
                     return new TrackingAim(world, Protocol.Integer(args, "entity", 1, int.MaxValue, 0), Protocol.Integer(args, "bone", 0, 65535, 31086), shoot, requireAimTarget,
-                        new TimedControls(world, control, clock, Protocol.Integer(args, "ms", 1, 30000, 300), Array.Empty<(int, int, float)>(), false));
+                        new TimedControls(world, control, clock, milliseconds, Array.Empty<(int, int, float)>(), false),
+                        Protocol.Integer(args, "warmupMs", 0, milliseconds, 0), (float)Protocol.Number(args, "height", -20, 20, 0));
                 }));
         }
         public static Hash NativeHash(string name)
@@ -67,20 +69,25 @@ namespace GTAVMods.Agent
         private readonly int target, bone;
         private readonly bool shoot, requireAimTarget;
         private readonly TimedControls duration;
+        private readonly int warmupMs;
+        private readonly float height;
+        private int? start;
         private AimObservation observation = new AimObservation(true, null, null, false);
         private int frames, lineOfSightFrames, aimTargetMatchFrames, unknownAimTargetFrames, attackRequestedFrames;
         private int inCoverFrames, aimingFromCoverFrames, weaponReadyFrames;
-        public TrackingAim(IAgentWorld world, int target, int bone, bool shoot, bool requireAimTarget, TimedControls duration)
-        { this.world = world; this.target = target; this.bone = bone; this.shoot = shoot; this.requireAimTarget = requireAimTarget; this.duration = duration; }
+        public TrackingAim(IAgentWorld world, int target, int bone, bool shoot, bool requireAimTarget, TimedControls duration, int warmupMs = 0, float height = 0)
+        { this.world = world; this.target = target; this.bone = bone; this.shoot = shoot; this.requireAimTarget = requireAimTarget; this.duration = duration; this.warmupMs = warmupMs; this.height = height; }
         public object Result => new { entity = target, targetAvailable = observation.Available, timing = duration.Result,
-            requireAimTarget, frames, lineOfSightFrames, aimTargetMatchFrames, unknownAimTargetFrames, attackRequestedFrames,
+            requireAimTarget, warmupMs, height, frames, lineOfSightFrames, aimTargetMatchFrames, unknownAimTargetFrames, attackRequestedFrames,
             inCoverFrames, aimingFromCoverFrames, weaponReadyFrames,
             last = new { targetAvailable = observation.Available, lineOfSight = observation.LineOfSight, aimTarget = observation.AimTarget, attackRequested = observation.AttackRequested,
                 inCover = observation.InCover, aimingFromCover = observation.AimingFromCover, weaponReady = observation.WeaponReady } };
         public bool Run()
         {
             if (duration.Run()) return true;
-            observation = world.AimAt(target, bone, shoot, requireAimTarget);
+            if (!start.HasValue) start = world.GameTime;
+            bool fire = shoot && unchecked((uint)(world.GameTime - start.Value)) >= warmupMs;
+            observation = world.AimAt(target, bone, fire, requireAimTarget, height);
             frames++;
             if (observation.LineOfSight == true) lineOfSightFrames++;
             if (observation.AimTarget == target) aimTargetMatchFrames++;

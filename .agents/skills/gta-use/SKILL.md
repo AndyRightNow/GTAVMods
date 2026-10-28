@@ -45,6 +45,8 @@ agent sandbox; an empty list there does not prove GTA exited. Use the host's
 verified PID and normal scoped execution approval when required. Never dump
 `service-<PID>.json`, which contains a bearer credential.
 
+Use `gta_use.driving.drive_to` and `pursue_vehicle` for continuous road travel and moving-target engagement. Their contracts and no-effect limits are in Python AI.
+
 For short on-foot access with bounded climb/vault recovery, use
 `gta_use.navigation.navigate_to`; its contract is in Python AI.
 For mission scripting, read [Python AI](references/python-ai.md) and consult
