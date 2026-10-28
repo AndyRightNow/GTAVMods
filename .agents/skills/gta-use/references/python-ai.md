@@ -79,6 +79,21 @@ be acquired. Mission-required vehicles, companions and current terrain still
 constrain the choice. A model name or driveable flag alone does not establish
 that a vehicle can leave its location.
 
+Check entry eligibility before moving. Driveability and door/driver access are
+separate: reject `CannotEnter` / `PlayerCannotEnter` for ordinary play, but do not
+exclude `CanBeBrokenInto` or an occupied seat merely because the vehicle is not
+unlocked and empty. Ordinary break-in/carjacking is allowed when its specific lock
+state permits it; inspect `GTA.VehicleLockStatus` in the pinned XML for conditional
+states. Estimate approach, entry and road-access time instead of selecting only
+unlocked cars or choosing solely by straight-line distance. Verify actual entry
+with a bounded attempt and try another eligible candidate if it fails; never
+warp or change locks to manufacture success.
+
+For a moving vehicle pursuit, cancel the previous on-foot follow task when the
+objective changes. On-foot motion should terminate at the selected acquisition
+vehicle, not chase the rider. Recheck the player's driver seat and target rider's
+current vehicle before submitting a chase, and monitor both during the segment.
+
 Keep acquisition, driving and arrival in a continuous bounded policy when the
 scene is understood: approach the vehicle locally, use normal entry/carjacking,
 verify the player is actually driving, submit a driving task, monitor progress,

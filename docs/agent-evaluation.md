@@ -175,6 +175,31 @@ validation and whitespace checks passed. Reuse is verified through the real
 command path with explicit engine observations; no new live latency or memory
 benchmark is claimed for this change.
 
+### Pursuit acquisition mistakes
+
+The user's next correction concerned Franklin running after the bike appeared.
+The trace distinguishes the actual tasks: `run-042` cleared its on-foot Lamar
+follow when the new marker appeared. `run-043` intended to enter a pursuit car,
+but proceeded after observing that the Penumbra about 7 m away was `CannotEnter`.
+It checked driveability and ignored entry eligibility, wasting about 20 seconds.
+
+`run-044` then rejected a driveable, empty Bison 34.78 m away with lock status
+`CanBeBrokenInto`, because its whitelist accepted only `None` or `Unlocked`.
+It instead submitted `EnterVehicle` for an unlocked Cavalcade 64.39 m away.
+The visible running was the approach to that farther car; no vehicle chase had
+started. The pinned SHVDNE XML explicitly distinguishes `CannotEnter` from
+`CanBeBrokenInto`, which permits breaking the window. The user had already allowed
+normal carjacking. These were selection-policy mistakes using available data,
+not evidence of a missing driving primitive. The Bison was a candidate for a
+bounded normal entry attempt, not proven reachable merely from its lock status.
+
+The parent sent that distinction to Terra and added it to the skill: assess entry
+eligibility before approach, allow ordinary theft when the lock state permits it,
+consider acquisition/road-access time and verify driver occupancy before pursuit.
+The second run ended with a state I/O timeout and unconfirmed pause; that alone
+does not establish its cause or prove a mission failure. Terra retains control of
+UI/state inspection and recovery. Failed traces remain outside Git.
+
 ## DeepSeek 1017 Max trial
 
 Evaluated on 2026-10-27–28 with DeepSeek Harness, DeepSeek-V4.1-Flash build **1017**,
