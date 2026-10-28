@@ -196,9 +196,11 @@ bounded normal entry attempt, not proven reachable merely from its lock status.
 The parent sent that distinction to Terra and added it to the skill: assess entry
 eligibility before approach, allow ordinary theft when the lock state permits it,
 consider acquisition/road-access time and verify driver occupancy before pursuit.
-The second run ended with a state I/O timeout and unconfirmed pause; that alone
-does not establish its cause or prove a mission failure. Terra retains control of
-UI/state inspection and recovery. Failed traces remain outside Git.
+The second run ended with a state I/O timeout and unconfirmed pause. Terra then
+inspected the visible game and recorded `MISSION FAILED: The biker escaped.`
+Its status records the first mission checkpoint retry. The timeout alone was
+insufficient to diagnose failure; the visible result supplied that evidence.
+Terra retains control of retry and recovery. Failed traces remain outside Git.
 
 ## DeepSeek 1017 Max trial
 
