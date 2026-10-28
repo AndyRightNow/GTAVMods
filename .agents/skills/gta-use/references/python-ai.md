@@ -114,8 +114,21 @@ omit optional arguments or inspect the loaded public overload and its defaults
 instead of assuming every XML symbol is callable.
 
 Submit a navigation task once per goal, then observe progress. The in-game C#
-compiler has a 128-attempt budget per managed session; state loops belong in
-Python and should use state packs, not compile new C# on every observation.
+compiler has a 128-compilation-attempt budget per managed session. Successfully
+compiled identical source is reused in current builds, but every explicit call
+still executes against fresh state; no action result is cached. Older deployments
+compile every call. Failed compilation attempts consume the budget; runtime
+failures do not require recompilation of successfully compiled source.
+
+State loops belong in Python and should use filtered packs or `game.native` for
+simple queries. For repeated compound observations, register one bounded read-only
+provider and poll its section. For a recurring batch guard with changing entity
+handles, register a parameterized namespaced command once through
+`GTAVMods.Agent.BridgeScript.Active.Commands` and pass handles as arguments.
+Do not interpolate changing coordinates/handles into new C# on each loop iteration;
+source reuse cannot prevent that from exhausting the budget. Keep an explicit
+reload/revalidation recovery path, and disable Thor again after reload for normal
+mission testing. Reload can change gameplay state, so record any resulting effects.
 A long route can continue while Python checks health, position and the goal.
 Avoid clear/reissue loops when the same task is making progress.
 For a moving vehicle target, also inspect `M:GTA.TaskInvoker.VehicleChase(GTA.Ped)`.

@@ -104,6 +104,55 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
 
         [TestMethod]
+        public void RepeatedConsoleActionsUseFreshObservationsAndExecuteAgainAfterNewCompilationIsExhausted()
+        {
+            const string code = "CONTEXT.World.Pause(true); CONTEXT.Print(CONTEXT.World.GameTime); return CONTEXT.World.GameTime;";
+            using (var s = new AgentScene(compilationLimit: 1))
+            {
+                Assert.AreEqual(true, s.Batch(Step("command", ("code", code)))["ok"]);
+                s.Frame();
+                Assert.AreEqual(0, s.Results.Single()["result"]);
+                StringAssert.Contains((string)s.Batch(Step("command", ("code", "return 8;")))["error"], "compilation budget");
+                s.Game.Host.GameTime = 125;
+                var repeated = s.Request("action", ("steps", new[] { Step("command", ("code", code)) }));
+                Assert.AreEqual(true, repeated["ok"], Protocol.Encode(repeated));
+                StringAssert.Contains(Protocol.Encode(repeated), "\"value\":125");
+                Assert.AreEqual(2, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED),
+                    "Reusing compiled code must execute the requested action again, not replay a prior result.");
+                s.Journal.Drain();
+                Assert.AreEqual(2, Directory.GetFiles(s.Root, "output-*.json").Length);
+            }
+            using (var next = new AgentScene(compilationLimit: 1))
+            {
+                next.Game.Host.GameTime = 900;
+                var fresh = next.Request("action", ("steps", new[] { Step("command", ("code", code)) }));
+                Assert.AreEqual(true, fresh["ok"], Protocol.Encode(fresh));
+                StringAssert.Contains(Protocol.Encode(fresh), "\"value\":900");
+                Assert.AreEqual(1, next.Game.Native.Calls.Count(c => c.Hash == Hash.SET_GAME_PAUSED),
+                    "A new bridge session must bind the command to its own world and output sink.");
+            }
+        }
+
+        [TestMethod]
+        public void RuntimeFailureCanBeRetriedAfterObservedRecoveryWithoutAnotherCompilation()
+        {
+            using (var s = new AgentScene(compilationLimit: 1))
+            {
+                const string code = "if (CONTEXT.World.GameTime == 0) throw new InvalidOperationException(\"world not ready\"); CONTEXT.World.Pause(false); return CONTEXT.World.GameTime;";
+                Assert.AreEqual(true, s.Batch(Step("command", ("code", code)))["ok"]);
+                s.Frame();
+                StringAssert.Contains(s.Status, "\"state\":\"failed\"");
+                StringAssert.Contains(s.Status, "world not ready");
+                Assert.AreEqual(true, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                s.Game.Host.GameTime = 50;
+                var recovered = s.Request("action", ("steps", new[] { Step("command", ("code", code)) }));
+                Assert.AreEqual(true, recovered["ok"], Protocol.Encode(recovered));
+                StringAssert.Contains(Protocol.Encode(recovered), "\"value\":50");
+                Assert.AreEqual(false, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+            }
+        }
+
+        [TestMethod]
         public void InvalidCSharpRejectsWholeBatchAndCompilationBudgetLeavesNormalControlsAvailable()
         {
             using (var s = new AgentScene(compilationLimit: 2))

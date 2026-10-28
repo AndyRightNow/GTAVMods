@@ -53,12 +53,15 @@ namespace GTAVMods.Agent
         private readonly CommandContext context;
         private readonly Func<IEnumerable<Assembly>> assemblies;
         private readonly int compilationLimit;
+        private readonly Dictionary<string, Func<object>> compiled = new Dictionary<string, Func<object>>(StringComparer.Ordinal);
         private int compilations;
         public CSharpCommands(CommandContext context, Func<IEnumerable<Assembly>> assemblies, int compilationLimit = 128)
         { this.context = context; this.assemblies = assemblies; this.compilationLimit = compilationLimit; }
         public Func<object> Compile(string code)
         {
-            if (++compilations > compilationLimit) throw new InvalidOperationException("C# compilation budget reached. Reload scripts before submitting more C#; ordinary controls remain available.");
+            if (compiled.TryGetValue(code, out var existing)) return existing;
+            if (compilations >= compilationLimit) throw new InvalidOperationException("C# compilation budget reached. Reuse previously compiled C#, use native/state operations, or reload scripts before submitting new C#; ordinary controls remain available.");
+            compilations++;
             var options = new CompilerParameters { GenerateInMemory = true, CompilerOptions = "/optimize /define:TRACE", TreatWarningsAsErrors = false };
             foreach (var assembly in assemblies())
             {
@@ -81,7 +84,9 @@ public static class AgentExpression {
                     throw new ArgumentException(string.Join(Environment.NewLine, result.Errors.Cast<CompilerError>().Where(e => !e.IsWarning).Select(e => e.ToString())));
                 var method = result.CompiledAssembly.GetType("AgentExpression").GetMethod("Run");
                 Func<object> invoke = () => method.Invoke(null, new object[] { context });
-                return () => context.Execute(invoke);
+                Func<object> execute = () => context.Execute(invoke);
+                compiled.Add(code, execute);
+                return execute;
             }
         }
     }

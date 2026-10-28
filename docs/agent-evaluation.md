@@ -146,6 +146,35 @@ The new package has not been deployed into the active mission; its additional
 observations are integration-tested, while the covered shot above used the
 previously deployed bridge and temporary diagnostic queries.
 
+### Continuation compilation-limit recovery
+
+Terra's later `run-039-combat-sweep` exhausted the deployed bridge's 128-attempt
+C# compilation budget. It repeatedly submitted C# for marker/target observations
+and geometry guards inside its Python loop, including identical source. The
+existing guidance called for state packs in observation loops, but the bridge
+also recompiled every identical command. Terra recovered with one managed reload,
+immediately paused the new session and disabled Thor. Its before/after capture
+reported the mission active, Franklin still in cover at 150 health, pistol ammo
+136 and 213 ms of elapsed game time. This is separate from a GTA mission checkpoint
+retry. After parent guidance about recurring queries, its next policy registered
+one temporary parameterized guard instead of compiling a new guard on every loop.
+
+The follow-up source reuses successfully compiled identical C# within its bridge
+session. It retains the compilation limit and executes each explicit submission
+against fresh state, with fresh side effects and output. It does not cache action
+results or replay failed actions. New-source compilation and failed compilations
+remain bounded; state providers, native queries and parameterized commands remain
+the preferred repeated-operation paths. Regression scenarios exercise changed
+observations, repeat mutations/output, session replacement and recovery after a
+runtime exception. This source has not been deployed into the running mission.
+
+The full build/test/package workflow passed **334 C#**, **15 Python** and
+**8 Rust** cases. Required C# executable coverage stayed at 100%: GameBridge
+1097/1097 lines and 603/603 branches, with Thor and ModUtils unchanged. Skill
+validation and whitespace checks passed. Reuse is verified through the real
+command path with explicit engine observations; no new live latency or memory
+benchmark is claimed for this change.
+
 ## DeepSeek 1017 Max trial
 
 Evaluated on 2026-10-27–28 with DeepSeek Harness, DeepSeek-V4.1-Flash build **1017**,

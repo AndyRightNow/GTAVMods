@@ -300,7 +300,17 @@ C# commands run on the script thread, with GTA, GTA.Math and GTA.Native imports
 and P/PED, PLAYER, V, POS aliases. Return structured values or CONTEXT.Print(value).
 Vectors/quaternions become numeric fields; game objects become handles without
 traversing native-backed properties. Console/Trace output goes to files.
-Compilation is bounded to 128 attempts per managed domain and output to 1 MiB.
+Compilation is bounded to 128 attempts per managed session and output to 1 MiB.
+Successfully compiled identical source reuses its executable delegate within that
+session, avoiding repeated compiler work and assembly allocation. Every explicit
+submission still executes again against the current world and records fresh
+output; no action results or failures are replayed. Reuse remains available after
+the compilation budget is exhausted. Invalid source consumes an attempt; changing
+the source requires another attempt. The cache retains at most 128 successful
+source/delegate pairs and is discarded with the bridge session.
+Prefer filtered state/native queries for polling, or register a bounded provider
+or parameterized command once for repeated compound work. Interpolating changing
+handles or coordinates into C# on every iteration still consumes new attempts.
 Keep arbitrary C# short and nonblocking: it cannot safely be preempted.
 
 Mods can register namespaced CommandDefinition operations on
