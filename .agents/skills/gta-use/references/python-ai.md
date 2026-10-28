@@ -70,7 +70,13 @@ observation/behavior is understood. The SDK is in
 [__main__.py](../../../../tools/gta_use/__main__.py).
 
 
-## Choose a vehicle before planning a travel route
+## Identify the mission route, then choose transport
+
+Identify the objective and intended access route before choosing transport. A
+short run through an alley or over a fence may be necessary to reach the relevant
+bike or car. Read fresh objective/companion/vehicle evidence and inspect a
+screenshot when the route is uncertain. Do not optimize a list of nearby cars
+before establishing where the current mission actually wants the player to go.
 
 Always prioritize vehicles for reaching a destination. Observe nearby vehicles
 and choose a suitable accessible car or bike; normal in-game carjacking is
@@ -103,6 +109,43 @@ when no usable vehicle or drivable route is available. A failed walking route is
 also a reason to reconsider transport, not just generate more foot waypoints.
 Handle expected calls and objective changes within the policy rather than
 starting a new model interaction for every brief input.
+
+## Run and climb short access routes
+
+Use `gta_use.navigation.navigate_to(ctx, destination, ...)` for a fixed on-foot
+destination with optional `waypoints=[{x,y,z}, ...]`. Supply freshly observed
+approach/far-side points; the helper does not infer mission objectives. For a
+fence, choose a reachable approach and a landing point beyond the fence by more
+than the arrival radius. A destination on another floor needs a stair/ladder/edge
+route, not a matching horizontal coordinate.
+
+```python
+from gta_use.navigation import navigate_to
+
+# Inside run(ctx), after identifying destination from current observations:
+arrival = navigate_to(ctx, destination, waypoints=approach_points,
+                      parkour=True, timeout=60, max_climbs=3)
+ctx.checkpoint("access-route-reached", **arrival)
+```
+
+It resumes once, submits a normal navmesh run with no timeout warp, and polls
+only player state. On a stall it reads the route result and one forward obstacle
+probe. A nearby static obstacle may trigger a short approach, natural turn and
+normal GTA climb/vault task, followed by observed landing and resumed routing.
+Task acceptance, an animation or an attempted climb is not arrival. It stops on
+bounded unsuccessful attempts, health/control/identity changes or uncertain I/O;
+no blind replay, forced movement, lock change or teleport is used. No C# compilation
+is needed. Successful return leaves the game running for the next policy action;
+the enclosing runner pauses when the segment ends.
+
+Defaults: `radius=.75`, `stall_timeout=2.5`, `climb_timeout=7`,
+`minimum_health=100`, `move_blend_ratio=2.5`, `check_interval=.2` seconds for
+polling. `parkour=False` stops at a stall; adjust limits deliberately for the scene.
+This is bounded recovery using GTA's own climb detection, not a guarantee that
+any fence, wall, rooftop, ladder or gap can be traversed. Inspect and change the
+route after failure. For a standalone run use
+[navigate_to.py](../../../../tools/gta_use/examples/navigate_to.py) with JSON
+`GTA_USE_DESTINATION` and optional `GTA_USE_WAYPOINTS`.
 
 ## Find a task without guessing its ABI
 

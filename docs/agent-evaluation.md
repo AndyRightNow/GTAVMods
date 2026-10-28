@@ -202,6 +202,32 @@ Its status records the first mission checkpoint retry. The timeout alone was
 insufficient to diagnose failure; the visible result supplied that evidence.
 Terra retains control of retry and recovery. Failed traces remain outside Git.
 
+The user then corrected the route itself: run to the fence, climb it and get the
+bike. The parent had diagnosed lock-state selection without establishing the
+intended mission route and had reinforced arbitrary car acquisition. That was
+host misdirection; the lock-state findings did not establish the right mission
+plan. The route correction is explicit user assistance, not autonomous reasoning
+by either agent. The skill now puts objective/access-route identification before
+transport selection, while preserving vehicle travel for the appropriate legs.
+
+The requested general follow-up adds a supervised Python `navigate_to` helper
+for short fixed destinations and optional waypoints, with observed progress,
+bounded obstacle approach/climb recovery and settled 3D arrival. It uses existing
+native operations and works without replacing the active game's DLL. Automated
+scenarios supply explicit engine observations through the real Rust/Python stack;
+the helper's live traversal evidence must be recorded separately from earlier
+one-off fence crossings.
+
+The full build/test/package workflow passed **334 C#**, **28 Python** and
+**8 Rust** cases. The 13 new navigation scenarios cover open/waypoint routes,
+observed fence traversal and landing, bounded approach and failed climbs,
+disabled parkour, actor/missing-obstacle guards, vertical-level mismatch,
+health/mission transitions, unfinished climbing, uncertain receipts and invalid
+coordinates. C# coverage remains at 100% with the same 1097/603 GameBridge line/
+branch counts. Skill validation and whitespace checks passed. Live verification
+of this helper is still pending the continuing task; its earlier manual-control
+fence crossing is not counted as a helper test.
+
 ## DeepSeek 1017 Max trial
 
 Evaluated on 2026-10-27–28 with DeepSeek Harness, DeepSeek-V4.1-Flash build **1017**,

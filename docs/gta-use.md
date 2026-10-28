@@ -358,6 +358,34 @@ evidence.
 
 ## Python policy examples
 
+`gta_use.navigation.navigate_to(ctx, destination, waypoints=(), parkour=True)`
+provides bounded on-foot access routing using the existing native bridge. It
+starts a normal navmesh run, checks player progress and inspects one obstacle
+probe only after a stall. A nearby static obstacle can trigger an approach,
+natural turn and GTA climb/vault task; the helper then observes landing and
+resumes the route. It uses no C# compilation or timeout warp. Repeated failed
+climbs, state/control changes and uncertain receipts stop for inspection.
+Arrival requires a settled player within a 3D radius (default 0.75 m); choose
+far-side waypoints beyond that radius when crossing a fence. It cannot discover
+every mission route or guarantee arbitrary walls, ladders and gaps are traversable.
+Success returns arrival evidence and leaves simulation running, so a policy can
+continue to normal bike/car entry. The segment runner pauses on completion.
+
+Use `tools/gta_use/examples/navigate_to.py` with JSON `GTA_USE_DESTINATION` and
+optional `GTA_USE_WAYPOINTS` for a standalone route. Configurable bounds include
+`timeout=60`, `stall_timeout=2.5`, `max_climbs=3`, `climb_timeout=7`,
+`minimum_health=100`, `move_blend_ratio=2.5` and `check_interval=.2`.
+State polling reads only the player; no nearby enumeration, inventory scan or
+LOS fan is needed during unobstructed movement. Vehicle-first travel still allows
+short on-foot fence/entrance access to the actual mission vehicle.
+
+Native contracts: [navmesh task](https://github.com/citizenfx/natives/blob/master/TASK/TaskFollowNavMeshToCoord.md),
+[short straight approach](https://github.com/citizenfx/natives/blob/master/TASK/TaskGoStraightToCoord.md),
+[natural turn](https://github.com/citizenfx/natives/blob/master/TASK/TaskTurnPedToFaceCoord.md)
+and [climb task](https://github.com/citizenfx/natives/blob/master/TASK/TaskClimb.md).
+The navmesh final-heading sentinel is the pinned SHVDNE overload's metadata
+default; the native timeout is explicitly -1, and water entry is disabled.
+
 `tools/gta_use/examples/cover_segment.py` runs a continuous cover/aim/fire loop,
 checks health and ammo, and pauses for uncertain cover geometry or blocked sight.
 It uses actual combat or explicit `GTA_USE_TARGETS` handles, excludes animals, and

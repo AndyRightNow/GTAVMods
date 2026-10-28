@@ -9,7 +9,9 @@ Use filtered JSON observations and supervised Python policies for continuous
 segments. Use screenshots for objective text, menus and uncertain geometry.
 Command acceptance is not an observed gameplay outcome.
 
-Always prioritize vehicles for travel. Acquire a nearby suitable car or bike
+Identify the objective and intended route first, including short fence/entrance
+access to the required vehicle. Always prioritize vehicles for travel. Acquire a
+nearby suitable car or bike
 through normal entry or carjacking, verify the driver seat, then drive. Use walking
 for access to vehicles, entrances or objectives that require it; do not default
 to cross-town foot routes. See the travel policy in [Python AI](references/python-ai.md).
@@ -43,6 +45,8 @@ agent sandbox; an empty list there does not prove GTA exited. Use the host's
 verified PID and normal scoped execution approval when required. Never dump
 `service-<PID>.json`, which contains a bearer credential.
 
+For short on-foot access with bounded climb/vault recovery, use
+`gta_use.navigation.navigate_to`; its contract is in Python AI.
 For mission scripting, read [Python AI](references/python-ai.md) and consult
 [world state](references/world-state.md) for the fields your policy consumes.
 Start by running the small observation example in Python AI. Then implement the
