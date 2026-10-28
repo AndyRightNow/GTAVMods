@@ -49,7 +49,10 @@ Use the shipped policies as concrete starting points:
 - [cover_segment.py](../../../../tools/gta_use/examples/cover_segment.py): normal
   cover input, health checks, confirmed human targets, LOS, reload and short
   head-aim/fire actions. `GTA_USE_TARGETS` can carry a JSON list of handles verified
-  for the current objective. Its no-visible-targets checkpoint does not prove
+  for the current objective. Set `GTA_USE_ALLIES` to the currently identified
+  companion handles (or [] after checking none are present). It withholds fire
+  for possible friendly obstruction and uses `requireAimTarget=True`.
+  Its no-visible-targets checkpoint does not prove
   mission completion. Its health thresholds are an example policy, not universal
   tuning. It deliberately stops when cover geometry or firing angle is uncertain.
 - [drive_to.py](../../../../tools/gta_use/examples/drive_to.py): observed driver
@@ -85,6 +88,9 @@ For raw natives, verify the upstream signature before using `game.native`.
 Convert observed handles with `Entity.FromHandle(handle) as Vehicle` (or `as Ped`),
 then check null, existence and current role. Do not guess public `new Vehicle(handle)`
 or `new Ped(handle)` constructors; they are unavailable in the pinned API.
+XML can mention nonpublic constants such as `TaskInvoker.DefaultNavmeshFinalHeading`;
+omit optional arguments or inspect the loaded public overload and its defaults
+instead of assuming every XML symbol is callable.
 
 Submit a navigation task once per goal, then observe progress. The in-game C#
 compiler has a 128-attempt budget per managed session; state loops belong in
@@ -144,10 +150,19 @@ dependent action. Keep Lua/C#/native loops off the game thread; Python owns poli
 
 `game.action("resume")` once begins continuous play. Timed controls and aim actions
 are frame-driven by the bridge. `game.action("aim", entity=handle, bone=31086,
-ms=350, shoot=True)` aims/fires briefly; it does not choose a target, find cover or
-alter health. Firing requires LOS, but effectiveness still needs observed damage.
+ms=350, shoot=True, requireAimTarget=True)` aims/fires briefly;
+it does not choose a target, find cover or
+alter health. Firing requires LOS; the optional gate also requires the engine
+aim-target handle to match. Use the returned frame counts and `last` observation
+to distinguish an obstruction, unknown aim and requested Attack. Requested Attack
+is not proof of a shot. Measure ammo/health across the whole interval, and inspect
+a different protected angle when fire is withheld or damage remains unchanged.
 Do not reissue a long native navigation task each iteration if it is progressing.
 Pause stops time; it does not erase a persistent native task before the next resume.
+`cutsceneActive` can describe a loaded cutscene before playback starts; use
+`cutscenePlaying` and advancing `cutsceneTime` to establish playback. If time
+does not advance, inspect focus and the visible UI before retrying. Record any
+temporary focus-loss setting change and restore the original value afterward.
 
 ## Observe, progress, checkpoint
 

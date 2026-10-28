@@ -56,7 +56,9 @@ of building another framework before the first runnable segment.
    or uncertainty, and inspect the runner's final `paused` result.
 3. Verify actual position progress, vehicle occupancy, acquired cover, target
    damage or objective transition. Revalidate handles after time advances.
-   A hostile relationship alone does not identify a mission enemy.
+   A hostile relationship alone does not identify a mission enemy. For blocked
+   fire, inspect aim feedback and companion clearance; see Python AI before
+   repeating the same firing angle.
 4. On failure, inspect `result.json`, `state.json`, `events.jsonl` and stderr.
    Correct the cause and recover the game's real checkpoint before a new run.
    A policy checkpoint label does not create a GTA checkpoint or prove success.

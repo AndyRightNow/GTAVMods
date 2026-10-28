@@ -15,7 +15,17 @@ namespace GTAVMods.Game
         object State(StateQuery query);
         string[] StateSections { get; }
         object Invoke(GTA.Native.Hash hash, string result, object[] arguments);
-        bool AimAt(int target, int bone, bool shoot);
+        AimObservation AimAt(int target, int bone, bool shoot, bool requireAimTarget);
+    }
+
+    public readonly struct AimObservation
+    {
+        public AimObservation(bool available, bool? lineOfSight, int? aimTarget, bool attackRequested)
+        { Available = available; LineOfSight = lineOfSight; AimTarget = aimTarget; AttackRequested = attackRequested; }
+        public bool Available { get; }
+        public bool? LineOfSight { get; }
+        public int? AimTarget { get; }
+        public bool AttackRequested { get; }
     }
 
     /// <summary>Agent operations use the same observed game boundary as the player abilities.</summary>
@@ -45,9 +55,9 @@ namespace GTAVMods.Game
                 default: native.Call(hash, arguments); return null;
             }
         }
-        public bool AimAt(int target, int bone, bool shoot)
+        public AimObservation AimAt(int target, int bone, bool shoot, bool requireAimTarget)
         {
-            if (!game.Entities.Exists(target) || game.Entities.IsDead(target)) return false;
+            if (!game.Entities.Exists(target) || game.Entities.IsDead(target)) return default;
             Vector3 point = native.Call<Vector3>(Hash.GET_PED_BONE_COORDS, target, bone, 0f, 0f, 0f);
             Vector3 delta = point - game.Cameras.GameplayPosition;
             float yaw = (float)(System.Math.Atan2(-delta.X, delta.Y) * 180 / System.Math.PI);
@@ -56,9 +66,11 @@ namespace GTAVMods.Game
             native.Call(Hash.SET_GAMEPLAY_CAM_RELATIVE_HEADING, native.Call<float>(Hash.GET_GAMEPLAY_CAM_RELATIVE_HEADING) + difference);
             native.Call(Hash.SET_GAMEPLAY_CAM_RELATIVE_PITCH, native.Call<float>(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH) + pitch - game.Cameras.GameplayRotation.X, 1f);
             SetControl(0, (int)Control.Aim, 1);
-            if (shoot && native.Call<bool>(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, game.Host.PlayerPed, target, 17))
-                SetControl(0, (int)Control.Attack, 1);
-            return true;
+            bool lineOfSight = native.Call<bool>(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, game.Host.PlayerPed, target, 17);
+            int? aimTarget = game.Outputs.AimTarget(game.Host.PlayerHandle, out int aimed) && game.Entities.Exists(aimed) ? (int?)aimed : null;
+            bool attackRequested = shoot && lineOfSight && (!requireAimTarget || aimTarget == target);
+            if (attackRequested) SetControl(0, (int)Control.Attack, 1);
+            return new AimObservation(true, lineOfSight, aimTarget, attackRequested);
         }
         public object Observe(float radius, int limit)
         {

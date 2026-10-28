@@ -1,5 +1,6 @@
 """Run real Python policies through the shipped Rust service and observed game pipe."""
 import json
+import os
 from collections import deque
 from pathlib import Path
 import subprocess
@@ -13,9 +14,10 @@ from observed_game import ObservedGame, RustScene
 
 class ObservedCombat(ObservedGame):
     """External engine observations and receipts; no physics or combat decisions."""
-    def __init__(self, root, observations):
+    def __init__(self, root, observations, aim_result=None):
         super().__init__(root)
         self.observations = deque(observations)
+        self.aim_result = aim_result or dict(targetAvailable=True, attackRequestedFrames=2)
 
     def request(self, envelope):
         self.requests.append(envelope)
@@ -26,7 +28,7 @@ class ObservedCombat(ObservedGame):
             save_json(self.directory / f"batch-{identifier}-status.json", dict(batch=identifier, state="completed", total=len(envelope["steps"])))
             result = {"batch": identifier}
         elif envelope["op"] == "action":
-            result = {"completed": True, "value": None}
+            result = {"completed": True, "value": self.aim_result if envelope["steps"][0]["op"] == "aim" else None}
         elif envelope["op"] == "state":
             result = self.observations[0]
             if len(self.observations) > 1:
@@ -50,12 +52,13 @@ class RunnerScenarios(unittest.TestCase):
         self.server.close()
         self.storage.cleanup()
 
-    def run_script(self, script, *arguments):
+    def run_script(self, script, *arguments, env=None):
         source = self.root / "segment.py"
         source.write_text(script)
         result = subprocess.run([sys.executable, "-m", "gta_use", "run", str(source), "--discovery", str(self.root),
                                  "--process", str(self.game.process), "--output", str(self.root / "run"), *arguments],
-                                capture_output=True, text=True, timeout=15)
+                                capture_output=True, text=True, timeout=15,
+                                env=None if env is None else dict(os.environ, **env))
         self.assertTrue((self.root / "run/result.json").exists(), result.stdout + result.stderr)
         return result, json.loads((self.root / "run/result.json").read_text())
 
@@ -125,18 +128,22 @@ class CoverPolicyScenarios(unittest.TestCase):
         self.storage = tempfile.TemporaryDirectory(prefix="GTAVMods-cover-test-")
         self.root = Path(self.storage.name)
 
-    def exercise(self, observations):
-        self.game = ObservedCombat(self.root, observations)
+    def exercise(self, observations, allies="[]", aim_result=None):
+        self.game = ObservedCombat(self.root, observations, aim_result)
         self.start_server()
         source = Path(__file__).parents[1] / "examples" / "cover_segment.py"
-        return self.run_script(source.read_text(), "--timeout", "10", "--stuck-timeout", "8")
+        return self.run_script(source.read_text(), "--timeout", "10", "--stuck-timeout", "8",
+                               env={"GTA_USE_ALLIES": allies, "GTA_USE_TARGETS": "[]"})
 
     @staticmethod
     def observation(human=True, player_health=175, target_health=100):
         return {"gameTime": 100, "sections": {
-            "player": {"entity": {"handle": 10, "health": player_health, "dead": False}, "inCover": True, "reloading": False},
+            "player": {"entity": {"handle": 10, "health": player_health, "dead": False,
+                                    "position": {"x": 0, "y": 0, "z": 0}}, "inCover": True, "reloading": False},
             "weapons": {"totalAmmo": 20, "ammoInClip": 8},
+            "navigation": {"blips": []},
             "nearby": {"nodes": [{"entity": {"handle": 20, "health": target_health, "dead": target_health == 0,
+                                              "position": {"x": 0, "y": 15, "z": 0},
                                               "relative": {"distance": 15}},
                                    "ped": {"human": human, "inCombatWithPlayer": True}, "lineOfSight": True}]}}}
 
@@ -165,8 +172,53 @@ class CoverPolicyScenarios(unittest.TestCase):
         self.assertEqual("no-visible-combat-targets", outcome["checkpoint"])
         self.assertTrue(outcome["paused"])
         shots = [step for step in self.actions() if step["op"] == "aim"]
-        self.assertEqual([dict(op="aim", entity=20, bone=31086, ms=350, shoot=True)], shots)
+        self.assertEqual([dict(op="aim", entity=20, bone=31086, ms=350, shoot=True, requireAimTarget=True)], shots)
         self.assertEqual({"20": 0}, outcome["evidence"]["previousTargets"])
+
+    def test_companion_in_shot_corridor_prevents_fire_despite_clear_entity_los(self):
+        observed = self.observation()
+        observed["sections"]["navigation"]["blips"] = [{"entity": 30, "position": {"x": 1, "y": 7, "z": 0}}]
+        result, outcome = self.exercise([observed], allies="[30]")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertNotIn("aim", [step["op"] for step in self.actions()])
+        self.assertIn("line of fire", (self.root / "run/stderr.log").read_text())
+
+    def test_missing_companion_stops_instead_of_treating_an_incomplete_scan_as_safe(self):
+        result, outcome = self.exercise([self.observation()], allies="[30]")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertNotIn("aim", [step["op"] for step in self.actions()])
+        self.assertIn("cannot be located", (self.root / "run/stderr.log").read_text())
+
+    def test_unknown_human_in_the_firing_corridor_is_not_treated_as_a_target(self):
+        observed = self.observation()
+        observed["sections"]["nearby"]["nodes"].append({"entity": {"handle": 30, "health": 175, "dead": False,
+            "position": {"x": 0, "y": 5, "z": 0}}, "ped": {"human": True, "inCombatWithPlayer": False}})
+        result, outcome = self.exercise([observed])
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertNotIn("aim", [step["op"] for step in self.actions()])
+
+    def test_off_axis_companion_permits_gated_fire_and_records_whole_interval_ammo(self):
+        alive, dead = self.observation(), self.observation(target_health=0)
+        alive["sections"]["navigation"]["blips"] = [{"entity": 30, "position": {"x": 6, "y": 7, "z": 0}}]
+        dead["sections"]["weapons"] = {"totalAmmo": 19, "ammoInClip": 7}
+        result, outcome = self.exercise([alive, dead], allies="[30]")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(outcome["paused"])
+        events = [json.loads(line) for line in (self.root / "run/events.jsonl").read_text().splitlines()]
+        before = next(e for e in events if e["event"] == "before-aim")
+        after = next(e for e in events if e["event"] == "after-aim")
+        self.assertEqual((20, 19, 0), (before["ammo"], after["ammo"], after["target"]["health"]))
+
+    def test_withheld_fire_stops_for_geometry_inspection_without_repeating_bursts(self):
+        result, outcome = self.exercise([self.observation()], aim_result=dict(targetAvailable=True, attackRequestedFrames=0,
+            last=dict(aimTarget=30, lineOfSight=True)))
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertEqual(1, sum(step["op"] == "aim" for step in self.actions()))
+        self.assertIn("Fire withheld", (self.root / "run/stderr.log").read_text())
 
 
 if __name__ == "__main__":

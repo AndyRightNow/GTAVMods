@@ -225,6 +225,23 @@ Firing requires line of sight; a disappeared/dead target ends tracking.
 It does not find cover, select enemies or change health. Python decides those
 policies from observed state, and should verify cover before firing.
 
+Set `requireAimTarget=True` to additionally withhold Attack unless the game's
+current aim-target handle matches the requested entity. A different, missing or
+stale aim target withholds fire. The default is false for compatibility. Cover
+animations or free-aim transitions can yield unknown observations; inspect and
+reposition instead of assuming the gate will always permit a shot.
+
+The result keeps `entity`, `targetAvailable` and `timing`, and adds `frames`,
+`lineOfSightFrames`, `aimTargetMatchFrames`, `unknownAimTargetFrames`,
+`attackRequestedFrames` and `last` (targetAvailable, lineOfSight, aimTarget,
+attackRequested). These are bounded counters and the last frame observation;
+there is no per-frame file output or retained sample list. Unknown LOS/aim data
+is null, including when a target becomes unavailable. An Attack request is not
+an observed shot or hit, and matching aim does not prove companion clearance or
+a clear muzzle path. Observe ammo and target health before and after the entire
+aim/fire interval. The cover policy example records both and checks companion
+and unknown-human positions before using the optional gate.
+
 native accepts a known GTA.Native.Hash name or 0x hexadecimal hash, a scalar args
 array, and returns: void, bool, int, uint, float, string or vector3. Integer-looking
 floating-point native arguments must be explicit, e.g. {"type":"float","value":2}.
@@ -328,7 +345,10 @@ evidence.
 `tools/gta_use/examples/cover_segment.py` runs a continuous cover/aim/fire loop,
 checks health and ammo, and pauses for uncertain cover geometry or blocked sight.
 It uses actual combat or explicit `GTA_USE_TARGETS` handles, excludes animals, and
-reports an observation checkpoint rather than claiming a mission passed. A
+requires `GTA_USE_ALLIES` with identified companion handles (or [] after checking
+that none are present). It conservatively checks companion/unknown-human positions
+and enables the aim-target gate. It reports an observation checkpoint rather than
+claiming a mission passed. A
 normal cover input worked in the live mission where the NPC cover task did not;
 moving along a cover edge was necessary for rooftop sightlines.
 
@@ -338,7 +358,7 @@ a starting policy, not a promise that GTA's pathfinder can navigate every chase
 or entrance. New road cells count as progress to allow detours; revisiting the
 same cells indefinitely does not keep the watchdog alive.
 
-Run either with `uv run gta-use run <script> --process <PID> --timeout 180
+Run either with the prepared interpreter: `python -m gta_use run <script> --process <PID> --timeout 180
 --stuck-timeout 30 --check-timeout 10`. Both files are included in the package's
 `scripts/GtaUse/tools/gta_use/examples` directory. The run snapshot preserves the
 entry script; imported local helper files remain the caller's responsibility to

@@ -1,4 +1,96 @@
-# DeepSeek 1017 Max GTA use evaluation
+# GTA use agent evaluations
+
+## Comparison: DeepSeek 1017 Max and GPT-6.1 Terra Max
+
+**Neither model completed Repossession.** DeepSeek reached the pursuit but needed
+repeated host intervention; Terra handled its own recovery after setup, stayed in
+cover during its combat sequence, and stopped earlier at an unresolved firing
+angle. Neither trial has a Mission Passed screenshot.
+
+| Measure | DeepSeek-V4.1-Flash 1017 / Max | GPT-6.1 Terra / Max |
+| --- | --- | --- |
+| Furthest verified stage | Garage combat, then unsuccessful bike pursuit | Garage combat; one confirmed attacker defeated |
+| First supervised run to last run ending | 2h 14m 7s | 2h 17m 34s |
+| Sum of supervised runner elapsed time | 28m 5s | 16m 24s |
+| Supervised runs | 98 | 54 |
+| Runner checkpoint / failed states | 53 / 45 | 34 / 20 |
+| Actual GTA checkpoint retries | 4, operated by host | 0; stopped before a mission-failure retry |
+| Confirmed pause / unknown pause results | 92 / 6 | 50 / 4 |
+| Host setup | Launch, backups, interpreter/PID and configuration | Updated installation, fresh Story session, paused handoff, Thor disabled and backups |
+| Host gameplay help after handoff | Modal recovery/retries, focus handling, navigation and API guidance, combat correction | None recorded; the task handled its own menus, expired leases and settings restoration |
+
+Times were recomputed from retained `run.json.started` and
+`result.json.elapsedSeconds`, using first start to final end rather than summing
+policy durations. The DeepSeek window was 2026-10-27 22:15:48 to 2026-10-28
+00:29:55; Terra was 2026-10-28 00:55:49 to 03:13:22, all Asia/Shanghai. These
+windows include observation and cleanup policies. Runner time includes I/O and
+waiting; it is not unpaused simulation time. Setup, initial preparation and final
+report writing lie outside these windows. The remaining time includes reasoning,
+tool interactions, UI recovery and gaps; no token/cost measurement was available.
+
+Terra used fewer scripts and less runner time, but nearly the same wall time and
+reached less of the mission. Zero retries is not evidence of higher mission
+success when the attempt stopped at an earlier blocker. Terra's original skill
+already included changes learned from DeepSeek; their harnesses, assistance and
+stopping conditions also differed. This is a single assisted-workflow comparison,
+not an isolated model ranking or measured before/after improvement.
+
+Terra left Franklin at 191 health and Lamar at 418, previously observed at 500.
+The cause of Lamar's damage is unknown. One early burst preceded its companion
+line-of-fire check, so the later guard does not establish the safety of that shot.
+It restored Autosave and Pause Game On Focus Loss to On and verified both save
+hashes unchanged. The host independently rechecked the hashes after the run.
+
+The retained Terra trace and reproducible comparison metrics are outside Git at
+`C:\Users\Helen\Documents\Codex\2026-10-28\agent-comparison`. Its review-only
+patch was inspected before applying the narrow documentation and policy changes.
+
+## Changes from the Terra findings
+
+- `aim` now returns constant-space frame counts and the last observed LOS,
+  aim-target handle and requested Attack state. A snapshot taken after releasing
+  aim can miss what happened during the action; counters preserve that evidence
+  without per-frame file writes or retained samples.
+- Optional `requireAimTarget` withholds Attack when the engine reports another
+  entity or an unknown/stale aim target. Default behavior is preserved. Matching
+  aim is not proof of a clear muzzle path, friendly-fire safety or damage.
+- The cover example requires an explicit companion list, checks nearby humans
+  and companion/blip positions conservatively, uses the gate, records ammo and
+  target health across the whole aim interval, and stops on fully withheld fire.
+  Its 2D clearance is an example filter, not a general combat or cover planner.
+- Skill references clarify loaded versus playing cutscenes, menu-induced lease
+  timeouts, changing combat flags, incomplete nearby scans and whole-interval
+  shot evidence. Repeating a blocked angle is not useful progress.
+
+The full build/test/package workflow passed **331 C#**, **13 Python** and
+**8 Rust** cases. C# executable line/branch coverage stayed at 100%: GameBridge
+1076/1076 and 595/595; ModUtils 274/274 and 90/90; Thor 1496/1496 and 610/610.
+The added scenarios verify fire withholding for a mismatched/unknown/stale aim
+target, normal fire when both checks pass, LOS overriding a matching target,
+control release, bounded telemetry, companion/unknown-human obstruction,
+missing-companion recovery and interval-wide evidence. They use explicit engine
+observations, not simulated successful gunfire.
+
+After a normal game exit, all 178 packaged files were deployed with backups and
+hash verification, followed by a fresh Story launch. A live unarmed check recorded
+24 aim-only frames and 26 frames with `shoot=true, requireAimTarget=true`; both
+reported unknown aim targets, no LOS and zero Attack requests. Health remained
+200 and the runner confirmed pause. This validates deployed feedback and the
+combined withholding path in that scene. The positive matching-target fire path
+is covered by integration scenarios, not by this live check. The new policy has
+not completed a mission or established reliable armed cover fire.
+
+A separate 700 ms aim-only diagnostic in Terra's final firefight, before
+deployment, preserved 191 health and 138 total pistol ammo. Its post-action
+snapshot returned no aim target, illustrating why it cannot reconstruct the
+per-frame aim decision. Neither follow-up is counted as part of Terra's trial.
+The follow-up game process exited normally. Both save hashes remain unchanged;
+all deployed files match their manifest. Final graphics comparison found only
+the window-mode value differed from the pretrial backup. With GTA closed, that
+value was restored and the complete graphics file again matched the original
+hash. The cause of that window-mode change was not established.
+
+## DeepSeek 1017 Max trial
 
 Evaluated on 2026-10-27–28 with DeepSeek Harness, DeepSeek-V4.1-Flash build **1017**,
 reasoning **Max**, Workspace Write access, GTA V Enhanced **1.0.1158.16** and the
@@ -161,15 +253,16 @@ verification.
 Both Story save files still matched their pretrial SHA-256 hashes. With GTA
 closed, the host restored the original graphics settings byte-for-byte; the only
 difference had been Pause Game On Focus Loss. Autosave had been disabled after
-declining an overwrite and remains a temporary test setting to restore after the
-comparison. No profile/account configuration was replaced.
+declining an overwrite and remained a temporary test setting through the handoff;
+Terra subsequently restored it to On. No profile/account configuration was replaced.
 
 The rebuilt package was deployed with all 178 installed files hash-verified and
 the replaced files backed up outside Git. A separate built-in Codex task was
 created for GPT-6.1 Terra with Max reasoning. It must use fresh policies without
 reading DeepSeek's artifacts or the previous solved mission. It receives the
 revised skill and bridge, so this is a comparison of assisted workflows, not an
-isolated model comparison under identical instructions. Its outcome is pending.
+isolated model comparison under identical instructions. Its completed outcome
+and the follow-up changes are recorded above.
 
 The DeepSeek trace was archived outside Git at
 `C:\Users\Helen\Documents\Codex\2026-10-27\deepseek-1017-eval-20261027-132223\trace`.

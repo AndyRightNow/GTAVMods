@@ -57,6 +57,18 @@ Use `cost` counters and `captureMilliseconds` to justify changing query frequenc
   unknown, not zero ammo or a negative observation.
 - Cover input/task acceptance does not establish `player.inCover`. LOS alone
   does not establish a useful muzzle angle from cover; verify target damage.
+  When a fresh `weapons.aimTarget` names a different entity, treat that as
+  evidence of a possible obstruction; null is not proof of a clear shot.
+  Observe ammo and target health before and after the whole aim/fire sequence.
+- Identify companions from current mission evidence and track their fresh
+  positions before firing. A nearby ped scan can omit a companion; cross-check
+  a matching blip or independently verified entity. Stop if the companion
+  cannot be located or may enter the shot path. A 2D separation margin is
+  only a conservative filter, not a guarantee against friendly fire.
+- `inCombatWithPlayer` can change as enemies redirect attention. Retain a
+  previously confirmed identity only while its handle, model, position and
+  mission role remain consistent; relationship or blip color alone is not
+  sufficient to confirm a new target.
 - Native GPS route queries can be unavailable even when the HUD draws a route.
   Target positions and nearby road context remain useful. Blip sprites are icon
   types, not mission titles. After identifying a moving target, track its blip/

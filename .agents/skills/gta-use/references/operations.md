@@ -69,6 +69,11 @@ The supervised runner acquires its own lease and heartbeats independently of the
 worker. Scripts use `ctx.game`, which inherits that lease. Completion, uncertainty,
 exceptions and cancellation release the lease and request a pause. Inspect the
 runner's `paused` result; HTTP availability alone does not confirm it.
+A GTA pause/settings menu can suspend game ticks long enough for heartbeat
+and release requests to time out, leaving `paused: null`. Close the menu
+through normal UI, inspect the current state, and do not assume release. If
+the old lease is expired, a fresh observation-only supervised run can acquire
+and release it; inspect again for `paused: true` and `lease.active: false`.
 
 For a manual controller, create `Client(process=..., token=<fresh UUID>)`, acquire
 the lease, heartbeat faster than expiry, and release in `finally`. Do not hold a

@@ -11,10 +11,11 @@ Python segments, observed world state, cover combat, driving and normal game
 controls. [Live results and limitations](docs/gta-use.md#live-verification-repossession-2026-10-27)
 describe checkpoint retries, screenshot evidence and server/watchdog recovery.
 
-A separate [DeepSeek 1017 Max usability evaluation](docs/agent-evaluation.md)
-did not finish Repossession. Its retained failures informed the compact inspection
-CLI, readable entity models and policy guidance; those changes do not establish
-reliable autonomous mission completion.
+Separate [DeepSeek 1017 Max and Terra 6.1 Max evaluations](docs/agent-evaluation.md)
+did not finish Repossession. Their retained failures informed compact inspection,
+readable entity models, aim feedback and companion-aware policy guidance. The
+report compares elapsed time, retries and assistance without claiming reliable
+autonomous mission completion.
 
 The repository skill at [.agents/skills/gta-use](.agents/skills/gta-use/SKILL.md)
 covers operation and supervised Python policies. See [bridge profiling](docs/bridge-performance.md)

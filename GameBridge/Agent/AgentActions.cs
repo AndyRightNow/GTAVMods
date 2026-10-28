@@ -23,12 +23,14 @@ namespace GTAVMods.Agent
                     return new ImmediateStep(() => world.Invoke(hash, result, parameters));
                 }));
             registry.Register(new CommandDefinition("aim", "Track an observed ped bone every frame, optionally firing only with clear line of sight. Ends when the target disappears/dies or duration expires.",
-                new { entity = "ped handle", bone = "bone ID; default 31086 (head)", ms = "1..30000", shoot = "boolean; default false" }, args => {
-                    Protocol.Fields(args, "entity", "bone", "ms", "shoot");
+                new { entity = "ped handle", bone = "bone ID; default 31086 (head)", ms = "1..30000", shoot = "boolean; default false", requireAimTarget = "boolean; default false. Withhold Attack unless the engine aim target matches; unknown also withholds. Returns bounded frame observations, not hits." }, args => {
+                    Protocol.Fields(args, "entity", "bone", "ms", "shoot", "requireAimTarget");
                     if (!args.ContainsKey("entity")) throw new ArgumentException("Missing target entity.");
                     bool shoot = false;
                     if (args.TryGetValue("shoot", out var value)) shoot = value is bool flag ? flag : throw new ArgumentException("shoot must be boolean.");
-                    return new TrackingAim(world, Protocol.Integer(args, "entity", 1, int.MaxValue, 0), Protocol.Integer(args, "bone", 0, 65535, 31086), shoot,
+                    bool requireAimTarget = false;
+                    if (args.TryGetValue("requireAimTarget", out var gate)) requireAimTarget = gate is bool required ? required : throw new ArgumentException("requireAimTarget must be boolean.");
+                    return new TrackingAim(world, Protocol.Integer(args, "entity", 1, int.MaxValue, 0), Protocol.Integer(args, "bone", 0, 65535, 31086), shoot, requireAimTarget,
                         new TimedControls(world, control, clock, Protocol.Integer(args, "ms", 1, 30000, 300), Array.Empty<(int, int, float)>(), false));
                 }));
         }
@@ -63,17 +65,25 @@ namespace GTAVMods.Agent
     {
         private readonly IAgentWorld world;
         private readonly int target, bone;
-        private readonly bool shoot;
+        private readonly bool shoot, requireAimTarget;
         private readonly TimedControls duration;
-        private bool available = true;
-        public TrackingAim(IAgentWorld world, int target, int bone, bool shoot, TimedControls duration)
-        { this.world = world; this.target = target; this.bone = bone; this.shoot = shoot; this.duration = duration; }
-        public object Result => new { entity = target, targetAvailable = available, timing = duration.Result };
+        private AimObservation observation = new AimObservation(true, null, null, false);
+        private int frames, lineOfSightFrames, aimTargetMatchFrames, unknownAimTargetFrames, attackRequestedFrames;
+        public TrackingAim(IAgentWorld world, int target, int bone, bool shoot, bool requireAimTarget, TimedControls duration)
+        { this.world = world; this.target = target; this.bone = bone; this.shoot = shoot; this.requireAimTarget = requireAimTarget; this.duration = duration; }
+        public object Result => new { entity = target, targetAvailable = observation.Available, timing = duration.Result,
+            requireAimTarget, frames, lineOfSightFrames, aimTargetMatchFrames, unknownAimTargetFrames, attackRequestedFrames,
+            last = new { targetAvailable = observation.Available, lineOfSight = observation.LineOfSight, aimTarget = observation.AimTarget, attackRequested = observation.AttackRequested } };
         public bool Run()
         {
             if (duration.Run()) return true;
-            available = world.AimAt(target, bone, shoot);
-            return !available;
+            observation = world.AimAt(target, bone, shoot, requireAimTarget);
+            frames++;
+            if (observation.LineOfSight == true) lineOfSightFrames++;
+            if (observation.AimTarget == target) aimTargetMatchFrames++;
+            if (observation.AimTarget == null) unknownAimTargetFrames++;
+            if (observation.AttackRequested) attackRequestedFrames++;
+            return !observation.Available;
         }
         public void Cancel() { }
     }

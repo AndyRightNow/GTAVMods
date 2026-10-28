@@ -91,7 +91,9 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             {
                 s.Game.Native.Returns(Hash.GET_PED_BONE_COORDS, Vector3.UnitY);
                 s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_HEADING, 0f); s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH, 0f);
+                s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, true);
                 Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("shoot", "yes")))["ok"]);
+                Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("requireAimTarget", "yes")))["ok"]);
                 Assert.AreEqual(false, s.Batch(Step("aim"))["ok"]);
                 s.Batch(Step("aim", ("entity", 20), ("ms", 10))); s.Frame(); s.Frame(10);
                 StringAssert.Contains(s.Status, "completed");
@@ -102,6 +104,39 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 s.Game.Entity(20).Exists = false;
                 s.Batch(Step("aim", ("entity", 20))); s.Frame();
                 StringAssert.Contains(s.Status, "completed");
+            }
+        }
+
+        [TestMethod]
+        public void GatedFireWaitsForTheObservedTargetAndReportsObstructionsUnknownAimAndRequestedControls()
+        {
+            using (var s = new AgentScene())
+            {
+                s.Game.Native.Returns(Hash.GET_PED_BONE_COORDS, Vector3.UnitY);
+                s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_HEADING, 0f);
+                s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH, 0f);
+                s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, true);
+                s.Game.Outputs.AimValid = true; s.Game.Outputs.AimEntity = 30; // A vehicle obstructs the aim.
+                Assert.AreEqual(true, s.Batch(Step("aim", ("entity", 20), ("shoot", true), ("requireAimTarget", true), ("ms", 500)))["ok"]);
+                s.Frame();
+                Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.Attack));
+                s.Game.Outputs.AimValid = false; s.Frame(100); // Unknown is not a clear shot.
+                s.Game.Outputs.AimValid = true; s.Game.Entity(30).Exists = false; s.Frame(100); // Stale aim handle.
+                Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.Attack));
+                s.Game.Outputs.AimEntity = 20; s.Frame(100);
+                CollectionAssert.AreEqual(new object[] { 0, (int)Control.Attack, 1f }, s.Game.Native.Calls.Single(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.Attack).Arguments);
+                s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, false); s.Frame(50); // Matching aim does not override LOS.
+                s.Frame(150);
+                var result = (System.Collections.Generic.Dictionary<string, object>)s.Results.Single()["result"];
+                Assert.AreEqual(5, result["frames"]);
+                Assert.AreEqual(4, result["lineOfSightFrames"]);
+                Assert.AreEqual(2, result["aimTargetMatchFrames"]);
+                Assert.AreEqual(2, result["unknownAimTargetFrames"]);
+                Assert.AreEqual(1, result["attackRequestedFrames"]);
+                StringAssert.Contains(Protocol.Encode(result["last"]), "\"lineOfSight\":false,\"aimTarget\":20,\"attackRequested\":false");
+                int inputs = s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME);
+                s.Frame(100);
+                Assert.AreEqual(inputs, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME), "No controls remain held after duration completion.");
             }
         }
 
