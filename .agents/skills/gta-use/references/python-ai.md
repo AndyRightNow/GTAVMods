@@ -68,6 +68,25 @@ observation/behavior is understood. The SDK is in
 [__main__.py](../../../../tools/gta_use/__main__.py).
 
 
+## Choose a vehicle before planning a travel route
+
+Always prioritize vehicles for reaching a destination. Observe nearby vehicles
+and choose a suitable accessible car or bike; normal in-game carjacking is
+allowed. Do not walk back to a personal vehicle when a closer suitable one can
+be acquired. Mission-required vehicles, companions and current terrain still
+constrain the choice. A model name or driveable flag alone does not establish
+that a vehicle can leave its location.
+
+Keep acquisition, driving and arrival in a continuous bounded policy when the
+scene is understood: approach the vehicle locally, use normal entry/carjacking,
+verify the player is actually driving, submit a driving task, monitor progress,
+then stop and leave for the final entrance. Walk when needed to reach a vehicle,
+enter a building, or satisfy an on-foot objective; record the concrete reason
+when no usable vehicle or drivable route is available. A failed walking route is
+also a reason to reconsider transport, not just generate more foot waypoints.
+Handle expected calls and objective changes within the policy rather than
+starting a new model interaction for every brief input.
+
 ## Find a task without guessing its ABI
 
 For ordinary movement/vehicle tasks, the local SHVDNE XML documents **C# API

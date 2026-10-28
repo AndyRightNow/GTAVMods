@@ -9,6 +9,11 @@ Use filtered JSON observations and supervised Python policies for continuous
 segments. Use screenshots for objective text, menus and uncertain geometry.
 Command acceptance is not an observed gameplay outcome.
 
+Always prioritize vehicles for travel. Acquire a nearby suitable car or bike
+through normal entry or carjacking, verify the driver seat, then drive. Use walking
+for access to vehicles, entrances or objectives that require it; do not default
+to cross-town foot routes. See the travel policy in [Python AI](references/python-ai.md).
+
 ## Start playing without rediscovering the installation
 
 For an already prepared installation, reuse its recorded Python 3.14 interpreter.
