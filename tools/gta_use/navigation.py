@@ -3,6 +3,7 @@ import math
 import time
 
 from .client import UncertainOutcome
+from ._validation import _bounds, _identity
 
 
 def _point(value):
@@ -14,6 +15,81 @@ def _point(value):
 
 def _float(value):
     return {"type": "float", "value": value}
+
+
+def climb_toward(ctx, facing, *, timeout=7, minimum_health=100, check_interval=.2):
+    """Turn toward an observed nearby edge, attempt one normal climb, observe landing.
+
+    Caller supplies a reachable approach and a point beyond the edge, including
+    stationary vehicle/roof edges. This never moves to the point, forces a pose,
+    repeats a jump or claims arrival. Check outcome and final position before
+    another action. Mission control loss returns transition without clearing its task.
+    """
+    point = _point(facing)
+    _bounds(timeout=(timeout, 1, 20), minimum_health=(minimum_health, 1, 10000),
+            check_interval=(check_interval, .05, 1))
+    identity = None
+
+    def observe():
+        nonlocal identity
+        state = ctx.check(sections=["player"])
+        p, session = state["sections"].get("player"), state["session"]
+        if not p or session["pauseMenu"] or p["inVehicle"]:
+            ctx.uncertain("Climb interrupted by missing player, menu or vehicle transition.")
+        current = _identity(p["entity"])
+        if identity is not None and current != identity:
+            ctx.uncertain("Player identity changed during climb.")
+        identity = current
+        if p["entity"]["health"] < minimum_health or p["swimming"]:
+            ctx.uncertain("Climb stopped for health or water recovery.")
+        return state, p, _point(p["entity"]["position"])
+
+    def transition(state):
+        return not state["session"]["playerControl"] or state["session"]["cutscenePlaying"]
+
+    def settled(p):
+        return not any(p[k] for k in ("climbing", "vaulting", "jumping", "falling", "inAir", "ragdoll"))
+
+    state, player, before = observe()
+    if transition(state) or not settled(player) or player["inCover"]:
+        ctx.uncertain("Start a climb settled, controllable, on foot and out of cover.")
+    horizontal = math.hypot(point[0]-before[0], point[1]-before[1])
+    if not .2 <= horizontal <= 8 or abs(point[2]-before[2]) > 8:
+        raise ValueError("Climb facing point must describe a nearby observed edge (within 8 m).")
+    ctx.game.action("resume")
+    ctx.game.native("TASK_TURN_PED_TO_FACE_COORD", identity[0], *map(_float, point), 650)
+    turn_end = time.monotonic() + .85
+    while time.monotonic() < turn_end:
+        time.sleep(check_interval)
+        state, player, position = observe()
+        if transition(state):
+            return dict(outcome="transition", state=state)
+    angle = (math.degrees(math.atan2(point[0]-position[0], point[1]-position[1]))
+             + player["entity"]["rotation"]["z"] + 180) % 360 - 180
+    if not settled(player) or abs(angle) > 35:
+        ctx.uncertain("Climb approach did not settle facing the observed edge.")
+    ctx.game.native("TASK_CLIMB", identity[0], False)
+    deadline = time.monotonic() + timeout
+    moved = climbed = False
+    stable_samples = 0
+    while time.monotonic() < deadline:
+        time.sleep(check_interval)
+        state, player, position = observe()
+        if transition(state):
+            return dict(outcome="transition", state=state)
+        climbed = climbed or player["climbing"] or player["vaulting"]
+        moved = moved or not settled(player)
+        stable_samples = stable_samples + 1 if settled(player) else 0
+        if moved and stable_samples >= 2:
+            result = dict(outcome="climbed" if climbed else "landed", position=dict(zip(("x", "y", "z"), position)),
+                          displacement=math.dist(before, position), heightChange=position[2]-before[2], state=state)
+            ctx.log("climb-observed", **{k: v for k, v in result.items() if k != "state"})
+            if result["displacement"] >= .5:
+                ctx.progress("Observed settled climb landing", position=position, climbed=climbed)
+            return result
+    if not settled(player):
+        ctx.uncertain("Climb did not settle within its deadline; preserve the animation for inspection.")
+    return dict(outcome="no-effect", position=dict(zip(("x", "y", "z"), position)), state=state)
 
 
 def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="navmesh", radius=.75,

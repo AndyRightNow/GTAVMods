@@ -105,13 +105,19 @@ def acquire_vehicle(ctx, desired=None, *, passenger=False, companion=None, radiu
                     owns_task = False
                     ctx.uncertain("Player identity changed during vehicle entry.")
                 if player["inVehicle"]:
-                    owns_task = False
-                    if vehicle and _identity(vehicle["entity"]) == _identity(car) and vehicle["driver"] == identity[0]:
+                    if not vehicle or _identity(vehicle["entity"]) != _identity(car):
+                        owns_task = False
+                        ctx.uncertain("Vehicle entry reached a different vehicle.")
+                    if vehicle["driver"] == identity[0]:
+                        owns_task = False
                         ctx.progress("Verified driver entry", vehicle=vehicle["entity"])
                         return vehicle["entity"]
-                    ctx.uncertain("Vehicle entry reached a different vehicle or seat.")
+                    # IS_PED_IN_ANY_VEHICLE can become true while the door/seat
+                    # animation is unfinished and the driver's handle is still 0.
+                    # Keep observing this owned entry within its original deadline.
                 if time.monotonic() - last_sample >= 1:
-                    ctx.log("vehicle-entry-observation", vehicle=car["handle"], position=player["entity"]["position"])
+                    ctx.log("vehicle-entry-observation", vehicle=car["handle"], position=player["entity"]["position"],
+                            inVehicle=player["inVehicle"], driver=vehicle["driver"] if vehicle else None)
                     last_sample = time.monotonic()
                 time.sleep(check_interval)
         except UncertainOutcome:

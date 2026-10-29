@@ -11,6 +11,75 @@ def _target_health(game, identity, *, alive=False):
         (*identity, ' || t.IsDead' if alive else ''))
 
 
+def melee_burst(ctx, target, *, attack_ms=500, recovery_ms=700, warmup_ms=700,
+                maximum_distance=3, minimum_health=140):
+    """One normal unarmed Aim/light-punch exchange against a caller-identified ped.
+
+    Does not choose hostility, move/turn the player, switch weapons or retry.
+    Check damaged and the returned state; a button press is not a connected punch.
+    Stop on transition so mission tasks can finish without another attack.
+    """
+    identity = _identity(target)
+    _bounds(attack_ms=(attack_ms, 1, 1500), recovery_ms=(recovery_ms, 0, 1500),
+            warmup_ms=(warmup_ms, 0, 1500), maximum_distance=(maximum_distance, .5, 5),
+            minimum_health=(minimum_health, 1, 10000))
+    if any(isinstance(v, bool) or not isinstance(v, int) for v in (attack_ms, recovery_ms, warmup_ms)):
+        raise ValueError("Melee durations must be integer milliseconds.")
+    player_identity = None
+
+    def observe():
+        nonlocal player_identity
+        state = ctx.check(sections=["player", "weapons", "nearby"], types=["ped"], radius=8, limit=32)
+        p, session = state["sections"].get("player"), state["session"]
+        if not p or session["pauseMenu"]:
+            ctx.uncertain("Melee interrupted by missing player or menu.")
+        if not session["playerControl"] or session["cutscenePlaying"]:
+            return state, None, "transition"
+        current = _identity(p["entity"])
+        if player_identity is not None and current != player_identity:
+            ctx.uncertain("Player identity changed during melee.")
+        player_identity = current
+        if p["inVehicle"] or p["inCover"] or p["entity"]["health"] < minimum_health:
+            ctx.uncertain("Melee needs an on-foot player with sufficient health and out of cover.")
+        if state["sections"]["weapons"]["selected"] != "Unarmed":
+            ctx.uncertain("Unarmed melee requires the currently selected Unarmed weapon.")
+        t = next((n["entity"] for n in state["sections"]["nearby"]["nodes"]
+                  if _identity(n["entity"]) == identity), None)
+        if t is None or t["dead"]:
+            return state, t, "target-unavailable"
+        if t["relative"]["distance"] > maximum_distance or abs(t["relative"]["bearing"]) > 60:
+            return state, t, "out-of-reach"
+        return state, t, None
+
+    state, before, reason = observe()
+    if reason:
+        return dict(outcome=reason, state=state)
+    ctx.game.action("resume")
+    if warmup_ms:
+        ctx.game.action("controls", ms=warmup_ms, inputs=[dict(control="Aim", value=1)])
+        state, current, reason = observe()
+        if reason:
+            return dict(outcome=reason, state=state)
+        before = current
+    ctx.game.action("controls", ms=attack_ms,
+                    inputs=[dict(control="Aim", value=1), dict(control="MeleeAttackLight", value=1)])
+    state, after, reason = observe()
+    if reason == "transition":
+        return dict(outcome=reason, state=state)
+    if recovery_ms and reason is None:
+        ctx.game.action("controls", ms=recovery_ms, inputs=[dict(control="Aim", value=1)])
+        state, after, reason = observe()
+        if reason == "transition":
+            return dict(outcome=reason, state=state)
+    hp = after["health"] if after else None
+    result = dict(outcome="exchanged", target=identity[0], before=before["health"], after=hp,
+                  damaged=hp is not None and hp < before["health"], targetStatus=reason, state=state)
+    ctx.log("melee-exchange", **{k: v for k, v in result.items() if k != "state"})
+    if result["damaged"]:
+        ctx.progress("Observed melee damage", target=identity[0], health=hp)
+    return result
+
+
 def fire_from_vehicle(ctx, target, *, bone=31086, burst_ms=1100, warmup_ms=200,
                       maximum_distance=45, minimum_health=100):
     """One target-gated burst from an observed vehicle seat, without replacing driving.

@@ -242,6 +242,59 @@ def run(ctx):
         self.assertFalse(self.natives())
         self.assertIn("finite", (self.root / "run/stderr.log").read_text())
 
+    def climb(self, observations, *, lost=False):
+        self.game = ObservedTraversal(self.root, [], climbs=[observations], uncertain_climb=lost)
+        self.start_server()
+        return self.run_script('''from gta_use.navigation import climb_toward
+def run(ctx):
+    result=climb_toward(ctx, dict(x=0,y=2,z=2), timeout=1, check_interval=.05)
+    ctx.checkpoint("edge-result", **result)
+''', "--timeout", "8", "--stuck-timeout", "5", "--check-timeout", "4")
+
+    def test_observed_vehicle_roof_climb_returns_height_only_after_stable_landing(self):
+        result, outcome = self.climb([observation(.5, 1, climbing=True),
+                                     observation(1, 2, falling=True), observation(1, 2)])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("climbed", outcome["evidence"]["outcome"])
+        self.assertEqual(2, outcome["evidence"]["heightChange"])
+        self.assertEqual(dict(x=0,y=1,z=2), outcome["evidence"]["position"])
+        self.assertEqual(["TASK_TURN_PED_TO_FACE_COORD", "TASK_CLIMB"], [n["name"] for n in self.natives()])
+        self.assertNotIn("arrived", outcome["evidence"], "A landing does not establish the intended route arrival.")
+
+    def test_normal_jump_at_missing_edge_is_not_reported_as_a_climb(self):
+        result, outcome = self.climb([observation(0, .4, jumping=True), observation()])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("landed", outcome["evidence"]["outcome"])
+        self.assertEqual(0, outcome["evidence"]["displacement"])
+        self.assertFalse(any(e["event"] == "progress" for e in self.events()))
+
+    def test_accepted_climb_without_animation_returns_no_effect_without_retry(self):
+        result, outcome = self.climb([observation()])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("no-effect", outcome["evidence"]["outcome"])
+        self.assertEqual(1, sum(n["name"] == "TASK_CLIMB" for n in self.natives()))
+
+    def test_climb_triggered_mission_transition_is_returned_without_task_cleanup(self):
+        transition = observation(1, 2)
+        transition["session"]["playerControl"] = False
+        result, outcome = self.climb([transition])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("transition", outcome["evidence"]["outcome"])
+        self.assertEqual("TASK_CLIMB", self.natives()[-1]["name"])
+
+    def test_climb_timeout_does_not_cancel_an_airborne_player(self):
+        result, outcome = self.climb([observation(1, 2, falling=True)])
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertEqual("TASK_CLIMB", self.natives()[-1]["name"])
+        self.assertIn("did not settle", (self.root / "run/stderr.log").read_text())
+
+    def test_uncertain_standalone_climb_stops_without_replay(self):
+        result, outcome = self.climb([observation()], lost=True)
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertEqual(1, sum(n["name"] == "TASK_CLIMB" for n in self.natives()))
+
 
 if __name__ == "__main__":
     unittest.main()

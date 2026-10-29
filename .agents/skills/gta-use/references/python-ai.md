@@ -100,6 +100,8 @@ routes and recovery tactics. A lost action receipt propagates without replay.
 | `vehicles.acquire_vehicle(ctx, desired=None, passenger=False, companion=None)` | Ordinary entry/carjacking; verifies the actual driver seat. `desired` and `companion` are observed `{handle, model}` entities. Prefers stationary eligible cars; accepts a passenger seat already occupied by the identified companion. Stops if a different vehicle must first be exited. |
 | `vehicles.leave_vehicle(ctx)` | Brakes when driving, requests ordinary exit without automatic blocked-door warping, waits for an on-foot observation. |
 | `vehicles.recover_upright(ctx)` | Bounded ordinary steering, followed by observed wheels-on-ground; never rotates or teleports the car. |
+| `navigation.climb_toward(ctx, facing)` | One natural turn and normal climb at a caller-observed nearby edge, including a stationary vehicle/roof approach. Returns `climbed`, `landed`, `no-effect` or `transition`; inspect the final position. It does not move to the facing point or prove route arrival. |
+| `combat.melee_burst(ctx, target)` | One unarmed Aim/light-punch exchange with fresh identity, range, facing and health checks. Reports observed damage; returns immediately on mission takeover. Caller owns bounded retries, defense and recovery. |
 | `combat.take_cover(ctx)` | One cover tap, then waits for settled cover; does not toggle during entry. Requires an observed suitable cover location. |
 | `combat.fire_from_cover(ctx, target, allies=...)` | One aim-only peek, current muzzle/companion geometry check and gated burst. Reports `not-ready`, `withheld` or `fired`, ammo and observed target-health change. Policy owns reload, healing waits, angle recovery and enemy selection. |
 | `combat.fire_from_vehicle(ctx, target)` | One bounded target-gated burst from the current seat without replacing the driving task. Rechecks target identity/range, observes ammo spent and damage; withholds during phone calls or without usable ammunition. |
@@ -329,6 +331,23 @@ any fence, wall, rooftop, ladder or gap can be traversed. Inspect and change the
 route after failure. For a standalone run use
 [navigate_to.py](../../../../tools/gta_use/examples/navigate_to.py) with JSON
 `GTA_USE_DESTINATION` and optional `GTA_USE_WAYPOINTS`.
+
+For an observed vehicle-to-roof access route, use `climb_toward` from the
+outside of the ledge. Inspect vertical collision/roof geometry when the next
+edge is unclear; walking farther underneath an overhang can remove the reachable
+edge. In Complications, normal truck-rack and roof climbs worked, while a farther
+approach under the roof produced a jump back to ground. The helper observes
+animation and two settled samples; `landed` can be an ordinary jump, and neither
+landing outcome proves the intended destination was reached. Keep approach and
+landing decisions in the mission policy.
+
+For an active unarmed fistfight, use `melee_burst` after identifying the opponent.
+It does not aim-lock or turn toward an arbitrary ped. Reobserve before each
+exchange, stop on a bounded no-damage budget, and preserve mission ending tasks
+when it returns `transition`. Normal light-punch input worked in the Complications
+Simeon fight; the optional gardener stealth takedown did not animate in the tested
+setup, so do not assume this helper solves every contextual takedown. Two early
+punch windows in the active fight had no damage before later punches connected.
 
 ## Find a task without guessing its ABI
 

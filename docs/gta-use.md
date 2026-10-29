@@ -393,6 +393,21 @@ evidence.
 
 ## Python policy examples
 
+`gta_use.navigation.climb_toward(ctx, facing)` attempts one normal climb from
+an observed edge approach, including stationary vehicle/roof surfaces. It turns
+naturally and waits for animation followed by two settled observations. Outcomes
+distinguish `climbed`, an ordinary jump (`landed`), `no-effect` and mission
+`transition`; none establishes route arrival. Inspect final position/height before
+another action. It never forces a pose or cancels an unfinished climb.
+
+`gta_use.combat.melee_burst(ctx, target)` performs one unarmed Aim/light-punch
+exchange against a caller-identified nearby ped. Fresh observations gate identity,
+facing, distance, selected weapon and player health. It reports actual target
+health change and stops input when a mission takes control. Callers choose bounded
+no-damage retries and defensive tactics. It neither changes weapons nor applies
+damage directly. This sequence worked in Complications' required Simeon fight;
+the optional gardener stealth takedown remains unverified.
+
 `gta_use.navigation.navigate_to(ctx, destination, waypoints=(), parkour=True)`
 provides bounded on-foot access routing using the existing native bridge. It
 starts a normal navmesh run, checks player progress and inspects a narrow three-ray obstacle
@@ -485,6 +500,28 @@ until ticks resume. Use the normal Retry UI, then reacquire the expired lease
 and inspect readiness. Releasing a lease intentionally pauses; resume only after
 release when proceeding without a supervisor. Do not automatically replay an
 action whose outcome is uncertain.
+
+## Live verification: Complications, 2026-10-29
+
+Complications reached an independently inspected **Mission Passed** screen using
+normal movement, truck/roof climbs, quiet interior navigation, vehicle entry and
+driving, a physical storefront ram and unarmed punches. The run used supervised
+segments with parent inspection and policy revisions, not one uninterrupted
+script. Four actual checkpoint retries occurred during optional gardener attempts;
+the successful route bypassed him quietly. Walkthrough assistance identified that
+optional objective and the truck/roof/window route. No teleport, timeout warp,
+health/ammo/weapon grant, direct damage, mission-global edit or mission Skip was used.
+
+Local evidence is indexed in `artifacts/gta-story-campaign/complications-completion.json`:
+39 retained segment results total 1,107.53 runner seconds, including observation
+segments and a phone-menu attempt; this is not elapsed wall time or a continuous
+completion time. The named Mission Passed image is
+`complications-passed-001/002-complications-passed-details-after.png`, SHA-256
+`f156bcc8cc3088442ea3978289b8319d4f704d115571d3a0091b011aa9f3c4ca`.
+Progress was saved to a new slot, preserving the earlier saves. The extracted
+`climb_toward` helper subsequently passed a separate live parked-car climb;
+`melee_burst` has transport/scenario coverage but its extracted implementation
+has not yet been used to complete another live fistfight.
 
 ## Live verification: Repossession, 2026-10-27
 

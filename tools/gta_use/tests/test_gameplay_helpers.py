@@ -39,6 +39,18 @@ def muzzle(**changes):
                                                    position=dict(x=2, y=5, z=1))]) | changes
 
 
+def melee_scene(hp=200, *, player_health=180, control=True, model=46, weapon="Unarmed", bearing=0):
+    state = scene()
+    state["sections"]["player"]["entity"]["health"] = player_health
+    state["session"]["playerControl"] = control
+    state["sections"]["weapons"]["selected"] = weapon
+    target = entity(30, model, y=1)
+    target.update(health=hp, dead=hp <= 0)
+    target["relative"]["bearing"] = bearing
+    state["sections"]["nearby"]["nodes"] = [dict(kind="ped", entity=target)]
+    return state
+
+
 class HelperWorld(ObservedGame):
     """Explicit external observations, not a simulated entry/combat decision engine."""
     def __init__(self, root, observations, queries=None, lost=None):
@@ -74,6 +86,8 @@ class HelperWorld(ObservedGame):
                 if self.lost == "aim":
                     return dict(id=envelope["id"], session=self.session, ok=False, uncertain=True, error="Lost aim receipt")
                 value = dict(targetAvailable=True, attackRequestedFrames=3 if step.get("shoot") else 0)
+            elif step["op"] == "controls" and self.lost == "controls":
+                return dict(id=envelope["id"], session=self.session, ok=False, uncertain=True, error="Lost input receipt")
             result = dict(completed=True, value=value)
         return dict(id=envelope["id"], session=self.session, ok=True, result=result)
 
@@ -99,6 +113,68 @@ class GameplayHelperScenarios(unittest.TestCase):
     def aims(self):
         return [s for r in self.game.requests for s in r.get("steps", []) if s["op"] == "aim"]
 
+    def melee(self, observations, lost=None):
+        return self.exercise('''from gta_use.combat import melee_burst
+def run(ctx):
+    result=melee_burst(ctx, dict(handle=30,model=46), attack_ms=100, warmup_ms=100, recovery_ms=100)
+    ctx.checkpoint("melee-result", **result)
+''', observations, lost=lost)
+
+    def inputs(self):
+        return [s for r in self.game.requests for s in r.get("steps", []) if s["op"] == "controls"]
+
+    def test_unarmed_exchange_measures_connected_punch_without_granting_or_forcing_damage(self):
+        result, outcome = self.melee([melee_scene(), melee_scene(), melee_scene(174), melee_scene(174)])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(outcome["evidence"]["damaged"])
+        self.assertEqual(174, outcome["evidence"]["after"])
+        self.assertEqual(3, len(self.inputs()))
+        attacks = [s for s in self.inputs() if any(i["control"] == "MeleeAttackLight" for i in s["inputs"])]
+        self.assertEqual(1, len(attacks))
+        self.assertFalse(any(s["op"] in ("native", "command", "aim") for r in self.game.requests for s in r.get("steps", [])))
+
+    def test_received_punch_input_with_no_damage_is_not_success_or_automatically_retried(self):
+        result, outcome = self.melee([melee_scene()])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertFalse(outcome["evidence"]["damaged"])
+        self.assertEqual(3, len(self.inputs()))
+
+    def test_fight_ending_control_takeover_prevents_further_inputs(self):
+        result, outcome = self.melee([melee_scene(), melee_scene(), melee_scene(165, control=False)])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("transition", outcome["evidence"]["outcome"])
+        self.assertEqual(2, len(self.inputs()), "Do not hold recovery Aim over the mission's ending.")
+
+    def test_melee_health_loss_stops_before_another_input(self):
+        result, outcome = self.melee([melee_scene(), melee_scene(player_health=120)])
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertEqual(1, len(self.inputs()))
+
+    def test_recycled_melee_target_is_rejected_before_attack(self):
+        result, outcome = self.melee([melee_scene(), melee_scene(model=99)])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("target-unavailable", outcome["evidence"]["outcome"])
+        self.assertEqual(1, len(self.inputs()))
+
+    def test_armed_player_is_not_silently_switched_or_allowed_to_fire_in_a_fistfight(self):
+        result, outcome = self.melee([melee_scene(weapon="Pistol")])
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertFalse(self.inputs())
+
+    def test_target_behind_player_requires_a_new_approach_instead_of_blind_punches(self):
+        result, outcome = self.melee([melee_scene(bearing=170)])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("out-of-reach", outcome["evidence"]["outcome"])
+        self.assertFalse(self.inputs())
+
+    def test_lost_melee_input_receipt_stops_before_attack_or_recovery(self):
+        result, outcome = self.melee([melee_scene()], lost="controls")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertEqual(1, len(self.inputs()))
+
     def test_carjack_selection_skips_inaccessible_nearest_car_and_verifies_driver_entry(self):
         result, outcome = self.exercise('''from gta_use.vehicles import acquire_vehicle
 def run(ctx):
@@ -122,6 +198,31 @@ def run(ctx):
         self.assertEqual(1, result.returncode)
         self.assertTrue(outcome["paused"])
         self.assertFalse(self.commands("enter-vehicle"))
+
+    def test_door_entry_waits_for_driver_observation_after_in_vehicle_becomes_true(self):
+        entering = scene(car=20)
+        entering["sections"]["vehicle"]["driver"] = 0
+        result, outcome = self.exercise('''from gta_use.vehicles import acquire_vehicle
+def run(ctx):
+    car=acquire_vehicle(ctx, dict(handle=20,model=45), check_interval=.05)
+    ctx.checkpoint("driver-entered", vehicle=car)
+''', [scene(), entering, entering, scene(car=20)], {"vehicle-candidates": [[access(20)]]})
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(20, outcome["evidence"]["vehicle"]["handle"])
+        self.assertEqual(1, len(self.commands("enter-vehicle")))
+        self.assertFalse(self.commands("clear-entry"), "Do not interrupt the door/seat animation.")
+
+    def test_same_vehicle_without_driver_occupancy_never_counts_as_success(self):
+        passenger = scene(car=20)
+        passenger["sections"]["vehicle"]["driver"] = 0
+        result, outcome = self.exercise('''from gta_use.vehicles import acquire_vehicle
+def run(ctx):
+    acquire_vehicle(ctx, dict(handle=20,model=45), entry_timeout=.2, check_interval=.05)
+''', [scene(), passenger], {"vehicle-candidates": [[access(20)]]})
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertEqual(1, len(self.commands("enter-vehicle")))
+        self.assertEqual(1, len(self.commands("clear-entry")))
 
     def test_recycled_companion_cannot_make_an_occupied_passenger_seat_eligible(self):
         result, _ = self.exercise('''from gta_use.vehicles import acquire_vehicle

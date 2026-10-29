@@ -48,7 +48,9 @@ verified PID and normal scoped execution approval when required. Never dump
 Use `gta_use.driving.drive_to` and `pursue_vehicle` for continuous road travel and moving-target engagement. Their contracts and no-effect limits are in Python AI.
 
 For short on-foot access with bounded climb/vault recovery, use
-`gta_use.navigation.navigate_to`; its contract is in Python AI.
+`gta_use.navigation.navigate_to`; explicit nearby edge attempts use
+`climb_toward`. Unarmed exchanges use `combat.melee_burst`. Their contracts and
+observed limits are in Python AI.
 For mission scripting, read [Python AI](references/python-ai.md) and consult
 [world state](references/world-state.md) for the fields your policy consumes.
 Python AI also documents reusable vehicle access, settled cover, muzzle-safe
