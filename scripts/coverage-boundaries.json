@@ -68,8 +68,8 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "System.Void GTAVMods.Game.GtaWorldQueries::Raycast(GTA.Math.Vector3,GTA.Math.Vector3,GTA.IntersectFlags,System.Int32,System.Boolean&,System.Int32&,GTA.Math.Vector3&)",
-      "reason": "Direct SHVDNE raycast invocation and output transport; measured GtaWorld assembles RayHit and tests terrain/zero/miss semantics. Handle null conversion is measured in GameHandles."
+      "method": "System.Void GTAVMods.Game.GtaWorldQueries::Raycast(GTA.Math.Vector3,GTA.Math.Vector3,GTA.IntersectFlags,System.Int32,GTA.ShapeTestOptions,System.Boolean&,System.Int32&,GTA.Math.Vector3&)",
+      "reason": "Direct synchronous SHVDNE shape-test invocation with caller-selected collision options and output transport; measured GtaWorld assembles RayHit and tests physical fence/terrain/zero/miss semantics. Handle null conversion is measured in GameHandles."
     },
     {
       "assembly": "GameBridge",

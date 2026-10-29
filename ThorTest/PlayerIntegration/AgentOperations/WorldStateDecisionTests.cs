@@ -198,6 +198,26 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
 
         [TestMethod]
+        public void WalkingProbeReportsACollidableSeeThroughFenceRatherThanAnOpenPath()
+        {
+            using (var s = new AgentScene())
+            {
+                s.Game.World.Rays.Enqueue(new RayHit(true, 40, new Vector3(1, 4, 4)));
+                var state = Read(s, ("sections", new[] { "probes" }),
+                    ("rays", new[] { Step("", ("yaw", 0), ("distance", 6)) }));
+                var obstacle = Rows(Sections(state)["probes"])[0];
+                Assert.AreEqual(true, obstacle["hit"]);
+                Assert.AreEqual(40, obstacle["entity"]);
+                Assert.AreEqual(2, Convert.ToInt32(obstacle["distance"]));
+                var query = s.Game.Calls.Single(c => c.Name == "world.raycast");
+                Assert.AreEqual(ShapeTestOptions.IgnoreNoCollision, query.Arguments[4],
+                    "Physical probes must include collidable glass/fences; the default LOS options ignore them.");
+                Assert.AreEqual(10, query.Arguments[3]);
+                Assert.AreEqual(1, Object(state["cost"])["raycasts"]);
+            }
+        }
+
+        [TestMethod]
         public void FenceClimbDecisionReportsOngoingTraversalWhenTheEngineDoesNotMarkThePlayerInAir()
         {
             using (var s = new AgentScene())

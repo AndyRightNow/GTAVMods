@@ -128,9 +128,10 @@ namespace GTAVMods.Game
         private readonly IWorldQueryBindings queries;
         public GtaWorld(IWorldQueryBindings queries) { this.queries = queries; }
         [GamePrimitive] public int[] NearbyEntities(Vector3 position, float radius) => GameHandles.OfMany(World.GetNearbyEntities(position, radius));
-        public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0)
+        public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0,
+            ShapeTestOptions options = ShapeTestOptions.Default)
         {
-            queries.Raycast(from, to, flags, ignoreEntity, out bool hit, out int entity, out Vector3 position);
+            queries.Raycast(from, to, flags, ignoreEntity, options, out bool hit, out int entity, out Vector3 position);
             return new RayHit(hit, entity, position);
         }
         public RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags)

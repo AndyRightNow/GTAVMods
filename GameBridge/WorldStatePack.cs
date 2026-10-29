@@ -201,7 +201,9 @@ namespace GTAVMods.Game
             return c.Query.Rays.Select(ray => {
                 var direction = StateGeometry.Direction(c.Heading, ray.Yaw, ray.Pitch);
                 c.Cost.raycasts++;
-                var hit = game.World.Raycast(origin, origin + direction * ray.Distance, IntersectFlags.Everything, ignored);
+                // Physical navigation must see collidable fences/glass even when LOS can see through them.
+                var hit = game.World.Raycast(origin, origin + direction * ray.Distance, IntersectFlags.Everything,
+                    ignored, ShapeTestOptions.IgnoreNoCollision);
                 return new { yaw = ray.Yaw, pitch = ray.Pitch, range = ray.Distance, origin = Vector(origin), direction = Vector(direction),
                     hit = hit.DidHit, entity = hit.DidHit ? (int?)hit.Entity : null,
                     position = hit.DidHit ? Vector(hit.Position) : null,

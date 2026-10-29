@@ -63,7 +63,10 @@ Use the shipped policies as concrete starting points:
   It is not a pursuit solver or guarantee of pathfinder success at gates/entrances.
 
 Inspect current state before reusing either policy; do not reuse old target
-handles, coordinates or tuning blindly. Extend a policy only after its missing
+handles, coordinates or tuning blindly. Resolve a known model name with
+`game.native("GET_HASH_KEY", "bagger", returns="int")` (using the relevant name)
+and compare it with the freshly observed model. Do not guess numeric hashes;
+a valid but wrong hash silently prevents an objective transition. Extend a policy only after its missing
 observation/behavior is understood. The SDK is in
 [client.py](../../../../tools/gta_use/client.py), the context in
 [segment.py](../../../../tools/gta_use/segment.py), and supervision in
@@ -103,7 +106,9 @@ current vehicle before submitting a chase, and monitor both during the segment.
 Keep acquisition, driving and arrival in a continuous bounded policy when the
 scene is understood: approach the vehicle locally, use normal entry/carjacking,
 verify the player is actually driving, submit a driving task, monitor progress,
-then stop and leave for the final entrance. Walk when needed to reach a vehicle,
+then stop and leave for the final entrance. A passenger seat occupied by the
+verified mission companion already satisfies companion boarding; do not reject
+that vehicle merely because the seat is not free. Walk when needed to reach a vehicle,
 enter a building, or satisfy an on-foot objective; record the concrete reason
 when no usable vehicle or drivable route is available. A failed walking route is
 also a reason to reconsider transport, not just generate more foot waypoints.
@@ -352,6 +357,8 @@ temporary focus-loss setting change and restore the original value afterward.
 Tucked-position LOS can be blocked by the player's own cover. Do not require it
 before trying a bounded **aim-only** peek at a confirmed target. Use normal Cover
 input, allow `player.goingIntoCover` to finish, and verify `player.inCover`.
+Poll the transition within a finite entry deadline instead of tapping Cover
+again after a fixed short sleep; a second tap can cancel entry or leave cover.
 Hold aim without firing (the example uses 800 ms), then refresh target identity,
 health, ammunition and companion positions before a gated firing interval.
 The duration is an example, not proof that a particular animation has completed.

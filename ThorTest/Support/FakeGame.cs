@@ -294,14 +294,15 @@ namespace GTAVMods.Tests.Support
         public Func<Vector3, Vector3, float, IntersectFlags, RayHit> CapsuleObservation { get; set; }
         public FakeWorld(FakeGame game) { this.game = game; }
         public int[] NearbyEntities(Vector3 position, float radius) { game.Record("world.nearby", position, radius); if (Nearby == null) throw new InvalidOperationException("Unscripted nearby query."); return Nearby(position, radius); }
-        public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0)
-            => new GtaWorld(this).Raycast(from, to, flags, ignoreEntity);
+        public RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0,
+            ShapeTestOptions options = ShapeTestOptions.Default)
+            => new GtaWorld(this).Raycast(from, to, flags, ignoreEntity, options);
         public RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags)
             => new GtaWorld(this).Capsule(from, to, radius, flags);
-        void IWorldQueryBindings.Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity,
+        void IWorldQueryBindings.Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity, ShapeTestOptions options,
             out bool hit, out int entity, out Vector3 position)
         {
-            game.Record("world.raycast", from, to, flags, ignoreEntity);
+            game.Record("world.raycast", from, to, flags, ignoreEntity, options);
             var observation = Rays.Count != 0 ? Rays.Dequeue() :
                 (RaycastObservation ?? throw new InvalidOperationException("Unscripted raycast observation."))(from, to, flags, ignoreEntity);
             hit = observation.DidHit; entity = observation.Entity; position = observation.Position;

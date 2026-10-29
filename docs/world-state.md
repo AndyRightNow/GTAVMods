@@ -14,7 +14,7 @@ measured capture time. The default `minimal` profile reads only the player.
 | `inventory` | Owned known SHVDNE weapons and ammo; opt-in enumeration, excluded from combat defaults |
 | `nearby` | Distance-sorted entity nodes, relative right/forward/up and bearing, type counts, truncation, ped human/animal classification, weapons, relationships, combat and current vehicle handle; optional visibility |
 | `navigation` | Zone/street/crossing, GPS route availability/length, routed targets, waypoint and map markers with world/relative positions |
-| `probes` | Bounded collision ray fan with hit/miss, range, direction, position, hit distance and entity; entity zero can mean terrain |
+| `probes` | Bounded physical collision ray fan with hit/miss, range, direction, position, hit distance and entity; includes collidable glass and see-through fences, excludes noncollidable objects; entity zero can mean terrain |
 | `camera` | Position, direction and rotation |
 
 Entity records preserve the numeric `model` hash and include `modelName` when

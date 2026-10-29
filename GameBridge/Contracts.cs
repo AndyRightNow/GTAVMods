@@ -183,7 +183,8 @@ namespace GTAVMods.Game
     public interface IWorldAccess
     {
         int[] NearbyEntities(Vector3 position, float radius);
-        RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0);
+        RayHit Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity = 0,
+            ShapeTestOptions options = ShapeTestOptions.Default);
         RayHit Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags);
         void DrawMarker(MarkerType type, Vector3 position, Vector3 direction,
             Vector3 rotation, Vector3 scale, System.Drawing.Color color);
