@@ -87,6 +87,19 @@ class Client:
     def command(self, code):
         return self.action("command", code=code)
 
+    def set_inputs(self, inputs, *, ttl_ms=1000):
+        """Replace held inputs immediately; renew before TTL or the game pauses.
+
+        Unlike timed controls, observations do not create gaps in held input.
+        The complete set replaces its predecessor; omitted buttons are released.
+        Lease heartbeat does not renew this independent wall-time deadline.
+        """
+        return self.action("controls.update", inputs=inputs, ttlMs=ttl_ms)
+
+    def release_inputs(self):
+        """Release continuous inputs without resuming or clearing native tasks."""
+        return self.action("controls.release")
+
     def native(self, name, *arguments, returns="void"):
         return self.action("native", name=name, args=list(arguments), returns=returns)
 
@@ -195,6 +208,13 @@ class LiveClient:
 
     async def native(self, name, *arguments, returns="void"):
         return await self.action("native", name=name, args=list(arguments), returns=returns)
+
+    async def set_inputs(self, inputs, *, ttl_ms=1000):
+        """Replace held input while continuing to consume streamed observations."""
+        return await self.action("controls.update", inputs=inputs, ttlMs=ttl_ms)
+
+    async def release_inputs(self):
+        return await self.action("controls.release")
 
     async def __aexit__(self, *errors):
         await self.ws.close()

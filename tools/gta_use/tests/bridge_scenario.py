@@ -52,6 +52,18 @@ async def main():
     assert game.command("return new Vector3(4, 5, 6);") == {"x": 4, "y": 5, "z": 6}
     async with game.connect() as live:
         assert await live.action("resume") == {"paused": False}
+        # Held input stays active while HTTP and WebSocket observations arrive.
+        # Exercise the real C# scheduler through the shipped Rust server.
+        held = game.set_inputs([{"control": "VehicleAccelerate", "value": .6}], ttl_ms=2000)
+        assert held["active"] and held["count"] == 1
+        assert game.state(sections=["player"])["sections"]["player"]
+        assert (await live.request("status"))["inputs"]["active"]
+        replaced = await live.set_inputs([{"control": "VehicleBrake", "value": .4}], ttl_ms=2000)
+        assert replaced["active"] and replaced["count"] == 1
+        assert not (await live.release_inputs())["active"]
+        game.set_inputs([{"control": "VehicleAccelerate"}], ttl_ms=2000)
+        assert not game.release_inputs()["active"]
+        assert (await live.request("status"))["paused"] is False
         timed = await live.action("wait", ms=32)
         assert timed["elapsedGameMs"] >= 32
 

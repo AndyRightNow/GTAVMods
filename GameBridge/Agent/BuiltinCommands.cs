@@ -35,6 +35,17 @@ namespace GTAVMods.Agent
                 var inputs = Protocol.Objects(args, "inputs", 32).Select(ParseControl).ToArray();
                 return new TimedControls(world, control, clock, Protocol.Integer(args, "ms", 1, 30000, 500), inputs, UseWallClock(args));
             }));
+            registry.Register(new CommandDefinition("controls.update", "Replace the complete continuous input set and return immediately. Inputs continue during observations; renew before the wall-time deadline or simulation pauses. Resume first. Timed controls/wait/aim, pause, cancel, lease loss and reload clear the set.",
+                new { ttlMs = "integer 50..5000, default 1000; independent of lease heartbeat", inputs = "1..32 control/group/value objects, same format as controls" }, args => {
+                Protocol.Fields(args, "ttlMs", "inputs");
+                var inputs = Protocol.Objects(args, "inputs", 32).Select(ParseControl).ToArray();
+                int ttl = Protocol.Integer(args, "ttlMs", 50, 5000, 1000);
+                return new ImmediateStep(() => control.UpdateInputs(inputs, ttl));
+            }));
+            registry.Register(new CommandDefinition("controls.release", "Release continuous inputs without changing simulation pause or native tasks.", new { }, args => {
+                Protocol.Fields(args);
+                return new ImmediateStep(() => { control.ClearInputs(); return control.InputStatus(); });
+            }));
             registry.Register(new CommandDefinition("observe", "Capture player, world, nearby entities, camera, mission/cutscene flags and blips as JSON.",
                 new { radius = "metres 1..1000, default 150", limit = "integer 1..256, default 64" }, args => {
                 Protocol.Fields(args, "radius", "limit");

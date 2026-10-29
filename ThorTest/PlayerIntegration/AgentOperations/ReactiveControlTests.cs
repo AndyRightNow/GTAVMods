@@ -15,6 +15,83 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
     public class ReactiveControlTests
     {
         [TestMethod]
+        public void DriverCanObserveWhileHoldingThrottleThenReplaceTheWholeInputSetWithoutGapsOrStaleSteering()
+        {
+            using (var s = new AgentScene())
+            {
+                string token = Guid.NewGuid().ToString("N");
+                s.Request("lease", ("action", "acquire"), ("token", token), ("ms", 5000));
+                var update = Step("controls.update", ("inputs", new[] {
+                    Step("", ("control", "VehicleAccelerate"), ("value", .8)),
+                    Step("", ("control", "VehicleMoveLeftRight"), ("value", -.25)) }));
+                Assert.AreEqual(false, s.Request("action", ("steps", new[] { update }))["ok"], "Another controller cannot replace held input.");
+                Assert.AreEqual(true, s.Request("action", ("token", token), ("steps", new[] { update }))["ok"]);
+                s.Frame(0, 100);
+                s.Game.Entity(10).Position = new Vector3(7, 8, 9);
+                StringAssert.Contains(Protocol.Encode(s.Request("state", ("sections", new[] { "player" }))), "\"x\":7,\"y\":8,\"z\":9");
+                s.Frame(0, 100);
+                Assert.AreEqual(4, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                StringAssert.Contains(s.Status, "\"inputs\":{\"active\":true,\"count\":2");
+                var brake = Step("controls.update", ("ttlMs", 500), ("inputs", new[] { Step("", ("control", "VehicleBrake"), ("value", .6)) }));
+                Assert.AreEqual(true, s.Request("action", ("token", token), ("steps", new[] { brake }))["ok"]);
+                s.Frame(0, 100);
+                CollectionAssert.AreEqual(new object[] { 0, (int)Control.VehicleBrake, .6f }, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME).Arguments);
+                Assert.AreEqual(5, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME), "The old throttle/steering set must be replaced, not merged.");
+                Assert.AreEqual(true, s.Request("action", ("token", token), ("steps", new[] { Step("controls.release") }))["ok"]);
+                s.Frame(0, 100);
+                Assert.AreEqual(5, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                StringAssert.Contains(s.Status, "\"paused\":false");
+            }
+        }
+
+        [TestMethod]
+        public void StaleDrivingInputsPauseAtTheirOwnWallDeadlineDespiteHealthyLeaseAndResumeDoesNotReplayThem()
+        {
+            using (var s = new AgentScene())
+            {
+                string token = Guid.NewGuid().ToString("N");
+                s.Request("lease", ("action", "acquire"), ("token", token), ("ms", 5000));
+                var update = Step("controls.update", ("ttlMs", 500), ("inputs", new[] { Step("", ("control", "VehicleAccelerate")) }));
+                s.Request("action", ("token", token), ("steps", new[] { update }));
+                s.Frame(0, 499);
+                s.Request("lease", ("action", "heartbeat"), ("token", token), ("ms", 5000));
+                s.Frame(0, 1);
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                Assert.AreEqual(true, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                Assert.AreEqual(false, s.Request("action", ("token", token), ("steps", new[] { update }))["ok"]);
+                s.Request("action", ("token", token), ("steps", new[] { Step("resume") }));
+                s.Frame(0, 100);
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                s.Request("action", ("token", token), ("steps", new[] { update }));
+                s.Frame(0, 300);
+                s.Request("action", ("token", token), ("steps", new[] { update }));
+                s.Frame(0, 300);
+                Assert.AreEqual(3, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                StringAssert.Contains(s.Status, "\"paused\":false");
+            }
+        }
+
+        [TestMethod]
+        public void InvalidInputReplacementPreservesHeldThrottleAndATimedBrakeTakesOverWithoutCompetingInputs()
+        {
+            using (var s = new AgentScene())
+            {
+                var inputs = new[] { Step("", ("control", "VehicleAccelerate")) };
+                s.Request("action", ("steps", new[] { Step("controls.update", ("inputs", inputs)) }));
+                Assert.AreEqual(false, s.Batch(Step("pause"), Step("controls.update", ("ttlMs", 0), ("inputs", inputs)))["ok"]);
+                Assert.AreEqual(false, s.Request("action", ("steps", new[] { Step("controls.update", ("inputs", new[] { Step("", ("control", "Typo")) })) }))["ok"]);
+                s.Frame();
+                Assert.AreEqual((int)Control.VehicleAccelerate, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME).Arguments[1]);
+                StringAssert.Contains(s.Status, "\"paused\":false");
+                s.Request("action", ("steps", new[] { Step("controls", ("ms", 200), ("inputs", new[] { Step("", ("control", "VehicleBrake")) })) }));
+                s.Frame(); s.Frame(100); s.Frame(100);
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAccelerate));
+                Assert.AreEqual(2, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleBrake));
+                StringAssert.Contains(s.Status, "\"inputs\":{\"active\":false,\"count\":0");
+            }
+        }
+
+        [TestMethod]
         public void LostPythonHeartbeatCancelsInputPausesThePlayerAndRejectsLateActionsUntilAnExplicitNewLease()
         {
             using (var s = new AgentScene())

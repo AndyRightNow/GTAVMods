@@ -15,6 +15,23 @@ state-selection and Python policy references.
 
 ## Runtime structure
 
+For reactive analog control, `Client.set_inputs(inputs, ttl_ms=1000)` (also on
+`LiveClient`) replaces the full held input set and returns immediately. The
+bridge applies it each frame while the client observes the world. This avoids
+gaps between timed bursts and state requests. The `controls.update` command
+uses a wall-time TTL of 50–5000 ms; expiry releases input and pauses simulation,
+even when the supervisor is still renewing the controller lease. Resume first
+and renew the entire set before expiry. `release_inputs()` / `controls.release`
+releases it without changing pause or native tasks. Pause, cancel, lease loss,
+reload and abort clear held inputs; starting a timed controls/wait/aim action
+also clears them. Continuous input updates obey the same single-controller and
+active-batch rules as other actions. Status exposes `inputs` for inspection.
+
+Timed `controls` and `step` remain useful for bounded taps and deliberate turns.
+Use continuous input for feedback steering or sustained analog movement, with
+finite policy deadlines and observed progress. Expiry is a stop condition, not
+permission to replay uncertain commands.
+
 `GameBridge.dll` is the single managed bridge. `GTAVMods.Game` implements typed
 engine contracts and state observations; `GTAVMods.Agent` implements the action
 scheduler, commands, diagnostics, pipe host and companion supervision. Shared file

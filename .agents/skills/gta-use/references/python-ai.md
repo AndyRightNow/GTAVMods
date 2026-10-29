@@ -185,6 +185,22 @@ starting a new model interaction for every brief input.
 
 ## Continuous driving and pursuit
 
+When implementing feedback steering or sustained movement, use
+`ctx.game.set_inputs([{"control": "VehicleAccelerate", "value": .5}], ttl_ms=1000)`
+after resuming. It returns immediately and holds input every frame while state
+requests run. Each update replaces the complete set; include steering and brake
+values in the same update. Short timed bursts followed by observations leave
+input gaps and can lose acceleration or steering authority at speed.
+
+Renew before the independent wall-time TTL (50–5000 ms) or the bridge releases
+input and pauses. Supervisor heartbeats do not renew this deadline. Choose it
+above the measured observation-loop latency, and treat expiry as uncertainty.
+`release_inputs()` releases the set without pausing; pause/cancel/lease loss,
+reload and timed controls/wait/aim also clear it. `LiveClient` exposes the same
+async methods. Keep the policy bounded and verify motion; held input is not a
+pathfinder or obstacle-avoidance guarantee. Inspect `status.inputs` if unsure
+whether a set is still active.
+
 Use `gta_use.driving.drive_to(ctx, destination)` for an observed road destination.
 Its default speed is 28 m/s and its alerted driving style (`786469`) goes around
 traffic and ignores lights while retaining braking. Slow down deliberately for

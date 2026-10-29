@@ -333,3 +333,30 @@ verification. `fastapi-actions.json` is excluded because it overlapped a build.
 temporarily locked a batch status file. The final Rust server retries only that
 artifact read, covered by a real Windows file-lock scenario; it never resubmits
 the game action. The final rerun passed.
+
+## Continuous input during policy observations — 2026-10-29
+
+A failed Father/Son steering attempt held each input for 100 game milliseconds,
+then observed the world before submitting another burst. Its median update
+interval was 265.16 wall milliseconds. Those gaps motivated `controls.update`:
+the bridge holds the complete input set each frame while Python observes and
+replaces it. This removes the policy's input gaps; it does not make a poor route
+or steering controller correct. An independent 50–5000 ms wall deadline releases
+stale input and pauses, even while supervisor heartbeats continue.
+
+The deployed build passed a live on-foot check: twelve updates during a bounded
+movement interval produced 1.88 m of displacement without health loss. Explicit
+release worked, and an intentionally unrenewed 400 ms input set expired with
+`paused=true`, zero held inputs and identical game times 300 ms apart. Full-axis
+movement succeeded; preceding low-amplitude forward and directional-button
+trials did not move the character. A separate comparison also found no movement
+from the old timed low-amplitude command, so those failures do not establish a
+scheduler defect. They remain in the evidence rather than being discarded.
+
+Evidence is under local `artifacts/gta-story-campaign/continuous-input-live-005`
+and `input-diagnostic-001` / `input-variants-001`; the failed movement checks are
+`continuous-input-live-001` through `004`. The deployed GameBridge SHA-256 is
+`f4e67e048c9d688465d0cad6f9a6c7181b854fb1f62cc15bc2609799def47229`.
+This verifies held-input delivery and expiry, not Father/Son completion or a
+before/after driving performance result. The full build passed 345 C#, 83 Python
+and eight Rust tests, with 100% executable line and branch coverage retained.

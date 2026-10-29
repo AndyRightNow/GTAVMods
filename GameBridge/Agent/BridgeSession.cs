@@ -26,7 +26,7 @@ namespace GTAVMods.Agent
         {
             this.journal = journal; this.publish = publish; this.world = world;
             this.serviceTick = serviceTick ?? (() => { });
-            control = new WorldControl(world); runtime = new ShvdnRuntime(assemblies);
+            control = new WorldControl(world, clock); runtime = new ShvdnRuntime(assemblies);
             Commands = new CommandRegistry();
             var context = new CommandContext(world, WriteOutput);
             BuiltinCommands.Register(Commands, world, control, clock, new CSharpCommands(context, assemblies, compilationLimit), capture);
@@ -38,7 +38,7 @@ namespace GTAVMods.Agent
         }
         public CommandRegistry Commands { get; }
         public object Status() => new { protocol = Protocol.Version, session = journal.Session, paused = control.Paused,
-            stopped, lease = lease.Status(), batch = runner.Status(), directory = journal.Directory, log = journal.LogPath, droppedRecords = journal.DroppedRecords };
+            stopped, lease = lease.Status(), inputs = control.InputStatus(), batch = runner.Status(), directory = journal.Directory, log = journal.LogPath, droppedRecords = journal.DroppedRecords };
         public void Tick()
         {
             if (stopped) return;
@@ -48,6 +48,7 @@ namespace GTAVMods.Agent
                 serviceTick();
                 pipe.Tick();
                 runner.Tick();
+                control.Tick();
                 if (reloadReady)
                 {
                     reloadReady = false;

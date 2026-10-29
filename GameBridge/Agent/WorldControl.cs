@@ -8,10 +8,27 @@ namespace GTAVMods.Agent
     public sealed class WorldControl
     {
         private readonly IAgentWorld world;
-        public WorldControl(IAgentWorld world) { this.world = world; }
+        private readonly Func<long> clock;
+        private (int Group, int Control, float Value)[] inputs;
+        private long inputDeadline;
+        public WorldControl(IAgentWorld world, Func<long> clock) { this.world = world; this.clock = clock; }
         public bool Paused { get; private set; }
-        public void Pause(bool value) { world.Pause(value); Paused = value; }
-        public void Release() { if (Paused) Pause(false); }
+        public object InputStatus() => new { active = inputs != null, count = inputs?.Length ?? 0, deadlineWallMs = inputDeadline };
+        public object UpdateInputs((int Group, int Control, float Value)[] values, int milliseconds)
+        {
+            if (Paused) throw new InvalidOperationException("Resume before updating continuous controls.");
+            inputs = values; inputDeadline = clock() + milliseconds;
+            return InputStatus();
+        }
+        public void ClearInputs() { inputs = null; inputDeadline = 0; }
+        public void Tick()
+        {
+            if (inputs == null) return;
+            if (clock() >= inputDeadline) { Pause(true); return; }
+            foreach (var input in inputs) world.SetControl(input.Group, input.Control, input.Value);
+        }
+        public void Pause(bool value) { ClearInputs(); world.Pause(value); Paused = value; }
+        public void Release() { ClearInputs(); if (Paused) Pause(false); }
     }
 
     public sealed class TimedControls : IAgentStep
@@ -33,6 +50,7 @@ namespace GTAVMods.Agent
         {
             if (!started)
             {
+                control.ClearInputs();
                 if (control.Paused && !wallClock) throw new InvalidOperationException("Resume before advancing simulation time.");
                 startGameTime = world.GameTime; startWallTime = clock(); started = true;
             }

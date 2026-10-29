@@ -14,6 +14,30 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
     [TestClass, TestCategory("PlayerIntegration")]
     public class AgentReloadTests
     {
+        [TestMethod, DataRow("pause"), DataRow("cancel"), DataRow("release"), DataRow("expiry"), DataRow("abort")]
+        public void StoppingAReactiveDriverReleasesHeldInputsAndNeverReplaysThemOnLaterFrames(string reason)
+        {
+            using (var s = new AgentScene())
+            {
+                string token = Guid.NewGuid().ToString("N");
+                s.Request("lease", ("action", "acquire"), ("token", token), ("ms", 1000));
+                s.Request("action", ("token", token), ("steps", new[] { Step("controls.update", ("ttlMs", 5000), ("inputs", new[] { Step("", ("control", "VehicleAccelerate")) })) }));
+                s.Frame();
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                switch (reason)
+                {
+                    case "pause": s.Request("action", ("token", token), ("steps", new[] { Step("pause") })); break;
+                    case "cancel": s.Request("cancel"); break;
+                    case "release": s.Request("lease", ("action", "release"), ("token", token)); break;
+                    case "expiry": s.Frame(0, 1000); break;
+                    case "abort": s.Bridge.Dispose(); break;
+                }
+                s.Frame(0, 100);
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                StringAssert.Contains(s.Status, "\"inputs\":{\"active\":false,\"count\":0");
+            }
+        }
+
         [TestMethod, DataRow(false), DataRow(true)]
         public void ScriptAbortClosesPrefetchedConnectionsAndIgnoresLateResponseCompletion(bool replyBeforeAbort)
         {
@@ -67,20 +91,23 @@ namespace GTAVMods.Tests.PlayerIntegration.ModLifecycle
             type.CreateType().GetField("Requested").SetValue(null, reload); return assembly;
         }
 
-        [TestMethod]
-        public void ReloadReleasesAgentPauseAndWaitsForItsReceiptToBeWrittenBeforeAskingTheRuntime()
+        [TestMethod, DataRow(false), DataRow(true)]
+        public void ReloadReleasesAgentPauseAndWaitsForItsReceiptToBeWrittenBeforeAskingTheRuntime(bool heldInput)
         {
             int reloads = 0;
             var runtime = Runtime(() => reloads++); var connection = new AgentTransport();
             using (var s = new AgentScene(() => connection, () => new[] { typeof(object).Assembly, runtime }))
             {
-                s.Batch(Step("pause")); s.Frame();
+                s.Batch(heldInput ? Step("controls.update", ("inputs", new[] { Step("", ("control", "VehicleAccelerate")) })) : Step("pause")); s.Frame();
                 connection.Request(Protocol.Encode(s.Envelope("reload")));
                 s.FramesUntil(() => connection.Outgoing != null);
-                Assert.AreEqual(0, reloads); Assert.AreEqual(false, s.Game.Native.Calls.Last(c => c.Hash == Hash.SET_GAME_PAUSED).Arguments[0]);
+                Assert.AreEqual(0, reloads); StringAssert.Contains(s.Status, "\"paused\":false");
+                int controls = s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME);
                 StringAssert.Contains(connection.Response, "accepted");
                 connection.WriteCompleted.SetResult(true); s.Frame();
                 Assert.AreEqual(1, reloads); StringAssert.Contains(s.Published, "reloading"); StringAssert.Contains(s.Events, "agent.reload.requested");
+                Assert.AreEqual(controls, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+                StringAssert.Contains(s.Status, "\"inputs\":{\"active\":false,\"count\":0");
             }
         }
 
