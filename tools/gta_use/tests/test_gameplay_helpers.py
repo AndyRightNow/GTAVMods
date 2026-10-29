@@ -292,7 +292,7 @@ def run(ctx):
 ''', [scene()])
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(b"retained external frame", (self.root / "run/001-before.png").read_bytes())
-        self.assertEqual(str(self.root / "run/002-after.png"), outcome["evidence"]["second"])
+        self.assertTrue((self.root / "run/002-after.png").samefile(outcome["evidence"]["second"]))
         events = [json.loads(s) for s in (self.root / "run/events.jsonl").read_text().splitlines()]
         self.assertEqual(2, len([e for e in events if e["event"] == "screenshot" and e["state"]["gameTime"] == 100]))
 
