@@ -44,6 +44,14 @@ Prefer one game checkpoint or tactical objective per run. A segment may contain
 many actions and a reactive loop; do not split every 300 ms shot into a separate
 model interaction. Keep pause/inspect as the fallback for an uncertain scene.
 
+For an explicitly requested uninterrupted mission, compose the verified phases
+inside one `run(ctx)` and reserve `ctx.checkpoint` for the final result. Helpers
+that return with simulation running can transition directly to the next phase.
+Keep stage deadlines and failure stops: a failed run remains a failed attempt,
+not a partial success to concatenate with a later checkpoint run. Record source
+hashes, phase times, action logs and the final Mission Passed image. Count game
+retries, policy restarts and host interventions separately.
+
 Use the shipped policies as concrete starting points:
 
 - [cover_segment.py](../../../../tools/gta_use/examples/cover_segment.py): normal
@@ -61,8 +69,15 @@ Use the shipped policies as concrete starting points:
   occupancy, normal long-range driving task, vehicle condition, coordinate/road
   progress and bounded arrival. `GTA_USE_DESTINATION` is JSON with finite x/y/z.
   It is not a pursuit solver or guarantee of pathfinder success at gates/entrances.
+- [repossession.py](../../../../tools/gta_use/examples/repossession.py): the exact
+  single-invocation policy that completed Repossession in 17m 4s without an
+  intermediate pause, retry or host input. Its route anchors and tuning are
+  specific to the tested original-house save and mission; use its phase/observation
+  pattern, not its coordinates, for another mission. Read the
+  [replay conditions and evidence](../../../../docs/continuous-repossession.md)
+  before running it. It disables Thor and drives through live Story gameplay.
 
-Inspect current state before reusing either policy; do not reuse old target
+Inspect current state before reusing a policy; do not reuse old target
 handles, coordinates or tuning blindly. Resolve a known model name with
 `game.native("GET_HASH_KEY", "bagger", returns="int")` (using the relevant name)
 and compare it with the freshly observed model. Do not guess numeric hashes;
@@ -87,6 +102,9 @@ allowed. Do not walk back to a personal vehicle when a closer suitable one can
 be acquired. Mission-required vehicles, companions and current terrain still
 constrain the choice. A model name or driveable flag alone does not establish
 that a vehicle can leave its location.
+Before a timed pursuit, plan the departure as well as vehicle entry. A correct
+heading can still leave the car against stairs or on a sidewalk. Verify the
+stopped position and physical clearance; choose a turn toward the observed road.
 
 Check entry eligibility before moving. Driveability and door/driver access are
 separate: reject `CannotEnter` / `PlayerCannotEnter` for ordinary play, but do not
@@ -132,6 +150,11 @@ transition; callbacks must not replace the helper's driving task. A 12-second
 motion stall stops with evidence rather than resubmitting the same route. Select
 an accessible road/entrance waypoint after inspecting the obstruction; do not
 increase every timeout or force a straight-line path through unknown geometry.
+The helper brakes and clears its driving task on ordinary completion; repeatedly
+calling it with short timeouts to pursue a moving point sacrifices momentum.
+Use a persistent pursuit task or a deliberate road-interception phase, then
+switch to the freshly observed target. Road distance and interception geometry
+matter when direct chasing takes an unproductive route.
 
 ```python
 from gta_use.driving import drive_to, wait_for_control
@@ -196,6 +219,15 @@ controls and task interaction or switch a verified tactic; do not repeat dozens
 of half-second trials. A three-second TASK_DRIVE_BY diagnostic became active but spent no ammo; do not
 substitute it for verified player input. Any new native firing task requires live validation and
 explicit cancellation when the target or firing geometry changes.
+
+In a Repossession test, a long-range driving task kept weapon readiness false;
+clearing that task restored readiness but did not establish accurate moving fire.
+Do not assume arbitrary driving and firing tasks cooperate. Where the objective
+allows physical interception, a verified vehicle mission can be an alternative:
+`TASK_VEHICLE_MISSION` with mission type `2` (Ram) succeeded in a pursuit test
+through ordinary collision physics. Verify the native signature and target
+identity, then observe rider state and the required vehicle's condition. This is
+an optional tactic, unsuitable when the target must remain unhurt or undamaged.
 
 
 ## Run and climb short access routes

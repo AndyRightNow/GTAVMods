@@ -106,7 +106,10 @@ versus 29.318 s. Observed paths were 170.70 m versus 294.73 m, so heading,
 traffic and route choice confound the comparison; this does **not** establish a
 material elapsed-time improvement. The new leg caused no additional vehicle
 damage and Franklin retained 200 health. Continuous control removes model
-handoffs, but the full optimized mission has not been replayed for a speed claim.
+handoffs. A subsequent [one-script full replay](continuous-repossession.md)
+completed in 17m 4s, with a 92.08-second pursuit and 150.50-second bike return.
+It used a developed mission policy and physical interception, so it is separate
+from these model evaluations and is not a controlled A/B driving benchmark.
 
 Vehicle-fire diagnostics 089/090 separated control delivery from actual effect.
 Holding both normal and vehicle aim controls through preparation spent one round;
