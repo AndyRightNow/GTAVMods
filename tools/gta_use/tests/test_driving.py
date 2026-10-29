@@ -34,9 +34,15 @@ class DrivingWorld(ObservedGame):
                 self.observations.popleft()
         elif envelope["op"] == "action":
             step, value = envelope["steps"][0], None
+            if step["op"] == "command" and "gta-use:pursuit-target" in step["code"]:
+                t = self.targets[0]
+                value = None if t.get("missing") else dict(position=dict(x=0, y=t["y"], z=0),
+                                                            health=t["health"], vehicle=t["vehicle"])
+                if len(self.targets) > 1:
+                    self.targets.popleft()
             if step["op"] == "native":
                 name, args = step["name"], step["args"]
-                if self.lost and name == "TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE":
+                if self.lost and name in ("TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE", "TASK_VEHICLE_MISSION"):
                     return dict(id=envelope["id"], session=self.session, ok=False, uncertain=True, error="Lost drive receipt")
                 if name == "DOES_ENTITY_EXIST":
                     value = True
@@ -193,3 +199,66 @@ def run(ctx):
 ''')
         self.assertEqual(1, result.returncode)
         self.assertFalse(self.natives())
+
+    def test_interception_reaches_road_anchor_then_keeps_ram_task_until_rider_separates(self):
+        result, outcome = self.exercise([scene(), scene(95, 25), scene(110, 25), scene(118, 5)], targets=[
+            dict(y=1000, health=150, vehicle=40), dict(y=300, health=150, vehicle=40),
+            dict(y=120, health=150, vehicle=40), dict(y=120, health=0, vehicle=0)], code='''from gta_use.driving import intercept_vehicle
+def run(ctx):
+    result=intercept_vehicle(ctx,30,40,rider_model=46,vehicle_model=47,
+        waypoints=[dict(x=0,y=100,z=0)],waypoint_radius=10,engagement="ram",timeout=3,check_interval=.05)
+    ctx.checkpoint("rider-separated",**result)
+''')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("rider-separated", outcome["evidence"]["outcome"])
+        self.assertEqual(0, outcome["evidence"]["target"]["health"])
+        tasks = self.natives()
+        self.assertEqual(["TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE", "TASK_VEHICLE_MISSION", "CLEAR_PED_TASKS"],
+                         [t["name"] for t in tasks])
+        self.assertEqual((40, 2), tuple(tasks[1]["args"][2:4]), "Physical interception must target the observed vehicle, using Ram.")
+        queries = [s for r in self.game.requests for s in r.get("steps", []) if s["op"] == "command"]
+        self.assertEqual(4, len(queries), "One target query per observation, no per-field RPC loop.")
+        self.assertEqual(1, sum(s["name"] == "CLEAR_PED_TASKS" for s in tasks), "No braking/clearing between route and pursuit.")
+
+    def test_interception_defaults_to_chase_and_never_silently_selects_ram(self):
+        result, _ = self.exercise([scene(), scene(30)], targets=[dict(y=40,health=150,vehicle=40),
+             dict(y=40,health=150,vehicle=0)], code='''from gta_use.driving import intercept_vehicle
+def run(ctx):
+    result=intercept_vehicle(ctx,30,40,rider_model=46,vehicle_model=47,timeout=2,check_interval=.05)
+    ctx.checkpoint("target-dismounted",**result)
+''')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(["TASK_VEHICLE_CHASE", "CLEAR_PED_TASKS"], [n["name"] for n in self.natives()])
+
+    def test_interception_constant_gap_times_out_without_resetting_progress_for_travel(self):
+        result, outcome = self.exercise([scene()], targets=[dict(y=40, health=150, vehicle=40)], code='''from gta_use.driving import intercept_vehicle
+def run(ctx):
+    intercept_vehicle(ctx,30,40,rider_model=46,vehicle_model=47,timeout=2,
+                      no_progress_timeout=.2,check_interval=.05)
+''')
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertTrue(any(e["event"] == "pursuit-no-effect" for e in self.events()))
+        self.assertFalse(any(e["event"] == "progress" for e in self.events()))
+        self.assertEqual(["TASK_VEHICLE_CHASE", "CLEAR_PED_TASKS"], [n["name"] for n in self.natives()])
+
+    def test_lost_ram_receipt_never_replays_or_clears_uncertain_pursuit(self):
+        result, outcome = self.exercise([scene()], lost=True, code='''from gta_use.driving import intercept_vehicle
+def run(ctx):
+    intercept_vehicle(ctx,30,40,rider_model=46,vehicle_model=47,engagement="ram",timeout=2,check_interval=.05)
+''')
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertEqual(["TASK_VEHICLE_MISSION"], [n["name"] for n in self.natives()])
+
+    def test_control_must_stay_available_for_requested_settle_interval(self):
+        playing = scene()
+        playing["session"].update(playerControl=False, cutscenePlaying=True, cutsceneTime=2000)
+        result, outcome = self.exercise([scene(), playing, scene(), scene()], code='''from gta_use.driving import wait_for_control
+def run(ctx):
+    state=wait_for_control(ctx,timeout=2,check_interval=.05,stable_for=.1)
+    ctx.checkpoint("stable-control",session=state["session"])
+''')
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertGreaterEqual(sum(r["op"]=="state" for r in self.game.requests), 5)
+        self.assertTrue(any(e["event"] == "progress" and e["evidence"]["session"]["cutscenePlaying"] for e in self.events()))

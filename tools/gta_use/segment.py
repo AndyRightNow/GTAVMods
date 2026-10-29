@@ -3,8 +3,10 @@ import datetime
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import time
-from .client import Client
+from .client import BridgeError, Client, UncertainOutcome
 
 
 class StopSegment(RuntimeError):
@@ -35,7 +37,29 @@ class Segment:
         self.directory = Path(os.environ["GTA_USE_RUN_DIRECTORY"])
         self.game = Client(process=int(os.environ["GTA_USE_PROCESS"]))
         self.status = {"state": "running", "checked": time.time(), "progress": time.time(), "checkpoint": None}
+        self.capture_count = 0
         self.log("started", session=self.game.session)
+
+    def capture(self, label, *, state=None, allow_unavailable=False, **evidence):
+        """Retain a numbered screenshot beside the policy's logs and observations.
+
+        Only a foreground-window rejection may be skipped explicitly. Transport
+        uncertainty and other errors propagate; no screenshot action is replayed.
+        """
+        if not isinstance(label, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", label):
+            raise ValueError("Screenshot labels must use 1..80 letters, digits, underscores or hyphens.")
+        try:
+            shot = self.game.request("capture")
+        except BridgeError as error:
+            if isinstance(error, UncertainOutcome) or not allow_unavailable or "foreground window" not in str(error):
+                raise
+            self.log("screenshot-unavailable", label=label, reason=str(error))
+            return None
+        self.capture_count += 1
+        target = self.directory / f"{self.capture_count:03}-{label}.png"
+        shutil.copyfile(shot["screenshot"], target)
+        self.log("screenshot", label=label, path=str(target), state=state, **evidence)
+        return str(target)
 
     def log(self, event, **data):
         record = dict(data, event=event, utc=datetime.datetime.now(datetime.timezone.utc).isoformat())

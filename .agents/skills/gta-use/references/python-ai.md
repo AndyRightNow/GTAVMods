@@ -69,8 +69,9 @@ Use the shipped policies as concrete starting points:
   occupancy, normal long-range driving task, vehicle condition, coordinate/road
   progress and bounded arrival. `GTA_USE_DESTINATION` is JSON with finite x/y/z.
   It is not a pursuit solver or guarantee of pathfinder success at gates/entrances.
-- [repossession.py](../../../../tools/gta_use/examples/repossession.py): the exact
-  single-invocation policy that completed Repossession in 17m 4s without an
+- [repossession.py](../../../../tools/gta_use/examples/repossession.py): a
+  single-invocation policy now composed from the reusable SDK helpers below.
+  Its pre-extraction revision completed Repossession in 17m 4s without an
   intermediate pause, retry or host input. Its route anchors and tuning are
   specific to the tested original-house save and mission; use its phase/observation
   pattern, not its coordinates, for another mission. Read the
@@ -86,6 +87,53 @@ observation/behavior is understood. The SDK is in
 [client.py](../../../../tools/gta_use/client.py), the context in
 [segment.py](../../../../tools/gta_use/segment.py), and supervision in
 [__main__.py](../../../../tools/gta_use/__main__.py).
+
+## Compose reusable SDK operations
+
+Prefer these bounded helpers to copying native/C# loops into each mission. They
+use the current `ctx` lease and observations, never start another controller, and
+do not checkpoint or pause on success. Policy code chooses objectives, targets,
+routes and recovery tactics. A lost action receipt propagates without replay.
+
+| Operation | Contract |
+| --- | --- |
+| `vehicles.acquire_vehicle(ctx, desired=None, passenger=False, companion=None)` | Ordinary entry/carjacking; verifies the actual driver seat. `desired` and `companion` are observed `{handle, model}` entities. Prefers stationary eligible cars; accepts a passenger seat already occupied by the identified companion. Stops if a different vehicle must first be exited. |
+| `vehicles.leave_vehicle(ctx)` | Brakes when driving, requests ordinary exit without automatic blocked-door warping, waits for an on-foot observation. |
+| `vehicles.recover_upright(ctx)` | Bounded ordinary steering, followed by observed wheels-on-ground; never rotates or teleports the car. |
+| `combat.take_cover(ctx)` | One cover tap, then waits for settled cover; does not toggle during entry. Requires an observed suitable cover location. |
+| `combat.fire_from_cover(ctx, target, allies=...)` | One aim-only peek, current muzzle/companion geometry check and gated burst. Reports `not-ready`, `withheld` or `fired`, ammo and observed target-health change. Policy owns reload, healing waits, angle recovery and enemy selection. |
+| `combat.fire_from_vehicle(ctx, target)` | One bounded target-gated burst from the current seat without replacing the driving task. Rechecks target identity/range, observes ammo spent and damage; withholds during phone calls or without usable ammunition. |
+| `combat.muzzle_clear(game, target, allies=...)` | Current 3D muzzle ray and ally clearance for custom firing policies; aim/peek first. Supply every identified companion. |
+| `driving.intercept_vehicle(ctx, rider, vehicle, rider_model=..., vehicle_model=..., waypoints=...)` | Persistent interception route then moving pursuit; defaults to chase. `engagement="ram"` explicitly opts into ordinary collision damage. Rider separation is an observation, not mission completion. |
+| `driving.wait_for_control(ctx, stable_for=2)` | Requires control to remain available for the requested interval, restarting that interval if a cutscene returns. |
+| `ctx.capture("stage-name", state=state)` | Retains a numbered screenshot and evidence in the run directory. `allow_unavailable=True` may skip only a foreground-window rejection, never uncertain transport. |
+
+```python
+from gta_use.vehicles import acquire_vehicle, leave_vehicle
+from gta_use.combat import take_cover, fire_from_cover
+
+# Supply target/companions only after identifying them in fresh mission state.
+car = acquire_vehicle(ctx, passenger=True, companion=companion_entity)
+# ... drive to the observed mission approach ...
+leave_vehicle(ctx)
+# ... navigate to an observed cover location ...
+take_cover(ctx, minimum_health=120)
+burst = fire_from_cover(ctx, target_entity, allies=[companion_entity])
+if burst["outcome"] == "fired" and burst["damaged"]:
+    ctx.log("tactical-outcome", target=burst["target"], health=burst["after"])
+```
+
+Vehicle entry uses native timeout `-1`; Python owns the deadline. A finite native
+entry timeout can warp the ped even without an explicit warp flag. Do not restore
+that fallback to make a blocked approach look successful. Exit also disables the
+engine's default blocked-door warp.
+
+Target/companion identities, cover placement and tuning remain the caller's
+responsibility. An unknown human can still move into a later shot; current muzzle
+clearance is not a promise about the whole burst. Helpers use narrow state filters
+and combine candidate eligibility or pursuit target reads into one immediate C#
+request. The bridge caches repeated source within its 128-compilation session
+budget; they do not add a durable request store or a second scheduler.
 
 
 ## Identify the mission route, then choose transport
@@ -207,7 +255,14 @@ input, not forced damage. One stationary-car test hit spent a round and reduced
 entity health from 1000 to 974 while body/engine health remained 1000. A later
 ped-bone interval during pursuit spent three rounds and reduced rider health
 from 200 to 110, but the car nearly stopped. Sustained accuracy at speed remains
-unverified. Neither aim matches nor incidental damage establish successful fire;
+scenario-dependent. In the 2026-10-29 Repossession recovery, a native chase plus
+two gated 1.1-second rider bursts stopped the rider in under 20 seconds; the
+first requested no Attack frames, the second requested ten and observed health
+100 to 0. This validates that chase/aim combination, not arbitrary high-speed
+accuracy. `fire_from_vehicle` extracts it with fresh range, identity and ammo
+observations. Use it in a pursuit callback, with a bounded no-shot allowance:
+two windows without ammo expenditure require diagnosis or another verified
+tactic. Neither aim matches nor incidental damage establish successful fire;
 correlate requested Attack, ammo and the intended target's health.
 
 Vehicle shooting has different timing from on-foot `aim`. The latter's aim and

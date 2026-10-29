@@ -51,6 +51,9 @@ For short on-foot access with bounded climb/vault recovery, use
 `gta_use.navigation.navigate_to`; its contract is in Python AI.
 For mission scripting, read [Python AI](references/python-ai.md) and consult
 [world state](references/world-state.md) for the fields your policy consumes.
+Python AI also documents reusable vehicle access, settled cover, muzzle-safe
+bursts, persistent interception and evidence capture; compose those helpers
+before embedding another native control loop in a mission script.
 Start by running the small observation example in Python AI. Then implement the
 next observed objective. The runner already supplies logs, state files, leases,
 heartbeats, checkpoints and timeouts; use `ctx.directory` and `ctx.log` instead

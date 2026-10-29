@@ -194,6 +194,27 @@ Imported helper modules remain normal Python imports from the script's original
 directory; snapshot/version them separately when reproducibility requires it.
 Do not spawn detached child controllers from a segment.
 
+Compose SDK helpers before writing another native loop. `gta_use.vehicles`
+provides `acquire_vehicle`, `leave_vehicle` and bounded `recover_upright`;
+`gta_use.combat` provides `take_cover`, `muzzle_clear` and `fire_from_cover`.
+`gta_use.driving.intercept_vehicle` keeps an observed road interception and chase
+continuous; `engagement="ram"` explicitly opts into physical interception.
+`wait_for_control(stable_for=2)` waits for stable control after a cutscene, and
+`ctx.capture("stage", state=state)` retains numbered screenshots with evidence.
+These operations share the current supervisor and lease, verify observed outcomes
+and leave simulation running on success. Vehicle/target/companion arguments use
+fresh `{handle, model}` identities. Entry uses native timeout `-1` and a Python
+deadline; it does not warp into an inaccessible car. Approach garage entrances
+with the navigation helper when required.
+
+Long decisions and recovery limits stay in Python. Candidate access checks,
+pursuit target reads and muzzle geometry are gathered in immediate C# commands
+on the existing bridge, reducing round trips without adding a server or scheduler.
+Mission routes, target selection and tactics stay in the policy. See the
+[Python AI guide](../.agents/skills/gta-use/references/python-ai.md) for parameters
+and the [Repossession replay](continuous-repossession.md) for live evidence and
+its mission-specific limits.
+
 These are distinct checks: socket liveness, script observations, meaningful
 progress and overall deadline. WebSocket Ping/Pong does not prove mission progress.
 If SHVDNE stops ticking in a menu/failure screen, the watchdog cannot run until

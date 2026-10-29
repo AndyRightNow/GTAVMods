@@ -37,7 +37,12 @@ foreach ($name in @('pyproject.toml', 'uv.lock', '.python-version')) {
 }
 Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tools/gta_use') -Filter '*.py' -File |
     Copy-Item -Destination (Join-Path $agent 'tools/gta_use')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/gta_use/examples') -Destination (Join-Path $agent 'tools/gta_use/examples') -Recurse
+$exampleDirectory = Join-Path $agent 'tools/gta_use/examples'
+$null = New-Item -ItemType Directory -Path $exampleDirectory
+# Live policy imports may leave interpreter caches beside the examples. Package
+# portable source only, never machine-specific bytecode or gameplay artifacts.
+Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tools/gta_use/examples') -Filter '*.py' -File |
+    Copy-Item -Destination $exampleDirectory
 $guides = Join-Path $stage 'docs'
 New-Item -ItemType Directory -Path $guides -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/gta-use.md'), (Join-Path $repoRoot 'docs/world-state.md') -Destination $guides

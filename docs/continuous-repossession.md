@@ -7,8 +7,11 @@ ending evidence collection. There were **zero intermediate policy pauses, game
 checkpoint retries, script reloads or host inputs** during this passing attempt.
 The supervisor paused after the final evidence checkpoint.
 
-The [shipped example](../tools/gta_use/examples/repossession.py) is byte-identical
-to that run's snapshotted source. It is a developed, mission-specific policy,
+The [original example at ff99490](https://github.com/AndyRightNow/GTAVMods/blob/ff994908bc2d3749e754756657ec6cf40c9f9c32/tools/gta_use/examples/repossession.py)
+is byte-identical to that run's snapshotted source. The current
+[shipped example](../tools/gta_use/examples/repossession.py) extracts reusable
+vehicle, combat and interception operations into the SDK; the historical timings
+and hashes below identify the original run. It is a developed, mission-specific policy,
 not a fresh blind model evaluation. Earlier failed development attempts are
 accounted for below; this result does not establish repeatability or campaign-wide
 autonomy.
@@ -49,7 +52,7 @@ observations, not measured simulation time.
 
 | Phase | Time | Observed outcome |
 | --- | ---: | --- |
-| House, contact call and Simeon approach | 166.22 s | Original save; normal vehicle entry and garage reverse-out |
+| House, contact call and Simeon approach | 166.22 s | Original save; driver seat reached (entry caveat below), garage reverse-out |
 | Briefing and control return | 128.30 s | Cutscene advanced without a pause |
 | Beach drive, parking and exit | 198.03 s | Lamar boarded; car stopped facing the departure street |
 | Follow Lamar and entry fence | 64.37 s | `navigate_to` climbed and reached the far side |
@@ -63,9 +66,14 @@ observations, not measured simulation time.
 
 The 1,574 logged policy action requests include observation natives/C# and batches;
 they are not 1,574 distinct gameplay inputs. Franklin finished at **182 health**.
-No teleport, direct damage, health change, weapon/ammo grant, lock change, mission
-global change or time manipulation was used. Normal game tasks and controls drove
-movement, cover, aiming, firing, entry and climbing.
+No explicit teleport, direct damage, health change, weapon/ammo grant, lock change,
+mission global change or time manipulation was requested. Subsequent helper
+extraction found that the original vehicle-entry task's finite 25-second engine
+timeout can warp a ped. Its first entry took about 25.8 seconds, so the earlier
+claim of entirely ordinary entry is **not verified**. The SDK now passes `-1`
+to disable that engine timeout and enforces a separate Python deadline, while
+logging approach observations. Other movement, cover, aiming, firing and climbing
+used normal game tasks and controls.
 
 Pursuit used a persistent road interception followed by `TASK_VEHICLE_MISSION`
 type 2 (Ram), allowing ordinary game collision physics. It did not prove accurate
@@ -144,3 +152,59 @@ the restored focus-loss setting because of its video-memory limit, so the origin
 complete hash and both Story save hashes match their pre-test values. No profile
 or account files were replaced. Local `cleanup.json` records those checks beside
 `build-continuous-mission.log` under `artifacts/single-run-repossession/`.
+
+## SDK extraction and campaign continuation — 2026-10-29
+
+Reusable vehicle access/exit/roll recovery, settled-cover entry, muzzle-safe
+bursts, continuous interception, stable control-return waiting and retained
+screenshots now live in the SDK. The mission owns its route anchors, enemy
+identification and tactics. Candidate eligibility and pursuit target observations
+are batched into single C# requests rather than several native round trips.
+
+Live extraction testing found three problems before the complete replay: the
+finite entry timeout could warp the player; the no-warp entry task could not
+path from the house doorstep; and two generated C# snippets needed the correct
+leave-vehicle enum and an unambiguous bone placeholder. These are fixed. A
+short driveway approach followed by native timeout `-1` reached the driver seat
+in about six seconds, with continuous approach positions and before/after images.
+The ordinary approach plus entry diagnostic took 14.32 seconds. Engine timeouts
+are no longer used to manufacture entry success.
+
+`artifacts/sdk-helper-extraction/run-002` then played continuously from the garage
+car through the briefing, drive, both fences, garages and cover combat. The
+cover helper observed eleven target-health reductions to zero, twelve rounds
+used and player health 191. The run failed after **984.67 seconds**, because
+the four-minute Ram pursuit did not stop the rider. This is a failed uninterrupted
+attempt; it is not counted as an uninterrupted pass. A window-focus restoration
+occurred, but no host gameplay input or policy edit occurred during that run.
+
+A separate recovery policy continued the same mission without a GTA checkpoint
+retry. Native chase plus two gated 1.1-second pistol intervals stopped the rider
+in under twenty seconds. The first interval requested zero Attack frames; the
+second requested ten and observed rider health 100 to 0. The ordinary bike
+return took 186.65 seconds. Recovery and ending evidence took **266.15 seconds**;
+combined runner time was **1,250.82 seconds**, with **one policy recovery**, zero
+GTA retries and final health 191. `combat.fire_from_vehicle` extracts the tested
+chase/fire pattern with additional range, identity and ammo checks; the example
+now uses that helper with a two-window no-shot limit. That final source has not
+yet completed an uninterrupted replay.
+
+Mission Passed was independently inspected in
+`artifacts/gta-story-campaign/repossession-recovery-001/host-ending-001.png`
+(SHA-256 `ebed44b19129c1dffac136d94dd9cd3eff57fc1baca21307222b1a242f2e2efd`).
+The bridge correctly rejected captures while another window was foreground;
+the retained image came from the desktop window-capture tool. Null screenshot
+fields in the policy result are not completion evidence. Both runs, failures,
+source hashes and structured traces remain outside Git.
+
+The campaign continues from a new manual slot `SGTA50000`. The original
+`SGTA50015` and backup hashes remain unchanged. Autosave stays Off; focus-loss
+pausing is temporarily disabled for supervised play and must be restored at
+the end of testing. This ongoing campaign is separate from the earlier cleaned-up
+single-run evaluation.
+
+The extraction build/test/package workflow passed **336 C# scenarios, 67 Python
+scenarios and 8 Rust tests**, plus the same installer, diagnostic and coverage
+guardrails. C# executable line and branch coverage remains 100% with the counts
+above. Skill validation and whitespace checks passed. No DLL deployment was
+needed for these Python helpers; the existing game process imports the SDK.

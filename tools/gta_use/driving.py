@@ -4,6 +4,7 @@ import time
 
 from .client import UncertainOutcome
 from .navigation import _float, _point
+from ._validation import _bounds, _identity
 
 # SHVDNE DrivingModeAvoidVehicles: alerted driving with braking and obstacle
 # avoidance, without traffic-light waits. Not the reckless preset.
@@ -16,19 +17,13 @@ def _approach_speed(remaining, radius, cruise, arrival):
     return min(cruise, max(arrival, math.sqrt(5 * max(0, remaining - radius))))
 
 
-def _bounds(**values):
-    for name, (value, low, high) in values.items():
-        if isinstance(value, bool) or not math.isfinite(value) or not low <= value <= high:
-            raise ValueError(f"{name} must be finite and between {low} and {high}.")
-
-
 class _Driver:
     def __init__(self, ctx, minimum_health):
         self.ctx, self.game, self.minimum_health = ctx, ctx.game, minimum_health
         self.identity = None
         self.owns_task = self.uncertain = False
 
-    def observe(self):
+    def observe(self, *, allow_roll=False):
         state = self.ctx.check(sections=["player", "vehicle"])
         p, v = state["sections"].get("player"), state["sections"].get("vehicle")
         session = state["session"]
@@ -47,7 +42,7 @@ class _Driver:
             self.owns_task = False
             self.ctx.uncertain("Driver or vehicle identity changed.")
         self.identity = identity
-        if p["entity"]["health"] < self.minimum_health or not v["driveable"] or v["upsideDown"]:
+        if p["entity"]["health"] < self.minimum_health or not v["driveable"] or (v["upsideDown"] and not allow_roll):
             self.ctx.uncertain("Driver health or vehicle condition needs recovery.")
         return state, p, v
 
@@ -127,15 +122,16 @@ def drive_to(ctx, destination, *, speed=28, arrival_speed=6, radius=5,
         driver.close()
 
 
-def wait_for_control(ctx, *, timeout=90, check_interval=.4):
+def wait_for_control(ctx, *, timeout=90, check_interval=.4, stable_for=0):
     """Observe a bounded mission transition, including actual cutscene progress.
 
     Control returning is not Mission Passed. Call only for an expected transition;
     this resumes simulation but never dismisses a game menu or failure modal.
     """
-    _bounds(timeout=(timeout, 1, 300), check_interval=(check_interval, .05, 2))
+    _bounds(timeout=(timeout, 1, 300), check_interval=(check_interval, .05, 2),
+            stable_for=(stable_for, 0, timeout))
     deadline = time.monotonic() + timeout
-    previous, last_cutscene = None, -1
+    previous, last_cutscene, stable_since = None, -1, None
     ctx.game.action("resume")
     while time.monotonic() < deadline:
         state = ctx.check(sections=["player"])
@@ -148,7 +144,11 @@ def wait_for_control(ctx, *, timeout=90, check_interval=.4):
             ctx.progress("Observed mission transition", session=s)
         previous, last_cutscene = signature, playback
         if s["playerControl"] and not s["cutscenePlaying"] and state["sections"].get("player"):
-            return state
+            stable_since = time.monotonic() if stable_since is None else stable_since
+            if time.monotonic() - stable_since >= stable_for:
+                return state
+        else:
+            stable_since = None
         time.sleep(check_interval)
     ctx.uncertain("Mission transition did not return control before its deadline.")
 
@@ -210,6 +210,106 @@ def pursue_vehicle(ctx, rider, vehicle, *, rider_model, vehicle_model,
             if now - progress_at >= no_progress_timeout:
                 ctx.log("pursuit-no-effect", target=t)
                 ctx.uncertain("Pursuit is not closing or affecting its target; change tactics after inspection.")
+            time.sleep(check_interval)
+        ctx.uncertain("Pursuit exceeded its overall deadline.")
+    except UncertainOutcome:
+        driver.uncertain = True
+        raise
+    finally:
+        driver.close()
+
+
+def intercept_vehicle(ctx, rider, vehicle, *, rider_model, vehicle_model,
+                      waypoints=(), waypoint_radius=35, engage_distance=180,
+                      engagement="chase", speed=40, driving_style=786468,
+                      timeout=240, no_progress_timeout=65, check_interval=.25,
+                      minimum_health=100, recover_rolls=False, on_tick=None):
+    """Continuous road interception followed by chase or explicitly chosen ram.
+
+    Waypoints describe a caller-observed interception route. Closing within
+    engage_distance switches directly to the moving target. Tasks persist across
+    observations; no arrival braking or repeated half-second handoffs. Ram uses
+    normal collision physics and may damage the rider/vehicle. It is opt-in.
+    Rider separation is an inspection transition, never Mission Passed.
+    """
+    from .vehicles import recover_upright
+    _identity(dict(handle=rider, model=rider_model))
+    _identity(dict(handle=vehicle, model=vehicle_model))
+    points = [_point(p) for p in waypoints]
+    if len(points) > 32 or engagement not in ("chase", "ram") or not isinstance(recover_rolls, bool):
+        raise ValueError("Use <=32 waypoints, chase/ram engagement and a boolean recovery option.")
+    if isinstance(driving_style, bool) or not isinstance(driving_style, int) or not 0 <= driving_style <= 2147483647:
+        raise ValueError("driving_style must be a nonnegative signed integer bitmask.")
+    _bounds(waypoint_radius=(waypoint_radius, 1, 100), engage_distance=(engage_distance, 2, 500),
+            speed=(speed, 1, 60), timeout=(timeout, 1, 600),
+            no_progress_timeout=(no_progress_timeout, .2, 120), check_interval=(check_interval, .05, 2),
+            minimum_health=(minimum_health, 1, 10000))
+    # One immediate RPC, one game-thread observation, cached C# for this identity.
+    # Avoid seven individually framed native requests per pursuit observation.
+    query = ('''/* gta-use:pursuit-target */
+        var rider=Entity.FromHandle(%d) as Ped; var vehicle=Entity.FromHandle(%d) as Vehicle;
+        if(rider==null || !rider.Exists() || rider.Model.Hash!=%d ||
+           vehicle==null || !vehicle.Exists() || vehicle.Model.Hash!=%d) return null;
+        return new {position=rider.Position, health=rider.Health,
+                    vehicle=Function.Call<int>(Hash.GET_VEHICLE_PED_IS_IN,rider.Handle,false)};
+    ''') % (rider, vehicle, rider_model, vehicle_model)
+    driver = _Driver(ctx, minimum_health)
+    started = progress_at = window_at = time.monotonic()
+    best = health = math.inf
+    window_gap, route_index, plan, last_sample = None, 0, None, 0
+    try:
+        ctx.game.action("resume")
+        while time.monotonic() - started < timeout:
+            state, p, v = driver.observe(allow_roll=recover_rolls)
+            if p is None:
+                return dict(outcome="transition", state=state)
+            if recover_rolls and v["upsideDown"]:
+                recover_upright(ctx, minimum_health=minimum_health)
+                state, p, v = driver.observe()
+                if p is None:
+                    return dict(outcome="transition", state=state)
+            target = ctx.game.command(query)
+            if target is None:
+                ctx.uncertain("Pursuit target identity changed or disappeared.")
+            target["distance"] = math.dist(_point(p["entity"]["position"]), _point(target["position"]))
+            now = time.monotonic()
+            if now - last_sample > 2:
+                ctx.log("pursuit-sample", target=target, vehicle=v)
+                last_sample = now
+            if target["health"] <= 0 or target["vehicle"] != vehicle:
+                return dict(outcome="rider-separated", target=target, state=state)
+            if target["distance"] < best - 3 or target["health"] < health:
+                if math.isfinite(best):
+                    ctx.progress("Moving vehicle pursuit closing", target=target)
+                best, health, progress_at = min(best, target["distance"]), min(health, target["health"]), now
+            if window_gap is None:
+                window_gap = target["distance"]
+            if now - window_at >= 5:
+                if window_gap - target["distance"] > 8:
+                    progress_at = now
+                    ctx.progress("Pursuit closed over observation window", before=window_gap, after=target["distance"])
+                window_gap, window_at = target["distance"], now
+            if on_tick is not None and on_tick(ctx, state, target):
+                return dict(outcome="policy", target=target, state=state)
+            if target["distance"] < engage_distance:
+                route_index = len(points)
+            while route_index < len(points) and math.dist(_point(p["entity"]["position"]), points[route_index]) < waypoint_radius:
+                route_index += 1
+            if plan != route_index:
+                if route_index < len(points):
+                    ctx.game.native("TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE", driver.identity[0], driver.identity[2],
+                                    *map(_float, points[route_index]), _float(speed), driving_style, _float(3))
+                    ctx.log("intercept-replan", road=dict(zip(("x", "y", "z"), points[route_index])), target=target)
+                elif engagement == "ram":
+                    ctx.game.native("TASK_VEHICLE_MISSION", driver.identity[0], driver.identity[2], vehicle,
+                                    2, _float(speed), driving_style, _float(2), _float(15), True)
+                    ctx.log("physical-vehicle-interception", target=target)
+                else:
+                    ctx.game.native("TASK_VEHICLE_CHASE", driver.identity[0], rider)
+                driver.owns_task, plan = True, route_index
+            if now - progress_at >= no_progress_timeout:
+                ctx.log("pursuit-no-effect", target=target)
+                ctx.uncertain("Moving vehicle pursuit did not close the gap or affect its target.")
             time.sleep(check_interval)
         ctx.uncertain("Pursuit exceeded its overall deadline.")
     except UncertainOutcome:

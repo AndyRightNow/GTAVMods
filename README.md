@@ -11,10 +11,13 @@ Python segments, observed world state, cover combat, driving and normal game
 controls. [Live results and limitations](docs/gta-use.md#live-verification-repossession-2026-10-27)
 describe checkpoint retries, screenshot evidence and server/watchdog recovery.
 
-On 2026-10-29, a [single Python policy](tools/gta_use/examples/repossession.py)
+On 2026-10-29, the pre-extraction version of the [single Python policy](tools/gta_use/examples/repossession.py)
 completed Repossession from the original house save in **17m 4s**, with no
 intermediate pause, retry or host input. [Replay evidence and conditions](docs/continuous-repossession.md)
 separate that passing attempt from the failed runs used to develop it.
+The current example composes reusable SDK operations for vehicle access, settled
+cover/fire, continuous interception and evidence capture; its mission routes and
+tactical choices remain in the policy.
 
 Separate initial [DeepSeek 1017 Max and Terra 6.1 Max evaluations](docs/agent-evaluation.md)
 did not finish Repossession. A later assisted Terra Max continuation did, with a

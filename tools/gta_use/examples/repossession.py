@@ -5,16 +5,15 @@ current mission/companion/vehicle observations. No checkpoints until the ending.
 No teleport, health, ammunition, damage, locks, mission globals or time changes.
 """
 import hashlib
-import json
 import math
 from pathlib import Path
-import shutil
 import time
 
-from gta_use.driving import drive_to, pursue_vehicle, wait_for_control
+from gta_use.driving import drive_to, intercept_vehicle, wait_for_control
+from gta_use.vehicles import acquire_vehicle, leave_vehicle, recover_upright
+from gta_use.combat import take_cover, fire_from_cover, fire_from_vehicle
 from gta_use.navigation import navigate_to
 from gta_use.segment import StopSegment
-from gta_use.client import BridgeError
 
 AXES = ('x', 'y', 'z')
 LAMAR = 1706635382
@@ -46,7 +45,6 @@ class Mission:
         self.phase_times = {}
         self.last_anchor = None
         self.last_capture = 0
-        self.shot_count = 0
         self.action_count = 0
         self.mission_started = False
         self.ending = False
@@ -92,19 +90,8 @@ class Mission:
         return s
 
     def capture(self, label, state=None):
-        try:
-            shot = self.g.request('capture')
-        except BridgeError as exc:
-            if 'foreground window' not in str(exc):raise
-            self.ctx.log('screenshot-unavailable',label=label,reason=str(exc))
-            return None
-        path = Path(shot['screenshot'])
-        self.shot_count += 1
-        target = self.ctx.directory / f'{self.shot_count:03}-{label}.png'
-        shutil.copyfile(path, target)
-        self.ctx.log('screenshot', stage=self.stage, label=label, path=str(target),
-                     state=state, elapsed=time.monotonic()-self.started)
-        return str(target)
+        return self.ctx.capture(label, state=state, allow_unavailable=True,
+                                stage=self.stage, elapsed=time.monotonic()-self.started)
 
     def phase(self, name):
         self.stage = name
@@ -119,17 +106,7 @@ class Mission:
                              inputs=[dict(control=k, value=v) for k,v in inputs.items()])
 
     def take_cover(self):
-        p=self.read(False)['sections']['player']
-        if p['inCover']:return
-        if not p['goingIntoCover']:self.controls(200,Cover=1)
-        end=time.monotonic()+5
-        while time.monotonic()<end:
-            p=self.read(False)['sections']['player']
-            if p['inCover']:
-                self.ctx.progress('Observed settled cover',position=p['entity']['position'])
-                return
-            time.sleep(.2)
-        self.ctx.uncertain('Cover entry did not settle within five seconds')
+        return take_cover(self.ctx, minimum_health=103)
 
     def clear(self):
         self.g.native('CLEAR_PED_TASKS', self.read(False)['sections']['player']['entity']['handle'])
@@ -178,55 +155,21 @@ class Mission:
         self.ctx.uncertain('Local approach timed out: '+self.stage)
 
     def leave_car(self):
-        s=self.read()
-        if not s['sections']['player']['inVehicle']:return
-        self.clear()
-        self.controls(600,VehicleHandbrake=1)
-        self.g.command('P.Task.LeaveVehicle(LeaveVehicleFlags.None);')
-        end=time.monotonic()+15
-        while time.monotonic()<end:
-            if not self.read()['sections']['player']['inVehicle']:return
-            time.sleep(.2)
-        self.ctx.uncertain('Ordinary vehicle exit failed')
+        return leave_vehicle(self.ctx, minimum_health=103)
 
     def acquire(self, desired=None, passenger=False):
-        s=self.read()
-        p=s['sections']['player']
-        if p['inVehicle'] and s['sections']['vehicle']['driver']==p['entity']['handle']:
-            return s['sections']['vehicle']['entity']
-        rejected=set()
-        for attempt in range(4):
-            s=self.read()
-            candidates=[n['entity'] for n in self.nodes(s) if n['kind']=='vehicle'
-                        and (desired is None or n['entity']['handle']==desired)
-                        and not n['entity']['dead'] and n['entity']['handle'] not in rejected
-                        and n['entity']['relative']['distance']<55
-                        and abs(n['entity']['position']['z']-p['entity']['position']['z'])<4]
-            # A close moving car may leave before an on-foot entry can start.
-            # Prefer a stationary car; a slow carjack remains a valid fallback.
-            candidates.sort(key=lambda e:(0 if desired==e['handle'] else 1,
-                math.hypot(e['velocity']['x'],e['velocity']['y'])>1,
-                e['relative']['distance']))
-            car=None
-            for e in candidates:
-                v=self.g.command(('var v=Entity.FromHandle(%d) as Vehicle; if(v==null || !v.Exists() || v.Model.Hash!=%d) return null; '
-                    'return new {driveable=v.IsDriveable,locked=v.LockStatus.ToString(),passenger=v.IsSeatFree(VehicleSeat.Passenger),occupant=Function.Call<int>(Hash.GET_PED_IN_VEHICLE_SEAT,v.Handle,0,false)};')%(e['handle'],e['model']))
-                if v and v['driveable'] and v['locked'] in ('None','Unlocked','CanBeBrokenInto') and (not passenger or v['passenger'] or v['occupant']==self.friend):
-                    car=e;break
-            if car is None:self.ctx.uncertain('No nearby eligible road vehicle')
-            self.ctx.log('acquire-vehicle',vehicle=car,attempt=attempt)
-            self.g.command(('var v=Entity.FromHandle(%d) as Vehicle; if(v==null || !v.Exists() || v.Model.Hash!=%d) throw new Exception("entry identity"); '
-                'P.Task.EnterVehicle(v,VehicleSeat.Driver,25000,2f,EnterVehicleFlags.None);')%(car['handle'],car['model']))
-            end=time.monotonic()+28
-            while time.monotonic()<end:
-                s=self.read(); p=s['sections']['player']; v=s['sections'].get('vehicle')
-                if p['inVehicle'] and p['vehicle']==car['handle'] and v and v['driver']==p['entity']['handle']:
-                    self.ctx.progress('Verified driver entry',vehicle=car)
-                    return car
-                time.sleep(.3)
-            self.clear();rejected.add(car['handle'])
-            if desired is not None:self.ctx.uncertain('Required mission bike entry failed')
-        self.ctx.uncertain('Four eligible vehicle entry attempts failed')
+        state = self.read()
+        wanted = None
+        if desired is not None:
+            wanted = next((n['entity'] for n in self.nodes(state)
+                           if n['kind']=='vehicle' and n['entity']['handle']==desired), None)
+            current = state['sections'].get('vehicle')
+            if wanted is None and current and current['entity']['handle']==desired:
+                wanted = current['entity']
+            if wanted is None:self.ctx.uncertain('Required vehicle is not currently observed')
+        companion = dict(handle=self.friend, model=LAMAR) if self.friend else None
+        return acquire_vehicle(self.ctx, wanted, passenger=passenger,
+                               companion=companion, minimum_health=103)
 
     def board_friend(self):
         end=time.monotonic()+35
@@ -266,15 +209,8 @@ class Mission:
                 style |= 256
 
     def cutscene(self, timeout=180):
-        end=time.monotonic()+timeout;stable=None
-        while time.monotonic()<end:
-            s=self.read(False)
-            if s['session']['playerControl'] and not s['session']['cutscenePlaying']:
-                stable=stable or time.monotonic()
-                if time.monotonic()-stable>2:return self.read()
-            else:stable=None
-            time.sleep(.3)
-        self.ctx.uncertain('Expected cutscene did not return control')
+        wait_for_control(self.ctx, timeout=timeout, check_interval=.3, stable_for=2)
+        return self.read()
 
     def setup_contact(self):
         s=self.phase('reach-simeon')
@@ -297,6 +233,13 @@ class Mission:
             time.sleep(.4)
         else:self.ctx.uncertain('Contact never became available')
         contact=contacts[0]['position']
+        # The recorded garage entry task cannot path from the front doorstep.
+        # Approach its open driveway first; never rely on native timeout warping.
+        pos=s['sections']['player']['entity']['position']
+        if not s['sections']['player']['inVehicle'] and dist(pos,dict(x=-14.2,y=-1446.5,z=30.6))<5:
+            garage=next((n['entity'] for n in self.nodes(s) if n['kind']=='vehicle'
+                         and dist(n['entity']['position'],dict(x=-25.16,y=-1427.97,z=30.28))<2),None)
+            if garage:self.walk(dict(x=-25,y=-1439,z=30.6),radius=1.5,timeout=30)
         self.car=self.acquire(passenger=True)
         current=self.read()['sections']['player']['entity']['position']
         if -29<current['x']<-19 and -1437<current['y']<-1422:
@@ -432,24 +375,6 @@ class Mission:
                 and n['entity']['model'] in GANG and n['ped']['weapon']!='Unarmed'
                 and (n['ped']['inCombatWithPlayer'] or n['entity']['handle'] in marked)]
 
-    def muzzle_clear(self,target):
-        return self.g.command(r'''
-            var t=Entity.FromHandle(TARGET) as Ped;
-            var a=Entity.FromHandle(ALLY) as Ped;
-            if(t==null || !t.Exists() || t.Model.Hash!=MODEL || t.IsDead || a==null || !a.Exists() || a.IsDead) return false;
-            var head=Function.Call<Vector3>(Hash.GET_PED_BONE_COORDS,t.Handle,31086,0f,0f,0f);
-            var ah=Function.Call<Vector3>(Hash.GET_PED_BONE_COORDS,a.Handle,31086,0f,0f,0f);
-            int w=Function.Call<int>(Hash.GET_CURRENT_PED_WEAPON_ENTITY_INDEX,P.Handle,false);
-            int bone=Function.Call<int>(Hash.GET_ENTITY_BONE_INDEX_BY_NAME,w,"gun_muzzle");
-            if(w==0 || bone<0) return false;
-            var src=Function.Call<Vector3>(Hash.GET_WORLD_POSITION_OF_ENTITY_BONE,w,bone);
-            var ray=World.Raycast(src,head,IntersectFlags.Everything,P);
-            var d=head-src; float len=d.LengthSquared(); if(len<.01f) return false;
-            float u=Math.Max(0f,Math.Min(1f,Vector3.Dot(ah-src,d)/len));
-            float clearance=(ah-(src+d*u)).Length();
-            return ray.DidHit && ray.HitEntity!=null && ray.HitEntity.Handle==t.Handle && clearance>.7f;
-        '''.replace('TARGET',str(target['handle'])).replace('MODEL',str(target['model'])).replace('ALLY',str(self.friend)))
-
     def combat(self):
         self.phase('cover-combat')
         deadline=time.monotonic()+300;quiet=None;blocked={};moved_cover=False;last_photo=0
@@ -471,19 +396,12 @@ class Mission:
             if w['selected']!='Pistol' or not w['totalAmmo']:self.ctx.uncertain('No usable mission pistol')
             t=min(enemies,key=lambda n:(blocked.get(n['entity']['handle'],0),n['entity']['relative']['distance']))['entity']
             h=t['handle']
-            self.g.action('aim',entity=h,bone=31086,ms=650,shoot=False)
-            safe=self.muzzle_clear(t)
-            if safe:
-                outcome=self.g.action('aim',entity=h,bone=31086,ms=1100,warmupMs=150,shoot=True,requireAimTarget=True)
-                after=self.read();hp=self.g.native('GET_ENTITY_HEALTH',h,returns='int')
-                self.ctx.log('cover-fire',target=h,before=t['health'],after=hp,aim=outcome,
-                             ammoBefore=w['totalAmmo'],ammoAfter=after['sections']['weapons']['totalAmmo'])
-                if hp<t['health']:
-                    blocked[h]=0;self.ctx.progress('Observed attacker damage',target=h,health=hp)
-                else:blocked[h]=blocked.get(h,0)+1
-            else:
+            result=fire_from_cover(self.ctx,t,allies=[dict(handle=self.friend,model=LAMAR)],
+                                   minimum_health=103)
+            if result['outcome']=='fired' and result['damaged']:
+                blocked[h]=0
+            elif result['outcome']!='not-ready':
                 blocked[h]=blocked.get(h,0)+1
-                self.ctx.log('muzzle-withheld',target=h,attempts=blocked[h])
             if time.monotonic()-last_photo>8:
                 self.capture('combat',self.read());last_photo=time.monotonic()
             if blocked.get(h,0)>=2 and not moved_cover:
@@ -507,81 +425,30 @@ class Mission:
             navigate_to(self.ctx,FENCE_OUT,route_mode='direct',radius=2,timeout=40,stall_timeout=.8,max_climbs=3,minimum_health=103)
             self.capture('exit-fence-crossed',self.read())
         self.car=self.acquire(passenger=True)
-        # A brief roll can resolve naturally; if it settles inverted, ordinary
-        # steering input lets the player rock a GTA vehicle back onto its wheels.
-        for recovery in range(12):
-            v=self.read(False)['sections']['vehicle']
-            if not v or not v['driveable']:self.ctx.uncertain('Pursuit car is no longer driveable')
-            if v['onAllWheels']:break
-            self.ctx.log('vehicle-roll-recovery',attempt=recovery,vehicle=v)
-            self.controls(500,VehicleMoveLeftRight=1 if v['entity']['rotation']['y']>0 else -1)
-        else:self.ctx.uncertain('Pursuit car did not recover upright')
+        recover_upright(self.ctx, minimum_health=103)
         # Lamar may follow into the chase car, but do not idle through a pursuit.
         self.phase('intercept-mission-bike')
         rider=self.g.native('GET_PED_IN_VEHICLE_SEAT',self.bike,-1,False,returns='int')
         if not rider:self.ctx.uncertain('Marked bike has no identified rider')
         rider_model=self.g.native('GET_ENTITY_MODEL',rider,returns='int')
-        last_sample=0
-        driver=self.read(False)['sections']['player']['entity']['handle']
-        vehicle=self.read(False)['sections']['player']['vehicle']
-        current=self.read(False)['sections']['player']['entity']['position']
-        # Replan the road destination without clearing the driving task between
-        # moving goals. The arrival helper deliberately brakes/stops at its goal.
-        self.g.native('SET_DRIVER_ABILITY',driver,f(1))
-        self.g.native('SET_DRIVER_AGGRESSIVENESS',driver,f(.8))
-        last_plan=0;route_index=0 if current['y'] < -880 else 1
+        player=self.read(False)['sections']['player']
+        # These road anchors and firing cadence are specific to this mission.
         interception=[dict(x=-1134,y=-850,z=13.5),dict(x=-1343,y=-540,z=30),dict(x=-1540,y=-640,z=28)]
-        deadline=time.monotonic()+240;best=float('inf');progress=time.monotonic();hp_best=1000
-        window_gap=None;window_at=time.monotonic()
-        try:
-            while time.monotonic()<deadline:
-                state=self.read(False);p=state['sections']['player'];v=state['sections']['vehicle']
-                if not v or p['vehicle']!=vehicle or v['driver']!=driver or not v['driveable']:
-                    self.ctx.uncertain('Pursuit driver or vehicle condition changed')
-                if v['upsideDown']:
-                    for recovery in range(12):
-                        self.controls(500,VehicleMoveLeftRight=1 if v['entity']['rotation']['y']>0 else -1)
-                        v=self.read(False)['sections']['vehicle']
-                        if v and v['onAllWheels']:break
-                    else:self.ctx.uncertain('Car remained overturned after normal steering recovery')
-                if self.g.native('GET_ENTITY_MODEL',self.bike,returns='int')!=self.bike_model or self.g.native('GET_ENTITY_MODEL',rider,returns='int')!=rider_model:
-                    self.ctx.uncertain('Pursuit target identity changed')
-                hp=self.g.native('GET_ENTITY_HEALTH',rider,returns='int')
-                position=self.g.native('GET_ENTITY_COORDS',rider,False,returns='vector3')
-                target=dict(position=position,health=hp,distance=dist(p['entity']['position'],position))
-                if time.monotonic()-last_sample>2:
-                    self.ctx.log('pursuit-sample',target=target,vehicle=v);last_sample=time.monotonic()
-                if hp<=0 or self.g.native('GET_VEHICLE_PED_IS_IN',rider,False,returns='int')!=self.bike:
-                    result=dict(outcome='rider-separated',target=target);break
-                if target['distance']<best-3 or hp<hp_best:
-                    best=min(best,target['distance']);hp_best=min(hp_best,hp);progress=time.monotonic()
-                    self.ctx.progress('Moving vehicle pursuit closing',target=target)
-                if window_gap is None:window_gap=target['distance']
-                if time.monotonic()-window_at>=5:
-                    if window_gap-target['distance']>8:
-                        progress=time.monotonic()
-                        self.ctx.progress('Pursuit closed over observation window',before=window_gap,after=target['distance'])
-                    window_gap=target['distance'];window_at=time.monotonic()
-                if target['distance']<180 and route_index<len(interception):
-                    route_index=len(interception);last_plan=0
-                if route_index<len(interception):
-                    road=interception[route_index]
-                    if dist(p['entity']['position'],road)<35:
-                        route_index+=1;last_plan=0
-                    if route_index<len(interception) and not last_plan:
-                        road=interception[route_index]
-                        self.g.native('TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE',driver,vehicle,*[f(road[k]) for k in AXES],f(40),786468,f(3))
-                        self.ctx.log('intercept-replan',road=road,target=target)
-                        last_plan=time.monotonic()
-                elif not last_plan:
-                    self.g.native('TASK_VEHICLE_MISSION',driver,vehicle,self.bike,2,f(40),786468,f(2),f(15),True)
-                    self.ctx.log('physical-bike-interception',target=target)
-                    last_plan=time.monotonic()
-                if time.monotonic()-progress>65:self.ctx.uncertain('Moving vehicle pursuit did not close the gap')
-                time.sleep(.25)
-            else:self.ctx.uncertain('Pursuit deadline exceeded')
-        finally:
-            self.g.native('CLEAR_PED_TASKS',driver)
+        if player['entity']['position']['y']>=-880:interception=interception[1:]
+        last_shot=0;no_shot=0
+        def engage(ctx,state,target):
+            nonlocal last_shot,no_shot
+            if target['distance']<45 and time.monotonic()-last_shot>2:
+                burst=fire_from_vehicle(ctx,dict(handle=rider,model=rider_model),minimum_health=103)
+                last_shot=time.monotonic()
+                if burst['outcome']=='fired':
+                    no_shot=0 if burst['ammoSpent'] or burst['damaged'] else no_shot+1
+                    if no_shot>=2:ctx.uncertain('Two vehicle firing windows spent no ammunition; inspect weapon/task interaction')
+            return False
+        result=intercept_vehicle(self.ctx,rider,self.bike,rider_model=rider_model,
+                                 vehicle_model=self.bike_model,waypoints=interception,
+                                 engagement='chase',recover_rolls=True,minimum_health=103,on_tick=engage)
+        if result['outcome']!='rider-separated':self.ctx.uncertain('Pursuit interrupted before rider separation')
         self.ctx.log('pursuit-ended',result=result)
         bike_pos=self.g.native('GET_ENTITY_COORDS',self.bike,False,returns='vector3')
         if dist(self.read(False)['sections']['player']['entity']['position'],bike_pos)>28:
@@ -630,9 +497,10 @@ class Mission:
 
 def run(ctx):
     policy=Mission(ctx)
-    import gta_use.driving, gta_use.navigation
+    import gta_use.driving, gta_use.navigation, gta_use.vehicles, gta_use.combat, gta_use.segment, gta_use._validation
     ctx.log('source-hashes',files={str(Path(p)):hashlib.sha256(Path(p).read_bytes()).hexdigest()
-        for p in (__file__,gta_use.driving.__file__,gta_use.navigation.__file__)})
+        for p in (__file__,gta_use.driving.__file__,gta_use.navigation.__file__,
+                  gta_use.vehicles.__file__,gta_use.combat.__file__,gta_use.segment.__file__,gta_use._validation.__file__)})
     try:
         policy.run()
     except Exception:
