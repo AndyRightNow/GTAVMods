@@ -5,11 +5,13 @@ $collector = Join-Path (Split-Path -Parent $PSScriptRoot) 'Collect-Diagnostics.p
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('GTAVMods-Diagnostics-' + [Guid]::NewGuid().ToString('N'))
 $originalLocalAppData = $env:LOCALAPPDATA
 $null = New-Item -ItemType Directory -Path (Join-Path $fixture 'game/scripts/Logs') -Force
-$null = New-Item -ItemType Directory -Path (Join-Path $fixture 'local/GTAVMods/Bridge') -Force
+$null = New-Item -ItemType Directory -Path (Join-Path $fixture 'repository/artifacts/gta-use/Bridge'), (Join-Path $fixture 'game/scripts/GtaUse') -Force
 try {
     $env:LOCALAPPDATA = Join-Path $fixture 'local'
     $game = Join-Path $fixture 'game'
-    $bridge = Join-Path $env:LOCALAPPDATA 'GTAVMods/Bridge'
+    $runtime = Join-Path $fixture 'repository/artifacts/gta-use'
+    $bridge = Join-Path $runtime 'Bridge'
+    $runtime | Set-Content -LiteralPath (Join-Path $game 'scripts/GtaUse/.runtime-root') -Encoding UTF8
     foreach ($file in @('GTA5_Enhanced.exe','scripts/AgentBridge.dll','scripts/GameBridge.dll','StraightToStoryMode.asi','StraightToStoryMode.log','ScriptHookVDotNet.log','scripts/Logs/Thor-test.jsonl')) {
         'fixture' | Set-Content -LiteralPath (Join-Path $game $file)
     }
@@ -26,7 +28,7 @@ try {
     }
     foreach ($screenshots in @($false,$true)) {
         $zip = Join-Path $fixture "capture-$screenshots.zip"
-        & $collector -GameDirectory $game -BridgeDirectory $bridge -Destination $zip -IncludeAgentScreenshots:$screenshots
+        & $collector -GameDirectory $game -Destination $zip -IncludeAgentScreenshots:$screenshots
         $extract = Join-Path $fixture "extract-$screenshots"
         Expand-Archive -LiteralPath $zip -DestinationPath $extract
         $files = @(Get-ChildItem -LiteralPath $extract -File -Recurse)

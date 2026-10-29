@@ -38,6 +38,8 @@ once when `navigation.truncated` is true; radius, entity limit, type and LOS fil
 are also CLI options. The raw
 `request describe` remains available for the complete catalogue.
 
+Bridge discovery and evidence default to the checkout's ignored `artifacts/gta-use/Bridge`. Installation records that runtime root in the game's `scripts/GtaUse/.runtime-root`; consult [operations](references/operations.md) when changing it. The SDK does not depend on the shell's working directory.
+
 If `.python-path` is missing or its interpreter no longer works, read
 [operations](references/operations.md) for setup. Do not run `uv sync` repeatedly
 against a read-only environment. Process enumeration can be restricted in an

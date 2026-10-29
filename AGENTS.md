@@ -10,7 +10,7 @@ The installation verified on **2026-10-20** used:
 
 | Item | Verified value |
 | --- | --- |
-| Repository on this PC | `C:\Users\Helen\repositories\GTAVMods` |
+| Repository on this PC (moved 2026-10-30) | `D:\repositories\GTAVMods` |
 | Game on this PC | `D:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced` |
 | Game executable | `GTA5_Enhanced.exe`, **1.0.1158.16** |
 | Script Hook V | **v3889.0 / 1158.13**, released July 15, 2026 |
@@ -44,9 +44,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1
 ```
 
 If `dotnet` is not on PATH, pass `-DotNet 'C:\path\to\dotnet.exe'`. The portable
-SDK used on this PC is at
-`C:\Users\Helen\Documents\Codex\2026-10-20\c\work\tooling\dotnet\dotnet.exe`;
-check that it still exists before using it. Use process-scoped execution-policy
+SDK is now at `<repo>/.dotnet/dotnet.exe`;
+check that it still exists before using it. `scripts/Build-Local.ps1` selects the
+repo-local .NET, Rust/LLVM, uv, Python and cache paths after a checkout move.
+Use process-scoped execution-policy
 options; do not change the machine's PowerShell policy.
 
 `Build.ps1` verifies the pinned SHVDNE API download, restores locked NuGet
@@ -286,7 +287,10 @@ complete; never ship automatic teleport/camera test harnesses.
   disk writes on every frame. Individual agent actions are ephemeral: no request/
   response receipt files, replay cache or durable flush. Diagnostics and console
   output use bounded asynchronous file logging; batch, screenshot and supervised
-  policy evidence lives under `%LOCALAPPDATA%\GTAVMods\Bridge`. See
+  policy evidence lives under the checkout's ignored `artifacts/gta-use/Bridge`.
+  `Install-AgentService.ps1` records the runtime root in the installed
+  `scripts/GtaUse/.runtime-root`; service upgrade backups use that root's
+  `Backups` directory. See
   `docs/gta-use.md` for protocol and controls. Do not retain an in-memory console
   history or diagnostic archive.
   Logging failures must not crash gameplay.

@@ -22,6 +22,13 @@ authentication and session artifacts. Managed reload retains the companion and
 URL; process failure is checked every ten seconds. Missing binaries
 produce diagnostics while the in-game bridge remains available.
 
+The runtime defaults to the checkout's ignored `artifacts/gta-use`; installation
+records it in `scripts/GtaUse/.runtime-root`. Discovery and session evidence live
+under its `Bridge` subdirectory, and service upgrade backups under `Backups`.
+The SDK, runner and diagnostics collector use the same configuration. See
+[runtime locations](gta-use.md#runtime-directory) for explicit overrides;
+the installed executable remains in `scripts/GtaUse`.
+
 The Rust executable accepts three arguments: discovery directory, GTA PID and
 the prepared Python executable. Normal operation uses automatic startup. Its
 random loopback port and bearer token are published to `service-<PID>.json`;

@@ -50,8 +50,7 @@ def supervise(args):
                                          checkTimeout=args.check_timeout, started=time.time()))
     print(json.dumps({"directory": str(directory), "session": game.session}), flush=True)
     environment = dict(os.environ, GTA_USE_RUN_DIRECTORY=str(directory), GTA_USE_TOKEN=game.token,
-                       GTA_USE_DISCOVERY=str(Path(args.discovery or os.environ.get("GTA_USE_DISCOVERY") or
-                            Path(os.environ["LOCALAPPDATA"]) / "GTAVMods" / "Bridge").resolve()),
+                       GTA_USE_DISCOVERY=str(game.discovery_root),
                        GTA_USE_PROCESS=str(game.discovery["process"]), GTA_USE_SCRIPT_DIRECTORY=str(source.parent))
     environment["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent) + os.pathsep + environment.get("PYTHONPATH", "")
     process = None

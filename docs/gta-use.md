@@ -76,7 +76,7 @@ Do not change Windows security labels or weaken the pipe ACL to fix an environme
 Rust is the only server. The installer requires `scripts/GtaUse/gta-use-server.exe`
 and backs up/removes the obsolete Python server, its bytecode and backend selector
 from older packages. Backups and a SHA-256 manifest are kept under
-`%LOCALAPPDATA%/GTAVMods/Backups`. Python remains available for the SDK and policies;
+`artifacts/gta-use/Backups` under the source checkout (or configured runtime directory). Python remains available for the SDK and policies;
 `uv sync --frozen` removes the old server dependencies from this dedicated environment.
 
 The bridge starts the prepared service invisibly, checks it every ten seconds,
@@ -84,12 +84,37 @@ reuses it across script reloads, and restarts it after an exit. It never downloa
 dependencies from the game thread. A missing environment produces a file diagnostic
 with the preparation command. The companion exits when the game process exits.
 
-Discovery files are in %LOCALAPPDATA%\GTAVMods\Bridge:
+## Runtime directory
+
+Runtime files default to `artifacts/gta-use` under the source checkout. Run
+`scripts/Install-AgentService.ps1 -GameDirectory <game>` from this checkout with
+GTA closed: it records that absolute runtime root in the installed
+`scripts/GtaUse/.runtime-root`. The game and Rust service then write into the
+checkout even though their installed binaries remain beside the game.
+The Python SDK resolves its project directory independently of the shell's
+working directory; supervised workers inherit the resolved discovery path.
+
+Discovery files are in `<runtime>/Bridge`:
 
 - bridge-<game PID>.json: current managed session, private pipe and session directory.
 - service-<game PID>.json: loopback URL, bearer token and companion process.
 - service-<game PID>.jsonl: rotating service diagnostics.
 - service-<game PID>-stdio.log: Rust startup failures and panic diagnostics.
+
+`<runtime>/Bridge/session-*` contains batch evidence, screenshots and default
+policy runs; `<runtime>/Backups` contains service upgrade backups. These files
+stay out of Git. `-RuntimeDirectory` selects another root during installation;
+set the checkout's ignored `.runtime-root` to that same root when using its SDK,
+or pass `--discovery <runtime>/Bridge` / `GTA_USE_DISCOVERY` explicitly.
+A `.runtime-root` may also be relative to its project directory. An empty file
+is an error. A standalone package without a configured root defaults to
+`scripts/GtaUse/artifacts/gta-use`; it does not write bridge data to AppData.
+Reinstalling a standalone package preserves its configured root.
+
+Existing AppData sessions are historical evidence. Relocate them with GTA and
+its service closed, preserving archived directory links and file hashes; do not
+silently delete them or rewrite their recorded paths. Ordinary diagnostics
+rotate, but retained session screenshots and batch evidence require archiving.
 
 The service binds only 127.0.0.1, uses a fresh bearer token, and rejects Origin
 headers. The private named pipe grants the current Windows user access and denies

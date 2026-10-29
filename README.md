@@ -6,6 +6,11 @@ screenshots, C# commands and script reload through an automatically started
 HTTP/WebSocket service powered by [Rust/Axum](docs/rust-service.md),
 with uv-managed Python 3.14 checkpoint scripts.
 
+Bridge discovery, session traces, screenshots and service upgrade backups live
+under the checkout's ignored `artifacts/gta-use` directory. Run the repository's
+`scripts/Install-AgentService.ps1` with GTA closed to point the installed bridge
+at this directory; `-RuntimeDirectory` selects an explicit alternative.
+
 On 2026-10-27, GTA use completed the full **Repossession** Story mission using
 Python segments, observed world state, cover combat, driving and normal game
 controls. [Live results and limitations](docs/gta-use.md#live-verification-repossession-2026-10-27)
@@ -79,6 +84,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1
 # A portable SDK can be selected explicitly:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1 -DotNet 'C:\path\to\dotnet.exe'
 ```
+
+For this PC's prepared portable tools, `scripts/Build-Local.ps1` runs that same workflow with SDKs, Python and caches resolved relative to the checkout. The repository is now at `D:\repositories\GTAVMods`; the wrapper survives future moves without a C: path.
 
 This verifies a pinned SHVDNE download by SHA-256, restores locked NuGet packages,
 prepares locked Python 3.14 dependencies, builds all projects, runs the Python and

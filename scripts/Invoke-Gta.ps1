@@ -10,11 +10,16 @@ param(
     [switch]$Capture,
     [switch]$NoWait,
     [int]$GameProcessId,
-    [string]$DiscoveryDirectory = (Join-Path $env:LOCALAPPDATA 'GTAVMods/Bridge'),
+    [string]$DiscoveryDirectory,
     [ValidateRange(1,3600)][int]$TimeoutSeconds = 60
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if (!$DiscoveryDirectory) {
+    $DiscoveryDirectory = if ($env:GTA_USE_DISCOVERY) { $env:GTA_USE_DISCOVERY } else {
+        Join-Path (& (Join-Path $PSScriptRoot 'Get-AgentRuntimeDirectory.ps1')) 'Bridge'
+    }
+}
 
 function Find-GtaBridge {
     $matches = @(Get-ChildItem -LiteralPath $DiscoveryDirectory -Filter 'bridge-*.json' -File | ForEach-Object {

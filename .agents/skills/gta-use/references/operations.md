@@ -15,7 +15,7 @@ starts the packaged Rust server invisibly, checks it every ten seconds, and reus
 it across managed reloads. Runtime installation never happens on the game thread.
 Rust is the sole server; Python runs the SDK and policies. Upgrades back up and
 remove the obsolete Python server, bytecode and backend selector, with a hash
-manifest under `%LOCALAPPDATA%/GTAVMods/Backups`. See
+manifest under the configured runtime root's `Backups` directory. See
 [server setup](../../../../docs/rust-service.md) and
 [measured comparisons](../../../../docs/bridge-performance.md).
 
@@ -26,7 +26,7 @@ Story resumes automatically. Otherwise select Story/Resume Story, never Online.
 Do not treat old discovery files as
 running processes; find the current `GTA5_Enhanced` PID.
 
-Discovery is `%LOCALAPPDATA%/GTAVMods/Bridge`. `bridge-<PID>.json` identifies the
+Runtime files default to the checkout's ignored `artifacts/gta-use`. Run the repository installer with GTA closed to record this root in the installed `scripts/GtaUse/.runtime-root`. The SDK reads its own project's optional `.runtime-root` regardless of the working directory; use `--discovery` or `GTA_USE_DISCOVERY` for an explicit `Bridge` directory. Packaged-only installs default to `scripts/GtaUse/artifacts/gta-use`. Discovery is `<runtime>/Bridge`. `bridge-<PID>.json` identifies the
 managed session and artifact directory; `service-<PID>.json` contains the loopback
 URL and credential. Use `Client(process=<PID>)`; avoid dumping credential files.
 `GET /v1/session` can succeed while game ticks are suspended. Follow it with a

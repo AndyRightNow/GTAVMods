@@ -9,6 +9,14 @@ namespace GTAVMods.Agent
 {
     public static class BridgeComposition
     {
+        public static BridgeSession CreateForProject(IAgentWorld world, string project, int process, DiagnosticLog log, IWindowPixels pixels)
+        {
+            string configuration = Path.Combine(project, ".runtime-root");
+            string root = File.Exists(configuration) ? File.ReadAllText(configuration).Trim() : Path.Combine("artifacts", "gta-use");
+            if (string.IsNullOrWhiteSpace(root)) throw new InvalidDataException("GTA use .runtime-root is empty. Run Install-AgentService.ps1 to configure its runtime directory.");
+            root = Path.GetFullPath(Path.Combine(project, root));
+            return Create(world, Path.Combine(root, "Bridge"), process, log, pixels, project);
+        }
         public static BridgeSession Create(IAgentWorld world, string root, int process, DiagnosticLog log, IWindowPixels pixels, string serviceDirectory = null)
         {
             string session = Guid.NewGuid().ToString("N");
@@ -43,10 +51,9 @@ namespace GTAVMods.Agent
                 new GtaEntities(new GtaEntityLifetimeBindings()), new GtaPeds(), new GtaWeapons(),
                 new GtaWorld(new GtaWorldQueries()), new GtaCameras(new GtaCameraLifetimeBindings()),
                 new GtaRopes(new GtaRopeLifetimeBindings()), new GtaNative(), new ScalarArgumentMarshaller(new GtaArgumentMarshaller()), new GtaOutputs());
-            session = BridgeComposition.Create(new AgentWorld(game, native, new Func<Blip[]>(GtaAgentQueries.Blips)),
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GTAVMods", "Bridge"),
-                Process.GetCurrentProcess().Id, Logger.Default, new WindowPixels(new NativeWindowCaptureApi()),
-                Path.Combine(BaseDirectory, "GtaUse"));
+            session = BridgeComposition.CreateForProject(new AgentWorld(game, native, new Func<Blip[]>(GtaAgentQueries.Blips)),
+                Path.Combine(BaseDirectory, "GtaUse"), Process.GetCurrentProcess().Id, Logger.Default,
+                new WindowPixels(new NativeWindowCaptureApi()));
             Tick += OnTick;
             Aborted += OnAborted;
             Interval = 0;

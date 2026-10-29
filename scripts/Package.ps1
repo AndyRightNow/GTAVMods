@@ -27,6 +27,7 @@ Copy-Item -Path (Join-Path $repoRoot 'Thor/resources/enhanced/*') -Destination $
 Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Collect-Diagnostics.ps1') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Invoke-Gta.ps1') -Destination $stage
 Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Install-AgentService.ps1') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Get-AgentRuntimeDirectory.ps1') -Destination $stage
 $agent = Join-Path $scripts 'GtaUse'
 $null = New-Item -ItemType Directory -Path (Join-Path $agent 'tools/gta_use') -Force
 Copy-Item -LiteralPath (Join-Path $artifactRoot 'rust/release/gta-use-server.exe') -Destination $agent

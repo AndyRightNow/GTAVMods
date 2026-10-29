@@ -2,11 +2,14 @@
 param(
     [Parameter(Mandatory=$true)][string]$GameDirectory,
     [string]$Destination = (Join-Path (Split-Path -Parent $PSScriptRoot) ('artifacts/diagnostics-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.zip')),
-    [string]$BridgeDirectory = (Join-Path $env:LOCALAPPDATA 'GTAVMods/Bridge'),
+    [string]$BridgeDirectory,
     [switch]$IncludeAgentScreenshots
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $GameDirectory).Path
+if (!$BridgeDirectory) {
+    $BridgeDirectory = Join-Path (& (Join-Path $PSScriptRoot 'Get-AgentRuntimeDirectory.ps1') -ProjectDirectory (Join-Path $root 'scripts/GtaUse')) 'Bridge'
+}
 $exe = Join-Path $root 'GTA5_Enhanced.exe'
 if (!(Test-Path -LiteralPath $exe)) { throw 'GTA5_Enhanced.exe not found.' }
 $destinationPath = [IO.Path]::GetFullPath($Destination)

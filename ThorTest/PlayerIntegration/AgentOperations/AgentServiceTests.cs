@@ -30,6 +30,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
             File.Copy(executable, Path.Combine(project, "gta-use-server.exe"));
             // A stale backend selector from an older install must not redirect startup.
             File.WriteAllText(Path.Combine(project, ".rust-server-path"), Path.Combine(scene.Root, "obsolete-server.exe"));
+            File.WriteAllText(Path.Combine(project, ".runtime-root"), Path.Combine(scene.Root, "repository", "artifacts", "gta-use"));
             return project;
         }
         [TestMethod]
@@ -52,9 +53,10 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 s.Game.Native.Returns(Hash.GET_GPS_BLIP_ROUTE_FOUND, false);
                 s.Game.Native.Returns(Hash.GET_GPS_BLIP_ROUTE_LENGTH, 0);
                 string project = ServiceProject(s);
-                using (var bridge = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), project))
+                string runtime = Path.Combine(s.Root, "repository", "artifacts", "gta-use", "Bridge");
+                using (var bridge = BridgeComposition.CreateForProject(s.World, project, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels)))
                 {
-                    string discovery = Path.Combine(s.Root, "service-" + Process.GetCurrentProcess().Id + ".json");
+                    string discovery = Path.Combine(runtime, "service-" + Process.GetCurrentProcess().Id + ".json");
                     int server = 0, replacement = 0;
                     Action tick = () => { s.Game.Host.GameTime += 16; bridge.Tick(); };
                     try
@@ -62,7 +64,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                         Wait(() => File.Exists(discovery), tick, 15000);
                         var entry = Protocol.Decode(File.ReadAllText(discovery)); server = (int)entry["serviceProcess"];
                         var info = new ProcessStartInfo(File.ReadAllText(Path.Combine(Project(), ".python-path")).Trim(),
-                            "\"" + Path.Combine(Project(), "tools", "gta_use", "tests", "bridge_scenario.py") + "\" \"" + s.Root + "\" " + Process.GetCurrentProcess().Id) {
+                            "\"" + Path.Combine(Project(), "tools", "gta_use", "tests", "bridge_scenario.py") + "\" \"" + runtime + "\" " + Process.GetCurrentProcess().Id) {
                             UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true
                         };
                         using (var client = Process.Start(info))
@@ -87,7 +89,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                         Assert.AreNotEqual(server, replacement);
                         // A managed reload publishes a new session but keeps the companion and URL.
                         bridge.Dispose();
-                        using (var reloaded = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), project))
+                        using (var reloaded = BridgeComposition.CreateForProject(s.World, project, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels)))
                         using (var client = Process.Start(info))
                         {
                             var output = client.StandardOutput.ReadToEndAsync(); var error = client.StandardError.ReadToEndAsync();
@@ -102,8 +104,8 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                     {
                         foreach (int id in new[] { server, replacement }.Where(id => id != 0).Distinct())
                             try { using (var process = Process.GetProcessById(id)) { process.Kill(); process.WaitForExit(); } } catch (ArgumentException) { }
-                        foreach (string file in Directory.GetFiles(s.Root, "*-stdio.log")) Console.WriteLine(File.ReadAllText(file));
-                        foreach (string file in Directory.GetFiles(s.Root, "service-*.jsonl")) Console.WriteLine(File.ReadAllText(file));
+                        foreach (string file in Directory.GetFiles(runtime, "*-stdio.log")) Console.WriteLine(File.ReadAllText(file));
+                        foreach (string file in Directory.GetFiles(runtime, "service-*.jsonl")) Console.WriteLine(File.ReadAllText(file));
                         Console.WriteLine(s.Events);
                         Directory.Delete(project, true);
                     }
@@ -114,18 +116,38 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         public void MissingPreparedServiceIsLoggedWhileThePlayerCanStillUseTheBridge(bool pythonPrepared)
         {
             using (var s = new AgentScene())
-            using (var bridge = BridgeComposition.Create(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels), s.Root))
             {
+                string runtime = Path.Combine(s.Root, "artifacts", "gta-use", "Bridge");
                 if (pythonPrepared)
                 {
                     File.Copy(Path.Combine(Project(), ".python-path"), Path.Combine(s.Root, ".python-path"));
+                    File.WriteAllText(Path.Combine(s.Root, ".runtime-root"), "relative-runtime");
+                    runtime = Path.Combine(s.Root, "relative-runtime", "Bridge");
                 }
-                File.WriteAllText(Path.Combine(s.Root, "service-" + Process.GetCurrentProcess().Id + ".json"), Protocol.Encode(new { serviceProcess = Process.GetCurrentProcess().Id }));
-                bridge.Tick();
-                Wait(() => s.Events.Contains("agent.service.start.failed"), bridge.Tick, 5000);
-                StringAssert.Contains(s.Events, "agent.service.start.failed"); StringAssert.Contains(s.Events, pythonPrepared ? "Rust service is missing" : "uv sync --frozen");
-                var request = new { version = 1, id = Guid.NewGuid().ToString("N"), session = Protocol.Decode(Protocol.Encode(bridge.Status()))["session"], op = "status" };
-                Assert.AreEqual(true, Protocol.Decode(bridge.Dispatch(Protocol.Encode(request)))["ok"]);
+                else
+                {
+                    File.WriteAllText(Path.Combine(s.Root, ".runtime-root"), " \r\n");
+                    Assert.Throws<InvalidDataException>(() => BridgeComposition.CreateForProject(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels)));
+                    Assert.IsFalse(Directory.Exists(runtime), "Invalid configuration must not redirect session evidence into a different directory.");
+                    File.Delete(Path.Combine(s.Root, ".runtime-root"));
+                }
+                using (var bridge = BridgeComposition.CreateForProject(s.World, s.Root, Process.GetCurrentProcess().Id, s.Log, new WindowPixels(s.Pixels)))
+                {
+                    File.WriteAllText(Path.Combine(runtime, "service-" + Process.GetCurrentProcess().Id + ".json"), Protocol.Encode(new { serviceProcess = Process.GetCurrentProcess().Id }));
+                    bridge.Tick();
+                    Wait(() => s.Events.Contains("agent.service.start.failed"), bridge.Tick, 5000);
+                    StringAssert.Contains(s.Events, "agent.service.start.failed"); StringAssert.Contains(s.Events, pythonPrepared ? "Rust service is missing" : "uv sync --frozen");
+                    var request = new { version = 1, id = Guid.NewGuid().ToString("N"), session = Protocol.Decode(Protocol.Encode(bridge.Status()))["session"], op = "status" };
+                    var status = Protocol.Decode(bridge.Dispatch(Protocol.Encode(request)));
+                    Assert.AreEqual(true, status["ok"]);
+                    StringAssert.StartsWith((string)Protocol.Decode(Protocol.Encode(status["result"]))["directory"], runtime + Path.DirectorySeparatorChar);
+                    var captureRequest = new { version = 1, id = Guid.NewGuid().ToString("N"), session = request.session, op = "capture" };
+                    var capture = Protocol.Decode(bridge.Dispatch(Protocol.Encode(captureRequest)));
+                    Assert.AreEqual(true, capture["ok"], "Missing service setup must not prevent direct bridge inspection.");
+                    string screenshot = (string)Protocol.Decode(Protocol.Encode(capture["result"]))["screenshot"];
+                    StringAssert.StartsWith(screenshot, runtime + Path.DirectorySeparatorChar);
+                    Assert.IsTrue(File.Exists(screenshot), "The usable bridge must retain requested evidence under its configured project runtime.");
+                }
             }
         }
         private static void Wait(Func<bool> completed, Action tick, int timeout)

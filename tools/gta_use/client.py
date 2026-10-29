@@ -8,6 +8,7 @@ import uuid
 import httpx
 from websockets.asyncio.client import connect
 from .windows import read_json
+from .paths import discovery_directory
 
 
 class BridgeError(RuntimeError):
@@ -20,7 +21,7 @@ class UncertainOutcome(BridgeError):
 
 class Client:
     def __init__(self, discovery=None, process=None, token=None, timeout=8):
-        root = Path(discovery or os.environ.get("GTA_USE_DISCOVERY") or Path(os.environ["LOCALAPPDATA"]) / "GTAVMods" / "Bridge")
+        root = self.discovery_root = discovery_directory(discovery)
         files = list(root.glob(f"service-{process or '*'}.json"))
         if len(files) != 1:
             raise BridgeError(f"Expected one HTTP service, found {len(files)}. Select --process explicitly.")

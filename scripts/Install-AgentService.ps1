@@ -1,17 +1,25 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$GameDirectory, [string]$Uv = 'uv')
+param([Parameter(Mandatory)][string]$GameDirectory, [string]$Uv = 'uv', [string]$RuntimeDirectory)
 $ErrorActionPreference = 'Stop'
 if (Get-Process -Name GTA5_Enhanced -ErrorAction SilentlyContinue) { throw 'Close GTA before preparing its Python environment.' }
 $project = Join-Path (Resolve-Path -LiteralPath $GameDirectory).Path 'scripts/GtaUse'
 if (!(Test-Path -LiteralPath (Join-Path $project 'uv.lock'))) { throw 'Extract the complete mod package before preparing the agent service.' }
 $server = Join-Path $project 'gta-use-server.exe'
 if (!(Test-Path -LiteralPath $server -PathType Leaf)) { throw 'Rust server missing. Extract the complete mod package first.' }
+if (!$RuntimeDirectory) {
+    $checkout = Split-Path -Parent $PSScriptRoot
+    $runtimeProject = if (Test-Path -LiteralPath (Join-Path $checkout 'pyproject.toml')) { $checkout } else { $project }
+    $RuntimeDirectory = & (Join-Path $PSScriptRoot 'Get-AgentRuntimeDirectory.ps1') -ProjectDirectory $runtimeProject
+}
+$RuntimeDirectory = [IO.Path]::GetFullPath($RuntimeDirectory)
 & $Uv sync --project $project --frozen --python 3.14
 if ($LASTEXITCODE -ne 0) { throw 'uv could not prepare the locked Python 3.14 SDK and policy environment.' }
 & $Uv run --project $project --frozen --no-sync python -c 'import sys; print(sys.executable)' | Set-Content -LiteralPath (Join-Path $project '.python-path') -Encoding UTF8
 if ($LASTEXITCODE -ne 0) { throw 'Cannot locate the prepared Python interpreter.' }
+$null = New-Item -ItemType Directory -Path (Join-Path $RuntimeDirectory 'Bridge') -Force
+$RuntimeDirectory | Set-Content -LiteralPath (Join-Path $project '.runtime-root') -Encoding UTF8
 # Retire only this project's obsolete Python server and selector. Preserve other
-# scripts and record recoverable copies outside the repository before removal.
+# scripts and record recoverable copies in the ignored runtime directory.
 $legacy = @('gta-service.py', 'tools/gta_use/service.py', '.rust-server-path')
 foreach ($cache in @('__pycache__', 'tools/gta_use/__pycache__')) {
     $directory = Join-Path $project $cache
@@ -22,7 +30,7 @@ foreach ($cache in @('__pycache__', 'tools/gta_use/__pycache__')) {
 }
 $retired = @($legacy | Where-Object { Test-Path -LiteralPath (Join-Path $project $_) -PathType Leaf })
 if ($retired.Count) {
-    $backup = Join-Path $env:LOCALAPPDATA ('GTAVMods/Backups/agent-service-' + [Guid]::NewGuid().ToString('N'))
+    $backup = Join-Path $RuntimeDirectory ('Backups/agent-service-' + [Guid]::NewGuid().ToString('N'))
     $manifest = @(foreach ($relative in $retired) {
         $source = Join-Path $project $relative
         $destination = Join-Path $backup $relative
@@ -38,3 +46,4 @@ if ($retired.Count) {
     Write-Host "Obsolete server files backed up to $backup"
 }
 Write-Host 'GTA use is prepared. The bridge will start and supervise the packaged Rust server automatically. Python 3.14 runs the SDK and agent policies.'
+Write-Host "Runtime files: $RuntimeDirectory"

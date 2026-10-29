@@ -4,6 +4,7 @@ import os
 from collections import deque
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 import time
@@ -116,6 +117,60 @@ def run(ctx):
         self.assertEqual("failed", outcome["state"])
         self.assertIn("uncertain mission objective", (self.root / "run/stderr.log").read_text())
         self.assertTrue(outcome["paused"])
+
+
+class RuntimeDiscoveryScenarios(unittest.TestCase):
+    def test_cli_and_supervised_worker_share_project_discovery_from_an_unrelated_working_directory(self):
+        for mode in ("default", "relative", "absolute", "environment", "explicit"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory(prefix="GTAVMods-runtime-") as temporary:
+                checkout = Path(temporary) / "checkout"
+                sdk = checkout / "tools/gta_use"
+                sdk.mkdir(parents=True)
+                for source in Path(__file__).parents[1].glob("*.py"):
+                    shutil.copyfile(source, sdk / source.name)
+                runtime = checkout / "artifacts/gta-use" if mode == "default" else checkout / "custom runtime"
+                bridge = runtime / "Bridge"
+                bridge.mkdir(parents=True)
+                configuration = checkout / ".runtime-root"
+                if mode != "default":
+                    configuration.write_text("custom runtime" if mode == "relative" else str(runtime), encoding="utf-8-sig")
+                environment = dict(os.environ, PYTHONPATH=str(checkout / "tools"))
+                environment.pop("GTA_USE_DISCOVERY", None)
+                environment.pop("LOCALAPPDATA", None)
+                arguments = []
+                if mode in ("environment", "explicit"):
+                    configuration.write_text(" ")
+                    environment["GTA_USE_DISCOVERY"] = str(bridge if mode == "environment" else checkout / "wrong")
+                    if mode == "explicit":
+                        arguments = ["--discovery", str(bridge)]
+                policy = checkout / "inspect.py"
+                policy.write_text('''def run(ctx):
+    state = ctx.check(sections=["player"])
+    ctx.checkpoint("project-runtime-observed", health=state["sections"]["player"]["entity"]["health"], discovery=str(ctx.game.discovery_root))
+''')
+                game = ObservedGame(bridge)
+                server = RustScene(game)
+                try:
+                    evidence = checkout / "evidence"
+                    result = subprocess.run([sys.executable, "-m", "gta_use", "run", str(policy), "--process", str(game.process),
+                                             "--output", str(evidence), *arguments], cwd=temporary, env=environment,
+                                            capture_output=True, text=True, timeout=15)
+                    self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                    outcome = json.loads((evidence / "result.json").read_text())
+                    self.assertEqual(175, outcome["evidence"]["health"])
+                    self.assertEqual(str(bridge.resolve()), outcome["evidence"]["discovery"])
+                    self.assertTrue(outcome["paused"])
+                    self.assertEqual("release", game.requests[-1]["action"])
+                    if mode == "relative":
+                        configuration.write_text(" ")
+                        before = len(game.requests)
+                        failed = subprocess.run([sys.executable, "-m", "gta_use", "describe", "--process", str(game.process)],
+                                                cwd=temporary, env=environment, capture_output=True, text=True, timeout=10)
+                        self.assertNotEqual(0, failed.returncode)
+                        self.assertIn(".runtime-root is empty", failed.stderr)
+                        self.assertEqual(before, len(game.requests), "Invalid configuration must not send commands to another game.")
+                finally:
+                    server.close()
 
 
 class CoverPolicyScenarios(unittest.TestCase):
