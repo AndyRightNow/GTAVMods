@@ -174,13 +174,11 @@ def pursue_vehicle(ctx, rider, vehicle, *, rider_model, vehicle_model,
     started, progress_at, best, health = time.monotonic(), time.monotonic(), math.inf, math.inf
 
     def target():
-        game = ctx.game
-        for handle, model in ((rider, rider_model), (vehicle, vehicle_model)):
-            if not game.native("DOES_ENTITY_EXIST", handle, returns="bool") or game.native("GET_ENTITY_MODEL", handle, returns="int") != model:
-                ctx.uncertain("Pursuit target identity changed or disappeared.")
-        return dict(position=game.native("GET_ENTITY_COORDS", rider, False, returns="vector3"),
-                    health=game.native("GET_ENTITY_HEALTH", rider, returns="int"),
-                    vehicle=game.native("GET_VEHICLE_PED_IS_IN", rider, False, returns="int"))
+        observed = observe_entity(ctx.game, dict(handle=rider, model=rider_model),
+                                  relative_to=dict(handle=vehicle, model=vehicle_model))
+        if observed is None:
+            ctx.uncertain("Pursuit target identity changed or disappeared.")
+        return observed
     try:
         state, p, v = driver.observe()
         if p is None:

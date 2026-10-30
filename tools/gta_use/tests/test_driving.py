@@ -60,7 +60,7 @@ class DrivingWorld(ObservedGame):
                 elif name == "GET_ENTITY_HEALTH":
                     value = self.targets[0]["health"]
                 elif name == "GET_VEHICLE_PED_IS_IN":
-                    value = self.targets[0]["vehicle"]
+                    value = self.targets[0].get("lastVehicle", self.targets[0]["vehicle"])
                     if len(self.targets) > 1:
                         self.targets.popleft()
             result = dict(completed=True, value=value)
@@ -160,7 +160,9 @@ def run(ctx):
     def test_pursuit_keeps_chasing_through_engagement_range_until_rider_dismounts(self):
         result, outcome = self.exercise([scene(), scene(15, 20), scene(35, 20), scene(48, 2)], targets=[
             dict(y=50, health=150, vehicle=40), dict(y=50, health=150, vehicle=40),
-            dict(y=50, health=120, vehicle=40), dict(y=50, health=120, vehicle=0)], code='''from gta_use.driving import pursue_vehicle
+            dict(y=50, health=120, vehicle=40),
+            # GTA can retain the previous vehicle handle after a confirmed dismount.
+            dict(y=50, health=120, vehicle=0, lastVehicle=40)], code='''from gta_use.driving import pursue_vehicle
 def run(ctx):
     def engage(ctx, state, target):
         ctx.log("engagement-observation", distance=target["distance"])
@@ -170,6 +172,12 @@ def run(ctx):
 ''')
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("target-left-vehicle", outcome["evidence"]["outcome"])
+        self.assertEqual(0, outcome["evidence"]["target"]["vehicle"])
+        reads = [s for r in self.game.requests for s in r.get("steps", [])
+                 if s["op"] == "command" and "gta-use:entity-observation" in s["code"]]
+        self.assertEqual(4, len(reads), "Each target sample uses one combined identity/occupancy read.")
+        self.assertFalse(any(n["name"] in ("DOES_ENTITY_EXIST", "GET_ENTITY_MODEL", "GET_ENTITY_COORDS",
+                                          "GET_ENTITY_HEALTH", "GET_VEHICLE_PED_IS_IN") for n in self.natives()))
         self.assertTrue(any(e["event"] == "engagement-observation" and e["distance"] < 25 for e in self.events()))
         self.assertEqual(1, sum(n["name"] == "TASK_VEHICLE_CHASE" for n in self.natives()))
         self.assertEqual("CLEAR_PED_TASKS", self.natives()[-1]["name"])
@@ -191,7 +199,7 @@ def run(ctx):
         self.assertFalse(any(e["event"] == "progress" for e in self.events()))
 
     def test_changed_rider_model_rejects_pursuit_before_any_driving_task(self):
-        result, outcome = self.exercise([scene()], code='''from gta_use.driving import pursue_vehicle
+        result, outcome = self.exercise([scene()], targets=[dict(missing=True)], code='''from gta_use.driving import pursue_vehicle
 def run(ctx):
     pursue_vehicle(ctx, 30, 40, rider_model=999, vehicle_model=47)
 ''')
