@@ -99,6 +99,34 @@ observation/behavior is understood. The SDK is in
 [segment.py](../../../../tools/gta_use/segment.py), and supervision in
 [__main__.py](../../../../tools/gta_use/__main__.py).
 
+## Visible in-game cursor interfaces
+
+`from gta_use.ui import click_at` provides `click_at(ctx, x, y)` for a freshly
+observed game UI target. Coordinates are fractions of the full game image,
+not pixels. Resume first; the helper verifies the cursor position, then sends
+one bounded left click. `button="right"` uses the normal cursor cancel control.
+It withholds a click if positioning fails, the observed cursor differs, or the
+pause menu opens. Uncertain receipts stop without replay. Inspect the resulting
+UI: `outcome="input-submitted"` does not mean the button or mission succeeded.
+
+This helper does not focus an interface or control the operating system. During
+Friend Request, long tool gaps let the idle camera hide the fictional computer
+screen even while simulation was paused. A short normal W tap restored that
+specific screen; do not generalize that key to other interfaces. One continuous
+visual Python loop closed 14 observed pop-up X buttons in 13.4 seconds. The
+antivirus then required distinct Scan Computer and Exterminate clicks; waiting
+for player control after Scan alone stalled. Interpret visible prompts rather
+than assuming every non-controllable scene will finish automatically.
+
+The extracted helper also positioned the cursor correctly over Michael's phone,
+but its CursorAccept input did not open Contacts. Normal Enter did. Phone list
+navigation used arrow keys and Enter; do not retry cursor clicks merely because
+the input receipt succeeded. Cursor-driven computer interfaces and phone menus
+use different controls. After the mission, the extracted helper successfully
+opened an observed article link and closed GTA's fictional browser, with
+before/after screenshots and cursor readback retained. Right-click behavior is
+covered by automated scenarios but has not yet been verified live.
+
 ## Physical key fallback
 
 Use ordinary controls/tasks first. If a verified interaction ignores simulated
@@ -773,6 +801,13 @@ new target was acquired. Replace only a task the policy owns, and preserve
 mission tasks on a control transition.
 
 ### Raw markers and contextual following stops
+
+`navigation.gpsTargets` describes routed/waypoint targets, not every mission goal.
+After the Friend Request clothing purchase, the yellow Lifeinvader marker was
+present in `navigation.blips` with `routed=False` while the player was on foot.
+An empty GPS list did not mean the mission had stalled. Check the visible objective
+and full bounded blip set (`blipLimit=256` if truncated) before waiting or retrying;
+select a target from that evidence, not from color alone.
 
 A rendered marker's apparent color need not equal `navigation.blips[].color`.
 During Chop, D and Chop both returned raw color 49 despite different visible

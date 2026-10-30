@@ -2,7 +2,7 @@
 import importlib
 import inspect
 
-_MODULES = ("combat", "driving", "entities", "navigation", "vehicles")
+_MODULES = ("combat", "driving", "entities", "navigation", "ui", "vehicles")
 
 
 def describe_helpers(query=None):

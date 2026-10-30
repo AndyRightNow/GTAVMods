@@ -61,6 +61,8 @@ def drive_to(ctx, destination, *, speed=28, arrival_speed=6, radius=5,
     Returns outcome='arrived', 'transition' or 'policy'. A truthy on_tick(ctx,
     state) result ends driving for a policy decision. Expected cutscenes return
     without clearing mission tasks; callers can wait_for_control next.
+    Arrival radius is 1..20 metres; speed is 1..60 metres/second. Use an observed
+    curb/access point when the objective lies inside a building or off-road.
     No pause, compilation, checkpoint or model handoff occurs inside the helper.
     """
     goal = _point(destination)

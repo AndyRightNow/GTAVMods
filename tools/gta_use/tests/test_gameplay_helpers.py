@@ -82,6 +82,12 @@ class HelperWorld(ObservedGame):
                     value = observations[0]
                     if len(observations) > 1:
                         observations.popleft()
+            elif step["op"] == "native":
+                observations = self.queries.get(step["name"])
+                if observations:
+                    value = observations[0]
+                    if len(observations) > 1:
+                        observations.popleft()
             elif step["op"] == "aim":
                 if self.lost == "aim":
                     return dict(id=envelope["id"], session=self.session, ok=False, uncertain=True, error="Lost aim receipt")
@@ -463,3 +469,71 @@ def run(ctx):
         self.assertTrue(outcome["evidence"]["vehicle"]["onAllWheels"])
         steps = [s for r in self.game.requests for s in r.get("steps", []) if s["op"] != "pause"]
         self.assertEqual([dict(op="resume"), dict(op="controls", ms=500, inputs=[dict(control="VehicleMoveLeftRight",value=1)])], steps)
+
+    def click_ui(self, *, button="left", observations=None, cursor=None, accepted=True, lost=None):
+        return self.exercise('''from gta_use.ui import click_at
+def run(ctx):
+    ctx.game.action("resume")
+    result=click_at(ctx, .25, .75, button=%r)
+    ctx.checkpoint("cursor-input", **result)
+''' % button, observations or [scene()],
+            queries={"SET_CURSOR_POSITION": [accepted], "GET_CONTROL_NORMAL": cursor or [.2502, .7498]}, lost=lost)
+
+    def test_visible_ui_left_click_uses_observed_cursor_without_claiming_objective_completion(self):
+        result, outcome = self.click_ui()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("input-submitted", outcome["evidence"]["outcome"])
+        self.assertEqual(dict(x=.2502, y=.7498), outcome["evidence"]["position"])
+        self.assertEqual([dict(op="controls", ms=70, clock="wall",
+            inputs=[dict(control="CursorAccept", group=2, value=1)])], self.inputs())
+        native_steps = [s for r in self.game.requests for s in r.get("steps", []) if s["op"] == "native"]
+        self.assertEqual(dict(op="native", name="SET_CURSOR_POSITION", returns="bool",
+            args=[dict(type="float", value=.25), dict(type="float", value=.75)]), native_steps[0])
+        self.assertEqual([[2, 239], [2, 240]], [s["args"] for s in native_steps[1:]])
+
+    def test_visible_ui_right_click_submits_cursor_cancel_once(self):
+        result, outcome = self.click_ui(button="right")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("right", outcome["evidence"]["button"])
+        self.assertEqual([dict(op="controls", ms=70, clock="wall",
+            inputs=[dict(control="CursorCancel", group=2, value=1)])], self.inputs())
+
+    def test_rejected_cursor_position_withholds_click(self):
+        result, outcome = self.click_ui(accepted=False)
+        self.assertEqual(1, result.returncode)
+        self.assertFalse(self.inputs())
+        self.assertTrue(outcome["paused"])
+        self.assertIn("rejected cursor", (self.root / "run/stderr.log").read_text())
+
+    def test_cursor_that_did_not_reach_target_withholds_click(self):
+        result, outcome = self.click_ui(cursor=[.5, .75])
+        self.assertEqual(1, result.returncode)
+        self.assertFalse(self.inputs())
+        self.assertTrue(outcome["paused"])
+        self.assertIn("differs from requested", (self.root / "run/stderr.log").read_text())
+
+    def test_pause_menu_opened_during_cursor_placement_withholds_click(self):
+        menu = scene()
+        menu["session"]["pauseMenu"] = True
+        result, outcome = self.click_ui(observations=[scene(), menu])
+        self.assertEqual(1, result.returncode)
+        self.assertFalse(self.inputs())
+        self.assertTrue(outcome["paused"])
+        self.assertIn("opened before the click", (self.root / "run/stderr.log").read_text())
+
+    def test_lost_cursor_click_receipt_is_not_replayed(self):
+        result, outcome = self.click_ui(lost="controls")
+        self.assertEqual(1, result.returncode)
+        self.assertEqual(1, len(self.inputs()))
+        self.assertTrue(outcome["paused"])
+        self.assertNotIn("checkpoint", outcome)
+
+    def test_out_of_image_ui_target_is_rejected_before_cursor_or_click_input(self):
+        result, outcome = self.exercise('''from gta_use.ui import click_at
+def run(ctx):
+    click_at(ctx, 1.1, .75)
+''', [scene()])
+        self.assertEqual(1, result.returncode)
+        actions = [s for r in self.game.requests for s in r.get("steps", []) if s["op"] != "pause"]
+        self.assertFalse(actions)
+        self.assertTrue(outcome["paused"])
