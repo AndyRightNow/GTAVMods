@@ -40,11 +40,11 @@ class DrivingWorld(ObservedGame):
                                                             health=t["health"], vehicle=t["vehicle"])
                 if len(self.targets) > 1:
                     self.targets.popleft()
-            if step["op"] == "command" and "gta-use:follow-target" in step["code"]:
+            if step["op"] == "command" and "gta-use:entity-observation" in step["code"]:
                 t = self.targets[0]
                 value = None if t.get("missing") else dict(position=dict(x=0, y=t["y"], z=t.get("z", 0)),
                     velocity=dict(x=0,y=10,z=0), relative=t.get("relative", dict(x=0,y=20,z=0)),
-                    health=t["health"], dead=t["health"] <= 0, vehicle=t["vehicle"])
+                    health=t["health"], dead=t["health"] <= 0, vehicle=t["vehicle"], attachedTo=t.get("attachedTo",0))
                 if len(self.targets) > 1:
                     self.targets.popleft()
             if step["op"] == "native":
@@ -300,15 +300,17 @@ def run(ctx):
 
     def test_follow_policy_can_end_on_observed_scripted_boarding_without_claiming_mission_success(self):
         result,outcome=self.exercise([scene(),scene(20)],targets=[dict(y=50,health=150,vehicle=0),
-            dict(y=21,health=150,vehicle=0,relative=dict(x=0,y=1,z=2))],code="""from gta_use.driving import follow_entity
+            dict(y=21,health=150,vehicle=0,attachedTo=20,relative=dict(x=0,y=1,z=2))],code="""from gta_use.driving import follow_entity
 def run(ctx):
     def observe(ctx,state,target):
-        return abs(target['relative']['y'])<2
+        return target['attachedTo']==state['sections']['vehicle']['entity']['handle'] and abs(target['relative']['y'])<2
     r=follow_entity(ctx,dict(handle=30,model=46),on_tick=observe,timeout=2,check_interval=.05)
     ctx.checkpoint("boarding-needs-inspection",**r)
 """)
         self.assertEqual(0,result.returncode,result.stderr)
         self.assertEqual("policy",outcome["evidence"]["outcome"])
+        self.assertEqual(0,outcome["evidence"]["target"]["vehicle"])
+        self.assertEqual(20,outcome["evidence"]["target"]["attachedTo"])
         self.assertTrue(outcome["evidence"]["state"]["session"]["missionActive"])
         self.assertEqual("CLEAR_PED_TASKS",self.natives()[-1]["name"])
 
@@ -348,3 +350,34 @@ def run(ctx):
 """)
         self.assertEqual(1,result.returncode)
         self.assertFalse(self.natives())
+
+    def test_driver_can_inspect_scripted_passenger_then_deliver_without_requiring_seat_flags(self):
+        result,outcome=self.exercise([scene(),scene(),scene(98,0)],targets=[
+            dict(y=1,health=150,vehicle=0,attachedTo=20,relative=dict(x=0,y=1,z=0))],code="""from gta_use.entities import observe_entity
+from gta_use.driving import drive_to
+def run(ctx):
+    state=ctx.check(sections=['player','vehicle'])
+    actor=observe_entity(ctx.game,dict(handle=30,model=46),relative_to=state['sections']['vehicle']['entity'])
+    if actor is None or actor['attachedTo']!=20:ctx.uncertain('Companion not aboard')
+    result=drive_to(ctx,dict(x=0,y=100,z=0),radius=4,timeout=2,check_interval=.05)
+    ctx.checkpoint('delivery-observed',companion=actor,**result)
+""")
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertEqual('arrived',outcome['evidence']['outcome'])
+        self.assertEqual(0,outcome['evidence']['companion']['vehicle'])
+        self.assertEqual(20,outcome['evidence']['companion']['attachedTo'])
+        self.assertFalse(any(n['name'].startswith(('ATTACH','DETACH','SET_ENTITY')) for n in self.natives()))
+
+    def test_changed_companion_or_reference_prevents_delivery_before_movement(self):
+        result,outcome=self.exercise([scene()],targets=[dict(missing=True)],code="""from gta_use.entities import observe_entity
+from gta_use.driving import drive_to
+def run(ctx):
+    state=ctx.check(sections=['player','vehicle'])
+    actor=observe_entity(ctx.game,dict(handle=30,model=46),relative_to=state['sections']['vehicle']['entity'])
+    if actor is None:ctx.uncertain('Companion or van identity changed')
+    drive_to(ctx,dict(x=0,y=100,z=0))
+""")
+        self.assertEqual(1,result.returncode)
+        self.assertTrue(outcome['paused'])
+        self.assertEqual([],self.natives())
+        self.assertIn('Companion or van identity changed',(self.root/'run/stderr.log').read_text())

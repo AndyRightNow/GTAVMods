@@ -48,7 +48,9 @@ verified PID and normal scoped execution approval when required. Never dump
 `service-<PID>.json`, which contains a bearer credential.
 
 Use `gta_use.driving.drive_to` for road travel, `pursue_vehicle` for rider pursuit,
-and `follow_entity` for moving actors or vehicles, including scripted boarding. Their contracts and no-effect limits are in Python AI.
+and `follow_entity` for moving actors or vehicles, including scripted boarding.
+`entities.observe_entity` reads identity-checked attachment and relative-pose evidence
+when ordinary seat flags do not describe a scripted companion. Their contracts and no-effect limits are in Python AI.
 
 For short on-foot access with bounded climb/vault recovery, use
 `gta_use.navigation.navigate_to`; explicit nearby edge attempts use

@@ -30,6 +30,12 @@ def run(ctx):
                    health=entity["health"])
 ```
 
+`ctx.checkpoint(...)` records evidence; it does **not** exit the function or pause.
+Use `return` immediately afterward when it ends a segment, especially inside a
+loop. The supervisor pauses only after the function exits. Accidentally continuing
+a loop after a checkpoint can let a timed target escape while producing repeated
+captures. `ctx.uncertain(...)` raises and stops; it has different control flow.
+
 This confirms an observation, not mission progress. Runner completion requests
 pause even if the script did not advance simulation. Check `result.json` for
 confirmed pause before handing control to another agent.
@@ -170,6 +176,21 @@ budget; they do not add a durable request store or a second scheduler.
 
 
 ## Scripted boarding and vehicle task conflicts
+
+Use `entities.observe_entity(game, observed_target, relative_to=observed_vehicle)`
+for one compact, read-only target/relative-pose observation. It validates both
+handle/model identities and returns `None` if either no longer matches. The
+result includes position, velocity, health, `vehicle` (ordinary seated occupancy),
+`attachedTo` (direct engine parent) and `relative` (vehicle-local x/y/z). Without
+`relative_to`, `relative` is None. This does not resume or alter the game; callers
+still own current-objective interpretation and bounded observation policies.
+
+In Chop, the dog visibly sat in the van while `vehicle` stayed 0;
+`attachedTo` identified the van throughout normal driving. A boarding predicate
+that required every companion to occupy a seat caused an unnecessary policy stop.
+Check actual attachment and travel-relative pose when the seat flag conflicts
+with the scene. Never attach or warp a companion to manufacture boarding.
+
 
 During Father/Son, Jimmy was visibly riding in the player car while
 `GET_VEHICLE_PED_IS_IN` and `IsInVehicle` still returned false. Franklin also

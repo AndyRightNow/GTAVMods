@@ -3,6 +3,7 @@ import math
 import time
 
 from .client import UncertainOutcome
+from .entities import observe_entity
 from .navigation import _float, _point
 from ._validation import _bounds, _identity
 
@@ -339,14 +340,6 @@ def follow_entity(ctx, target, *, speed=28, min_distance=5, arrival_radius=10,
         raise ValueError("min_distance must be an integer between 0 and 100 metres.")
     if isinstance(driving_style, bool) or not isinstance(driving_style, int) or not 0 <= driving_style <= 2147483647:
         raise ValueError("driving_style must be a nonnegative signed integer bitmask.")
-    query = ('''/* gta-use:follow-target */
-        var target=Entity.FromHandle(%d);
-        if(target==null || !target.Exists() || target.Model.Hash!=%d || P.CurrentVehicle==null) return null;
-        var ped=target as Ped;
-        return new {position=target.Position, velocity=target.Velocity, health=target.Health,
-            dead=target.IsDead, relative=P.CurrentVehicle.GetPositionOffset(target.Position),
-            vehicle=ped==null ? 0 : Function.Call<int>(Hash.GET_VEHICLE_PED_IS_IN,ped.Handle,false)};
-    ''') % (target_handle, target_model)
     driver = _Driver(ctx, minimum_health)
     started = progress_at = window_at = time.monotonic()
     best, window_gap = math.inf, None
@@ -357,7 +350,7 @@ def follow_entity(ctx, target, *, speed=28, min_distance=5, arrival_radius=10,
                 return dict(outcome="transition", state=state)
             if target_handle in (driver.identity[0], driver.identity[2]):
                 ctx.uncertain("Cannot follow the player's own actor or current vehicle.")
-            observed = ctx.game.command(query)
+            observed = observe_entity(ctx.game, target, relative_to=v["entity"])
             if observed is None:
                 ctx.uncertain("Follow target identity changed or disappeared.")
             observed.update(handle=target_handle, model=target_model,
