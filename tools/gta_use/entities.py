@@ -6,7 +6,7 @@ def observe_entity(game, target, *, relative_to=None):
     """Read a target and optional reference pose together on the game thread.
 
     Returns None when either supplied identity no longer matches. The result has
-    position, velocity, health, dead, vehicle, attachedTo and relative (None when
+    position, velocity, health, dead, inVehicle, vehicle, attachedTo and relative (None when
     no reference is supplied). vehicle is ordinary seated occupancy; attachedTo
     is the direct engine parent and may instead explain scripted boarding.
     Neither a nearby pose nor attachment alone establishes a mission outcome.
@@ -25,10 +25,12 @@ def observe_entity(game, target, *, relative_to=None):
         if(target==null || !target.Exists() || target.Model.Hash!=%d) return null;
         %s
         var ped=target as Ped;
+        var inVehicle=ped!=null && ped.IsInVehicle();
         return new {position=target.Position, velocity=target.Velocity, health=target.Health,
             dead=target.IsDead, relative=%s,
             attachedTo=Function.Call<int>(Hash.GET_ENTITY_ATTACHED_TO,target.Handle),
-            vehicle=ped==null ? 0 : Function.Call<int>(Hash.GET_VEHICLE_PED_IS_IN,ped.Handle,false)};
+            inVehicle=inVehicle,
+            vehicle=!inVehicle ? 0 : Function.Call<int>(Hash.GET_VEHICLE_PED_IS_IN,ped.Handle,false)};
     ''') % (handle, model, reference, relative)
     result = game.command(query)
     if result is not None:

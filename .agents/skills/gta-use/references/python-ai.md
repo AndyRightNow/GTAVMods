@@ -129,6 +129,7 @@ routes and recovery tactics. A lost action receipt propagates without replay.
 | `vehicles.acquire_vehicle(ctx, desired=None, passenger=False, companion=None)` | Ordinary entry/carjacking; verifies the actual driver seat. `desired` and `companion` are observed `{handle, model}` entities. Prefers stationary eligible cars; accepts a passenger seat already occupied by the identified companion. Stops if a different vehicle must first be exited. |
 | `vehicles.leave_vehicle(ctx)` | Brakes when driving, requests ordinary exit without automatic blocked-door warping, waits for an on-foot observation. |
 | `vehicles.recover_upright(ctx)` | Bounded ordinary steering, followed by observed wheels-on-ground; never rotates or teleports the car. |
+| `navigation.follow_on_foot(ctx, target, on_tick=...)` | One persistent normal task toward an observed actor; checks current identities, health, route movement and bounded separation. Returns on cutscene, target death/boarding or a caller predicate. Use for companion following or a confirmed on-foot pursuit; a stationary target/obstacle stops for inspection. |
 | `navigation.climb_toward(ctx, facing)` | One natural turn and normal climb at a caller-observed nearby edge, including a stationary vehicle/roof approach. Returns `climbed`, `landed`, `no-effect` or `transition`; inspect the final position. It does not move to the facing point or prove route arrival. |
 | `combat.melee_burst(ctx, target)` | One unarmed Aim/light-punch exchange with fresh identity, range, facing and health checks. Reports observed damage; returns immediately on mission takeover. Caller owns bounded retries, defense and recovery. |
 | `combat.take_cover(ctx)` | One cover tap, then waits for settled cover; does not toggle during entry. Requires an observed suitable cover location. |
@@ -180,7 +181,7 @@ budget; they do not add a durable request store or a second scheduler.
 Use `entities.observe_entity(game, observed_target, relative_to=observed_vehicle)`
 for one compact, read-only target/relative-pose observation. It validates both
 handle/model identities and returns `None` if either no longer matches. The
-result includes position, velocity, health, `vehicle` (ordinary seated occupancy),
+result includes position, velocity, health, `inVehicle`, `vehicle` (ordinary seated occupancy),
 `attachedTo` (direct engine parent) and `relative` (vehicle-local x/y/z). Without
 `relative_to`, `relative` is None. This does not resume or alter the game; callers
 still own current-objective interpretation and bounded observation policies.
@@ -188,6 +189,12 @@ still own current-objective interpretation and bounded observation policies.
 In Chop, the dog visibly sat in the van while `vehicle` stayed 0;
 `attachedTo` identified the van throughout normal driving. A boarding predicate
 that required every companion to occupy a seat caused an unnecessary policy stop.
+D's foot-pursuit phase also returned the previous bike from
+`GET_VEHICLE_PED_IS_IN(..., false)` after the observed dismount. The helper gates
+that handle with `Ped.IsInVehicle()` so a stale vehicle handle cannot end foot
+following as a false boarding event. Keep raw native returns distinct from
+confirmed current occupancy.
+
 Check actual attachment and travel-relative pose when the seat flag conflicts
 with the scene. Never attach or warp a companion to manufacture boarding.
 
@@ -406,6 +413,27 @@ an optional tactic, unsuitable when the target must remain unhurt or undamaged.
 
 
 ## Run and climb short access routes
+
+For a moving companion or a confirmed on-foot pursuit, use
+`follow_on_foot(ctx, target, timeout=180, stall_timeout=8, max_gap=120, on_tick=...)`.
+The target is a fresh `{handle, model}` identity. The default offset is two metres
+behind it, move blend ratio 3, and stopping range 2. The helper follows continuously;
+being close alone does not complete it. `on_tick(ctx, state, target)` can return
+True for an observed objective change. It must not replace the owned follow task.
+Use a smaller walking/running blend when following a slower companion.
+
+The helper returns `policy`, `transition`, `target-boarded` or `target-dead` with
+observations, never Mission Passed. It stops on stationary/blocked movement,
+excessive gap, identity/health/water failures or an uncertain receipt. For a
+stationary interaction, a policy can return after several close, stationary target
+observations rather than letting the movement watchdog expire. Inspect geometry
+and use `navigate_to`/`climb_toward` after an obstacle stop; this following task does
+not promise to solve arbitrary fences. It preserves mission-owned tasks at a
+control takeover and leaves successful simulation running for the next phase.
+
+Live in Chop: it followed D from the bus depot to the railway-search transition,
+with Franklin and D both at 200 health. This verifies that route, not every path.
+
 
 Use `gta_use.navigation.navigate_to(ctx, destination, ...)` for a fixed on-foot
 destination with optional `waypoints=[{x,y,z}, ...]`. Supply freshly observed

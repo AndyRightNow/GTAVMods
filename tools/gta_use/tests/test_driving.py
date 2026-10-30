@@ -44,7 +44,7 @@ class DrivingWorld(ObservedGame):
                 t = self.targets[0]
                 value = None if t.get("missing") else dict(position=dict(x=0, y=t["y"], z=t.get("z", 0)),
                     velocity=dict(x=0,y=10,z=0), relative=t.get("relative", dict(x=0,y=20,z=0)),
-                    health=t["health"], dead=t["health"] <= 0, vehicle=t["vehicle"], attachedTo=t.get("attachedTo",0))
+                    health=t["health"], dead=t["health"] <= 0, vehicle=t["vehicle"], attachedTo=t.get("attachedTo",0),inVehicle=bool(t["vehicle"]))
                 if len(self.targets) > 1:
                     self.targets.popleft()
             if step["op"] == "native":

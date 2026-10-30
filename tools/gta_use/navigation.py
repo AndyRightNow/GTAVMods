@@ -316,3 +316,93 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="nav
         # A lost receipt must be inspected, never followed by a blind task resubmission.
         if owns_task and not uncertain:
             clear()
+
+
+def follow_on_foot(ctx, target, *, offset=None, move_blend_ratio=3, stopping_range=2,
+                   timeout=180, stall_timeout=8, max_gap=120, minimum_health=100,
+                   check_interval=.2, on_tick=None):
+    """Follow an observed moving actor with one persistent normal on-foot task.
+
+    Returns transition, target-dead, target-boarded or policy; no proximity alone
+    ends following. on_tick(ctx, state, target) chooses the mission objective.
+    Stops on lost identities, player vehicle entry, water, health, excessive gap
+    or stalled movement. This does not infer obstacle crossings: after a stall,
+    inspect geometry and use navigate_to/climb_toward for bounded route recovery.
+    Success leaves simulation running. An uncertain receipt is never replayed.
+    """
+    from .entities import observe_entity
+    target_handle, target_model = _identity(target)
+    point = _point(offset or dict(x=0, y=-2, z=0))
+    if math.dist(point, (0, 0, 0)) > 10:
+        raise ValueError("Follow offset must be within 10 metres of the actor.")
+    _bounds(move_blend_ratio=(move_blend_ratio, 1, 3), stopping_range=(stopping_range, .5, 10),
+            timeout=(timeout, 1, 600), stall_timeout=(stall_timeout, .2, 60),
+            max_gap=(max_gap, 2, 500), minimum_health=(minimum_health, 1, 10000),
+            check_interval=(check_interval, .05, 2))
+    identity = None
+    owns_task = uncertain = False
+    started = moved = time.monotonic()
+    anchor = None
+    cells = set()
+    try:
+        while time.monotonic() - started < timeout:
+            state = ctx.check(sections=["player"])
+            p, session = state["sections"].get("player"), state["session"]
+            if not p or session["pauseMenu"]:
+                owns_task = False
+                ctx.uncertain("On-foot following interrupted by missing player or menu.")
+            if not session["playerControl"] or session["cutscenePlaying"]:
+                owns_task = False
+                return dict(outcome="transition", state=state)
+            current = _identity(p["entity"])
+            if p["inVehicle"] or (identity is not None and current != identity):
+                owns_task = False
+                ctx.uncertain("On-foot following interrupted by player identity or vehicle change.")
+            identity = current
+            if target_handle == identity[0]:
+                raise ValueError("Cannot follow the player's own actor.")
+            if p["entity"]["health"] < minimum_health or p["swimming"]:
+                ctx.uncertain("On-foot following stopped for health or water recovery.")
+            observed = observe_entity(ctx.game, target, relative_to=p["entity"])
+            if observed is None:
+                ctx.uncertain("On-foot follow target changed or disappeared.")
+            position = _point(p["entity"]["position"])
+            gap = math.dist(position, _point(observed["position"]))
+            observed["distance"] = gap
+            if observed["dead"]:
+                return dict(outcome="target-dead", state=state, target=observed)
+            if on_tick is not None and on_tick(ctx, state, observed):
+                return dict(outcome="policy", state=state, target=observed)
+            if observed["inVehicle"]:
+                return dict(outcome="target-boarded", state=state, target=observed)
+            if gap > max_gap:
+                ctx.uncertain("On-foot target exceeded the bounded following distance.")
+            if not owns_task:
+                ctx.game.action("resume")
+                source = ('''/* gta-use:foot-follow */
+                    var target=Entity.FromHandle(%d);
+                    if(target==null || !target.Exists() || target.Model.Hash!=%d) throw new Exception("Follow target identity changed");
+                    P.Task.FollowToOffsetFromEntity(target,new Vector3(%sf,%sf,%sf),%sf,-1,%sf,true);
+                ''') % (target_handle, target_model, *map(str, point), float(move_blend_ratio), float(stopping_range))
+                ctx.game.command(source)
+                owns_task = True
+                ctx.log("foot-follow-start", target=target, offset=point)
+            now = time.monotonic()
+            if anchor is None or math.dist(position, anchor) > .75:
+                anchor, moved = position, now
+            cell = tuple(round(x / 2) for x in position)
+            if cell not in cells and len(cells) < 4096:
+                if cells:
+                    ctx.progress("Observed on-foot route progress", position=position, gap=gap)
+                cells.add(cell)
+            if now - moved >= stall_timeout:
+                ctx.log("foot-follow-stalled", state=state, target=observed)
+                ctx.uncertain("On-foot following stalled; inspect the target or obstacle before recovery.")
+            time.sleep(check_interval)
+        ctx.uncertain("On-foot following exceeded its overall deadline.")
+    except UncertainOutcome:
+        uncertain = True
+        raise
+    finally:
+        if owns_task and not uncertain:
+            ctx.game.native("CLEAR_PED_TASKS", identity[0])
