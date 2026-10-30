@@ -6,6 +6,13 @@ from ._validation import _bounds, _identity
 from .client import UncertainOutcome
 
 
+_ROAD_TRAVEL_CLASSES = ("Compacts", "Sedans", "SUVs", "Coupes", "Muscle",
+                       "SportsClassics", "Sports", "Super", "Motorcycles", "OffRoad", "Vans")
+_VEHICLE_CLASSES = frozenset((*_ROAD_TRAVEL_CLASSES, "Industrial", "Utility", "Cycles",
+                             "Boats", "Helicopters", "Planes", "Service", "Emergency",
+                             "Military", "Commercial", "Trains", "OpenWheel"))
+
+
 def _observe(ctx, *, nearby=False, radius=55, minimum_health=100):
     filters = dict(sections=["player", "vehicle"])
     if nearby:
@@ -22,12 +29,16 @@ def _observe(ctx, *, nearby=False, radius=55, minimum_health=100):
 
 def acquire_vehicle(ctx, desired=None, *, passenger=False, companion=None, radius=55,
                     max_height_difference=4, max_attempts=4, entry_timeout=28,
-                    minimum_health=100, check_interval=.3):
+                    minimum_health=100, check_interval=.3, preferred_classes=_ROAD_TRAVEL_CLASSES):
     """Enter an eligible nearby vehicle through ordinary entry/carjacking.
 
     desired/companion are freshly observed {handle, model} entities, never bare
-    stale handles. Prefer stationary vehicles, then distance. A passenger seat
-    may already contain the identified companion. No lock or occupant is changed.
+    stale handles. By default prefer ordinary road cars/bikes/vans over industrial
+    or special vehicles, then stationary vehicles and distance. preferred_classes
+    is a tuple/list of SHVDNE VehicleClass names; () disables that preference.
+    It ranks eligible candidates, never excludes the only available vehicle or
+    overrides desired. A passenger seat may already contain the identified
+    companion. No lock or occupant is changed.
     Returns only after observing the requested vehicle's actual driver seat.
     """
     if not isinstance(passenger, bool) or isinstance(max_attempts, bool) or not isinstance(max_attempts, int) or not 1 <= max_attempts <= 8:
@@ -35,6 +46,10 @@ def acquire_vehicle(ctx, desired=None, *, passenger=False, companion=None, radiu
     _bounds(radius=(radius, 1, 100), max_height_difference=(max_height_difference, .1, 20),
             entry_timeout=(entry_timeout, .2, 60), check_interval=(check_interval, .05, 2),
             minimum_health=(minimum_health, 1, 10000))
+    if (not isinstance(preferred_classes, (tuple, list))
+            or any(not isinstance(c, str) or c not in _VEHICLE_CLASSES for c in preferred_classes)):
+        raise ValueError("preferred_classes must be a tuple/list of SHVDNE VehicleClass names.")
+    preferred = frozenset(preferred_classes)
     wanted = _identity(desired) if desired is not None else None
     ally = _identity(companion) if companion is not None else None
     rejected, player_identity = set(), None
@@ -56,8 +71,6 @@ def acquire_vehicle(ctx, desired=None, *, passenger=False, companion=None, radiu
                       and (wanted is None or _identity(n["entity"]) == wanted)
                       and n["entity"]["relative"]["distance"] < radius
                       and abs(n["entity"]["position"]["z"] - player["entity"]["position"]["z"]) < max_height_difference]
-        candidates.sort(key=lambda e: (math.hypot(e["velocity"]["x"], e["velocity"]["y"]) > 1,
-                                       e["relative"]["distance"]))
         # All candidate eligibility checks run in one bridge call. Source is
         # reused by the bridge compiler cache while the observed set is unchanged.
         pairs = ",".join("new int[]{%d,%d}" % _identity(e) for e in candidates)
@@ -69,6 +82,7 @@ def acquire_vehicle(ctx, desired=None, *, passenger=False, companion=None, radiu
                 int occupant=Function.Call<int>(Hash.GET_PED_IN_VEHICLE_SEAT,v.Handle,0,false);
                 var ped=Entity.FromHandle(occupant) as Ped;
                 result.Add(new {handle=v.Handle, model=v.Model.Hash, driveable=v.IsDriveable,
+                    vehicleClass=v.ClassType.ToString(),
                     locked=v.LockStatus.ToString(), passenger=v.IsSeatFree(VehicleSeat.Passenger),
                     occupant=occupant, occupantModel=ped!=null && ped.Exists() ? ped.Model.Hash : 0,
                     occupantAlive=ped!=null && ped.Exists() && !ped.IsDead});
@@ -76,6 +90,9 @@ def acquire_vehicle(ctx, desired=None, *, passenger=False, companion=None, radiu
             return result;
         """.replace("PAIRS", pairs)) if candidates else []
         eligible = {o["handle"]: o for o in observations}
+        candidates.sort(key=lambda e: (bool(preferred) and eligible.get(e["handle"], {}).get("vehicleClass") not in preferred,
+                                       math.hypot(e["velocity"]["x"], e["velocity"]["y"]) > 1,
+                                       e["relative"]["distance"]))
         car = None
         for candidate in candidates:
             observed = eligible.get(candidate["handle"])

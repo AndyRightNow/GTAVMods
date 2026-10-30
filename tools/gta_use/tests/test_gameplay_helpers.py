@@ -30,7 +30,7 @@ def scene(*, car=None, cover=False, entering=False, ammo=15):
 
 def access(handle, **changes):
     return dict(handle=handle, model=45, driveable=True, locked="CanBeBrokenInto",
-                passenger=True, occupant=0, occupantModel=0, occupantAlive=False) | changes
+                passenger=True, occupant=0, occupantModel=0, occupantAlive=False, vehicleClass="Sedans") | changes
 
 
 def muzzle(**changes):
@@ -189,6 +189,40 @@ def run(ctx):
         self.assertIn("VehicleSeat.Driver,-1,2f,EnterVehicleFlags.ResumeIfInterupted", self.commands("enter-vehicle")[0],
                       "Python owns the deadline; finite engine timeouts can warp the ped.")
         self.assertFalse(self.commands("clear-entry"), "Successful driving must not be cancelled.")
+
+    def test_travel_prefers_car_over_nearer_industrial_vehicle_and_verifies_driver(self):
+        result, outcome = self.exercise('''from gta_use.vehicles import acquire_vehicle
+def run(ctx):
+    car=acquire_vehicle(ctx,check_interval=.05)
+    ctx.checkpoint("road-transport",vehicle=car)
+''', [scene(), scene(car=21)], {"vehicle-candidates": [[access(20, vehicleClass="Industrial"), access(21)]]})
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(21, outcome["evidence"]["vehicle"]["handle"])
+        self.assertEqual(1, len(self.commands("vehicle-candidates")))
+        self.assertIn("FromHandle(21)", self.commands("enter-vehicle")[0])
+
+    def assert_truck_selection(self, arguments, other=None):
+        result, outcome = self.exercise(
+            "from gta_use.vehicles import acquire_vehicle\ndef run(ctx):\n"
+            f"    car=acquire_vehicle(ctx,{arguments},check_interval=.05)\n"
+            "    ctx.checkpoint('transport',vehicle=car)\n",
+            [scene(), scene(car=20)], {"vehicle-candidates": [[
+                access(20, vehicleClass="Industrial"), access(21, **(other or {}))]]})
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(20, outcome["evidence"]["vehicle"]["handle"])
+        self.assertIn("FromHandle(20)", self.commands("enter-vehicle")[0])
+
+    def test_required_mission_truck_is_not_replaced_with_preferred_road_car(self):
+        self.assert_truck_selection("dict(handle=20,model=45)")
+
+    def test_policy_can_prefer_industrial_vehicle_for_its_task(self):
+        self.assert_truck_selection("None, preferred_classes=('Industrial',)")
+
+    def test_policy_can_disable_class_ranking_to_choose_nearest_stationary_vehicle(self):
+        self.assert_truck_selection("None, preferred_classes=()")
+
+    def test_inaccessible_preferred_car_does_not_hide_available_truck(self):
+        self.assert_truck_selection("None", {"locked": "CannotEnter"})
 
     def test_required_car_does_not_succeed_just_because_player_drives_another_car(self):
         result, outcome = self.exercise('''from gta_use.vehicles import acquire_vehicle

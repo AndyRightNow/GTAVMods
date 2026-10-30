@@ -146,7 +146,7 @@ routes and recovery tactics. A lost action receipt propagates without replay.
 
 | Operation | Contract |
 | --- | --- |
-| `vehicles.acquire_vehicle(ctx, desired=None, passenger=False, companion=None)` | Ordinary entry/carjacking; verifies the actual driver seat. `desired` and `companion` are observed `{handle, model}` entities. Prefers stationary eligible cars; accepts a passenger seat already occupied by the identified companion. Stops if a different vehicle must first be exited. |
+| `vehicles.acquire_vehicle(ctx, desired=None, passenger=False, companion=None)` | Ordinary entry/carjacking; verifies the actual driver seat. `desired` and `companion` are observed `{handle, model}` entities. Prefers ordinary road cars/bikes/vans, then stationary vehicles and distance; `preferred_classes` customizes ranking and `desired` selects a required vehicle. Accepts a passenger seat already occupied by the identified companion. Stops if a different vehicle must first be exited. |
 | `vehicles.leave_vehicle(ctx)` | Brakes when driving, requests ordinary exit without automatic blocked-door warping, waits for an on-foot observation. |
 | `vehicles.recover_upright(ctx)` | Bounded ordinary steering, followed by observed wheels-on-ground; never rotates or teleports the car. |
 | `navigation.follow_on_foot(ctx, target, on_tick=...)` | One persistent normal task toward an observed actor; checks current identities, health, route movement and bounded separation. Returns on cutscene, target death/boarding or a caller predicate. Use for companion following or a confirmed on-foot pursuit; a stationary target/obstacle stops for inspection. |
@@ -585,8 +585,21 @@ missing tasks, pending searches and path results. A found route still needs
 observed movement. Repeating the same blocked goal is not recovery. Inspect the
 entrance and probe directions, choose a reachable exterior waypoint, or use normal
 controls for a short verified passage. A mission blip can be inside a building;
-its coordinates do not identify the accessible doorway. Keep automatic warping
-out of ordinary-play policies when choosing navigation overloads.
+its coordinates do not identify the accessible doorway. Choose the observed
+entrance before routing around the building. At Lester's first visit, navigation
+stopped at the front door and a short camera shot returned to controllable play
+without setting `missionActive`. Waiting there did not advance anything. A bounded
+ordinary forward walk opened the door; navigation inside then reached Lester and
+started the actual mission cutscene. This does not establish why the earlier
+native task stopped or mean every scripted camera is a mission takeover.
+
+For a visibly reachable doorway, try one short normal movement interval after
+checking the current camera/facing, then inspect actual position and the scene.
+`hold_key("W", ...)` moves relative to the current view; backing away can turn the
+camera, so blindly following S with W need not retrace the path. Do not unlock
+objects or clear a newly installed scene task to force entry. Use another route
+only when observed geometry supports it. Keep automatic warping out of ordinary-
+play policies when choosing navigation overloads.
 
 The runner already provides `ctx.directory`, `ctx.log(event, **data)`,
 `ctx.check`, `ctx.progress`, `ctx.checkpoint` and `ctx.uncertain`. Run the small
