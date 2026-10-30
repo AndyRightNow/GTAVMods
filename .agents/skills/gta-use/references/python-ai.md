@@ -723,3 +723,17 @@ installed. Reobserve occupancy before choosing the next action. If an old vehicl
 entry completes after resume, use or exit the actual vehicle; do not assume the
 new target was acquired. Replace only a task the policy owns, and preserve
 mission tasks on a control transition.
+
+### Raw markers and contextual following stops
+
+A rendered marker's apparent color need not equal `navigation.blips[].color`.
+During Chop, D and Chop both returned raw color 49 despite different visible
+markers. Identify the current objective and observed entity/model before waiting
+for an assumed color. Do not treat every loaded mission ped as an enemy.
+
+When following stops at a stationary companion, inspect the current prompt and
+geometry before retrying navigation. Chop required a close contextual interaction
+at the distracted dog and ordinary Context at the boxcar. A delivered key from
+outside the interaction range did not advance the objective; that alone did not
+show a bridge input defect. See the [Chop evaluation](../../../../docs/chop-evaluation.md)
+for the failed traces, live helper verification and assistance limits.
