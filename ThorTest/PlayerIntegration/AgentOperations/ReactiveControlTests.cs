@@ -173,8 +173,11 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH, 0f);
                 s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, true);
                 s.Game.Outputs.AimValid = true; s.Game.Outputs.AimEntity = 20;
+                s.Request("action", ("steps", new[] { Step("controls.update", ("ttlMs", 1000), ("inputs", new[] {
+                    Step("", ("control", "VehicleAccelerate"), ("value", .8)),
+                    Step("", ("control", "VehicleMoveLeftRight"), ("value", -.4)) })) }));
                 Assert.AreEqual(true, s.Batch(Step("aim", ("entity", 20), ("height", 10), ("warmupMs", 100),
-                    ("ms", 400), ("shoot", true), ("requireAimTarget", true)))["ok"]);
+                    ("ms", 400), ("shoot", true), ("requireAimTarget", true), ("keepInputs", true)))["ok"]);
                 s.Frame(); s.Frame(99);
                 Assert.AreEqual(2, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAim));
                 Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && ((int)c.Arguments[1] == (int)Control.Attack || (int)c.Arguments[1] == (int)Control.VehicleAttack)));
@@ -188,9 +191,39 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 var result = (System.Collections.Generic.Dictionary<string, object>)s.Results.Single()["result"];
                 Assert.AreEqual(1, result["attackRequestedFrames"]);
                 Assert.AreEqual(100, result["warmupMs"]);
+                Assert.AreEqual(5, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAccelerate), "Throttle must remain present on every aiming frame, including completion.");
+                Assert.AreEqual(5, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleMoveLeftRight));
+                int aimFrames = s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAim);
+                s.Frame(100);
+                Assert.AreEqual(6, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAccelerate), "The policy still owns driving after the burst returns.");
+                Assert.AreEqual(aimFrames, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME && (int)c.Arguments[1] == (int)Control.VehicleAim));
+                s.Request("action", ("steps", new[] { Step("controls.release") }));
                 int inputs = s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME);
                 s.Frame(100);
                 Assert.AreEqual(inputs, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME));
+            }
+        }
+
+        [TestMethod]
+        public void HeldInputExpiryStopsAnOngoingAimBurstWithoutWaitingForItsGameTimeDeadline()
+        {
+            using (var s = new AgentScene())
+            {
+                s.Game.Entity(10).InVehicle = true;
+                s.Game.Native.Returns(Hash.GET_PED_BONE_COORDS, Vector3.UnitY);
+                s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_HEADING, 0f);
+                s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH, 0f);
+                s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, true);
+                s.Game.Outputs.AimValid = true; s.Game.Outputs.AimEntity = 20;
+                s.Request("action", ("steps", new[] { Step("controls.update", ("ttlMs", 100), ("inputs", new[] { Step("", ("control", "VehicleAccelerate")) })) }));
+                s.Batch(Step("aim", ("entity", 20), ("ms", 2000), ("keepInputs", true), ("shoot", true), ("requireAimTarget", true)));
+                s.Frame(); s.Frame(50, 100);
+                StringAssert.Contains(s.Status, "\"paused\":true");
+                int inputs = s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME);
+                s.Frame(0, 1);
+                StringAssert.Contains(s.Status, "\"state\":\"failed\"");
+                Assert.AreEqual(inputs, s.Game.Native.Calls.Count(c => c.Hash == Hash.SET_CONTROL_VALUE_NEXT_FRAME), "Expired driving input must also stop aiming/fire while simulation is paused.");
+                StringAssert.Contains(s.Status, "Resume before advancing simulation time");
             }
         }
 
@@ -202,6 +235,7 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
                 s.Game.Native.Returns(Hash.GET_PED_BONE_COORDS, Vector3.UnitY);
                 s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_HEADING, 0f); s.Game.Native.Returns(Hash.GET_GAMEPLAY_CAM_RELATIVE_PITCH, 0f);
                 s.Game.Native.Returns(Hash.HAS_ENTITY_CLEAR_LOS_TO_ENTITY, true);
+                Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("keepInputs", "yes")))["ok"]);
                 Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("shoot", "yes")))["ok"]);
                 Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("requireAimTarget", "yes")))["ok"]);
                 Assert.AreEqual(false, s.Batch(Step("aim", ("entity", 20), ("ms", 10), ("warmupMs", 11)))["ok"]);

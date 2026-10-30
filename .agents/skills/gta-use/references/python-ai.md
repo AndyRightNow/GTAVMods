@@ -196,7 +196,12 @@ Renew before the independent wall-time TTL (50–5000 ms) or the bridge releases
 input and pauses. Supervisor heartbeats do not renew this deadline. Choose it
 above the measured observation-loop latency, and treat expiry as uncertainty.
 `release_inputs()` releases the set without pausing; pause/cancel/lease loss,
-reload and timed controls/wait/aim also clear it. `LiveClient` exposes the same
+reload and timed controls/wait/aim also clear it. For simultaneous continuous
+driving and a short aim burst, pass `keepInputs=True` to `aim`. The original
+input TTL remains in force and expiry stops aiming as well as driving; renew
+before the burst and include its wall time in the renewal budget. The default
+`aim` behavior still clears held input. A timed throttle/steering burst followed
+by state requests leaves gaps, even when aiming is composed into that burst. `LiveClient` exposes the same
 async methods. Keep the policy bounded and verify motion; held input is not a
 pathfinder or obstacle-avoidance guarantee. Inspect `status.inputs` if unsure
 whether a set is still active.
@@ -220,7 +225,12 @@ The helper brakes and clears its driving task on ordinary completion; repeatedly
 calling it with short timeouts to pursue a moving point sacrifices momentum.
 Use a persistent pursuit task or a deliberate road-interception phase, then
 switch to the freshly observed target. Road distance and interception geometry
-matter when direct chasing takes an unproductive route.
+matter when direct chasing takes an unproductive route. At freeway interchanges,
+3D distance alone does not prove the vehicles share a road. Check elevation,
+heading and the actual ramp before switching from road pathfinding to local
+relative steering; a target directly above another road is not reachable by
+steering toward its coordinates. Keep route recovery bounded and inspect the
+next real checkpoint after a lost-target failure.
 
 ```python
 from gta_use.driving import drive_to, wait_for_control

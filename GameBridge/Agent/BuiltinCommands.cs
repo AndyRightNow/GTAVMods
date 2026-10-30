@@ -35,7 +35,7 @@ namespace GTAVMods.Agent
                 var inputs = Protocol.Objects(args, "inputs", 32).Select(ParseControl).ToArray();
                 return new TimedControls(world, control, clock, Protocol.Integer(args, "ms", 1, 30000, 500), inputs, UseWallClock(args));
             }));
-            registry.Register(new CommandDefinition("controls.update", "Replace the complete continuous input set and return immediately. Inputs continue during observations; renew before the wall-time deadline or simulation pauses. Resume first. Timed controls/wait/aim, pause, cancel, lease loss and reload clear the set.",
+            registry.Register(new CommandDefinition("controls.update", "Replace the complete continuous input set and return immediately. Inputs continue during observations; renew before the wall-time deadline or simulation pauses. Resume first. Timed controls/wait/aim, pause, cancel, lease loss and reload clear the set; aim can explicitly preserve it with keepInputs=true.",
                 new { ttlMs = "integer 50..5000, default 1000; independent of lease heartbeat", inputs = "1..32 control/group/value objects, same format as controls" }, args => {
                 Protocol.Fields(args, "ttlMs", "inputs");
                 var inputs = Protocol.Objects(args, "inputs", 32).Select(ParseControl).ToArray();

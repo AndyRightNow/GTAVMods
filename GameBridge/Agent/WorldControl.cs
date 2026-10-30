@@ -37,21 +37,21 @@ namespace GTAVMods.Agent
         private readonly WorldControl control;
         private readonly Func<long> clock;
         private readonly int milliseconds;
-        private readonly bool wallClock;
+        private readonly bool wallClock, keepInputs;
         private readonly (int Group, int Control, float Value)[] inputs;
         private bool started;
         private int startGameTime;
         private long startWallTime;
         public TimedControls(IAgentWorld world, WorldControl control, Func<long> clock, int milliseconds,
-            (int Group, int Control, float Value)[] inputs, bool wallClock)
-        { this.world = world; this.control = control; this.clock = clock; this.milliseconds = milliseconds; this.inputs = inputs; this.wallClock = wallClock; }
+            (int Group, int Control, float Value)[] inputs, bool wallClock, bool keepInputs = false)
+        { this.world = world; this.control = control; this.clock = clock; this.milliseconds = milliseconds; this.inputs = inputs; this.wallClock = wallClock; this.keepInputs = keepInputs; }
         public object Result { get; private set; }
         public bool Run()
         {
+            if (control.Paused && !wallClock) throw new InvalidOperationException("Resume before advancing simulation time.");
             if (!started)
             {
-                control.ClearInputs();
-                if (control.Paused && !wallClock) throw new InvalidOperationException("Resume before advancing simulation time.");
+                if (!keepInputs) control.ClearInputs();
                 startGameTime = world.GameTime; startWallTime = clock(); started = true;
             }
             uint elapsed = unchecked((uint)(world.GameTime - startGameTime));

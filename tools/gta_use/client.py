@@ -94,6 +94,8 @@ class Client:
         Unlike timed controls, observations do not create gaps in held input.
         The complete set replaces its predecessor; omitted buttons are released.
         Lease heartbeat does not renew this independent wall-time deadline.
+        Use aim(..., keepInputs=True) explicitly to retain the set through an
+        aim burst; the original TTL still applies and must cover that burst.
         """
         return self.action("controls.update", inputs=inputs, ttlMs=ttl_ms)
 

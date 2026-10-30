@@ -23,16 +23,18 @@ namespace GTAVMods.Agent
                     return new ImmediateStep(() => world.Invoke(hash, result, parameters));
                 }));
             registry.Register(new CommandDefinition("aim", "Track an observed entity every frame with on-foot or vehicle controls; optional aim-only warm-up before gated fire. Ends when target disappears/dies or duration expires.",
-                new { entity = "entity handle", bone = "ped bone ID; default 31086 (head); non-peds use entity origin", height = "world Z offset in metres; -20..20; default 0", ms = "1..30000 total duration including warmup", warmupMs = "0..ms aim-only preparation; default 0", shoot = "boolean; default false", requireAimTarget = "boolean; default false. Withhold Attack unless the engine aim target matches; unknown also withholds. Returns bounded frame observations, not hits." }, args => {
-                    Protocol.Fields(args, "entity", "bone", "height", "ms", "warmupMs", "shoot", "requireAimTarget");
+                new { entity = "entity handle", bone = "ped bone ID; default 31086 (head); non-peds use entity origin", height = "world Z offset in metres; -20..20; default 0", ms = "1..30000 total duration including warmup", warmupMs = "0..ms aim-only preparation; default 0", keepInputs = "boolean; default false. Preserve continuous controls.update inputs during/after aiming; their original wall TTL still pauses and stops the action on expiry", shoot = "boolean; default false", requireAimTarget = "boolean; default false. Withhold Attack unless the engine aim target matches; unknown also withholds. Returns bounded frame observations, not hits." }, args => {
+                    Protocol.Fields(args, "entity", "bone", "height", "ms", "warmupMs", "shoot", "requireAimTarget", "keepInputs");
                     if (!args.ContainsKey("entity")) throw new ArgumentException("Missing target entity.");
                     bool shoot = false;
                     if (args.TryGetValue("shoot", out var value)) shoot = value is bool flag ? flag : throw new ArgumentException("shoot must be boolean.");
                     bool requireAimTarget = false;
                     if (args.TryGetValue("requireAimTarget", out var gate)) requireAimTarget = gate is bool required ? required : throw new ArgumentException("requireAimTarget must be boolean.");
+                    bool keepInputs = false;
+                    if (args.TryGetValue("keepInputs", out var held)) keepInputs = held is bool keep ? keep : throw new ArgumentException("keepInputs must be boolean.");
                     int milliseconds = Protocol.Integer(args, "ms", 1, 30000, 300);
                     return new TrackingAim(world, Protocol.Integer(args, "entity", 1, int.MaxValue, 0), Protocol.Integer(args, "bone", 0, 65535, 31086), shoot, requireAimTarget,
-                        new TimedControls(world, control, clock, milliseconds, Array.Empty<(int, int, float)>(), false),
+                        new TimedControls(world, control, clock, milliseconds, Array.Empty<(int, int, float)>(), false, keepInputs),
                         Protocol.Integer(args, "warmupMs", 0, milliseconds, 0), (float)Protocol.Number(args, "height", -20, 20, 0));
                 }));
         }

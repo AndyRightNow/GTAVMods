@@ -287,6 +287,13 @@ aim tracks the specified ped bone every frame using observed camera rotation.
 For vehicles and props it tracks the entity origin instead. Optional `height`
 adds a world-Z offset (-20..20 metres) to either target; choose a visible point
 instead of assuming an entity origin is above the road or an obstruction.
+Use `keepInputs=True` on `aim` to retain a previously submitted continuous driving
+input set during and after the burst. This is explicit; the default still clears
+held input. Renew the set before its original wall-time TTL expires; aim does not
+extend that TTL. Expiry pauses simulation and stops the burst on the next tick.
+Keep aim windows short enough to renew and adjust steering between them, and
+verify actual lane/road-level alignment, ammo spent and target damage.
+
 Vehicle occupants also receive VehicleAim/VehicleAttack inputs. `warmupMs`
 (default 0, at most `ms`) keeps aim held without firing during the first part of
 the same action; `ms` includes that interval. For example,
