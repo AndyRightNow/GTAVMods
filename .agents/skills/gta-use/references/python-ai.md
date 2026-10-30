@@ -107,6 +107,7 @@ routes and recovery tactics. A lost action receipt propagates without replay.
 | `combat.fire_from_vehicle(ctx, target)` | One bounded target-gated burst from the current seat without replacing the driving task. Rechecks target identity/range, observes ammo spent and damage; withholds during phone calls or without usable ammunition. |
 | `combat.muzzle_clear(game, target, allies=...)` | Current 3D muzzle ray and ally clearance for custom firing policies; aim/peek first. Supply every identified companion. |
 | `driving.intercept_vehicle(ctx, rider, vehicle, rider_model=..., vehicle_model=..., waypoints=...)` | Persistent interception route then moving pursuit; defaults to chase. `engagement="ram"` explicitly opts into ordinary collision damage. Rider separation is an observation, not mission completion. |
+| `driving.follow_entity(ctx, target)` | One persistent normal vehicle-follow task toward a moving ped, object or vehicle. Validates observed `{handle, model}`, driver identity and recent gap closure. Returns `near-target`, `policy`, `target-dead` or `transition`; proximity does not establish boarding. |
 | `driving.wait_for_control(ctx, stable_for=2)` | Requires control to remain available for the requested interval, restarting that interval if a cutscene returns. |
 | `ctx.capture("stage-name", state=state)` | Retains a numbered screenshot and evidence in the run directory. `allow_unavailable=True` may skip only a foreground-window rejection, never uncertain transport. |
 
@@ -137,6 +138,46 @@ and combine candidate eligibility or pursuit target reads into one immediate C#
 request. The bridge caches repeated source within its 128-compilation session
 budget; they do not add a durable request store or a second scheduler.
 
+
+## Scripted boarding and vehicle task conflicts
+
+During Father/Son, Jimmy was visibly riding in the player car while
+`GET_VEHICLE_PED_IS_IN` and `IsInVehicle` still returned false. Franklin also
+landed on the hood before ordinary seated occupancy became true. Combine the
+current objective, vehicle-relative pose over several observations and a
+screenshot at ambiguous transitions. Once the actor travels with the player car,
+stop targeting that actor with a driving task and inspect the next objective.
+Proximity alone is not proof of a completed rescue.
+
+Use `follow_entity` when the target is an observed actor on a trailer or otherwise
+not seated in a target vehicle. Its `min_distance` is an integer native request;
+`arrival_radius` is the measured 3D gap at which the helper returns. Neither
+promises a precise offset. For exact alignment, approach on the road first, then
+use a bounded local steering controller after checking obstacles. Do not send a
+road pathfinder repeatedly toward an inaccessible garage center; inspect the
+entrance and align at low speed.
+
+In the Father/Son shooting phase, `TASK_VEHICLE_CHASE` suppressed ordinary player
+vehicle fire: the same input spent ammo after clearing the driving task but spent
+none while chasing. `TASK_DRIVE_BY` beneath the driving task also had no effect
+there. Prior Repossession firing evidence remains valid for that scene. After a
+bounded no-ammo/no-damage burst, inspect task interference before repeating it.
+Use ordinary sustained steering/throttle plus aim/fire when simultaneous AI
+vehicle tasks block player shooting. `keepInputs=True` preserves held controls,
+but cannot make a game task permit firing. Track ammo across **every** observation,
+including increases from mission replenishment; accepted attack frames are not
+shots fired.
+
+Captures block the Python feedback loop: avoid taking screenshots during a sharp
+manual turn with steering held. Measured analog steering had a 0.25 deadzone in
+this setup; use observed input feedback when calibrating small corrections,
+rather than increasing control duration to compensate for zero effective input.
+
+Menu controls can use `clock="wall"` and group 2 for `FrontendAccept` /
+`FrontendCancel` (verified in Los Santos Customs). The save-slot menu suspends
+SHVDNE; after one timeout use the visible menu. A supervisor pause or lease expiry
+can leave the returning game frozen. Reacquire through a fresh supervised run
+and resume before waiting for gameplay; an expired token cannot resume it.
 
 ## Identify the mission route, then choose transport
 

@@ -317,3 +317,83 @@ def intercept_vehicle(ctx, rider, vehicle, *, rider_model, vehicle_model,
         raise
     finally:
         driver.close()
+
+
+def follow_entity(ctx, target, *, speed=28, min_distance=5, arrival_radius=10,
+                  driving_style=ALERTED, timeout=180, no_progress_timeout=20,
+                  minimum_health=100, check_interval=.3, on_tick=None):
+    """Approach an observed moving entity using one persistent vehicle task.
+
+    Unlike rider pursuit, the target need not occupy a vehicle: scripted actors
+    may stand on trailers or board through animations. Returns near-target,
+    target-dead, transition or policy. Proximity is not a boarding/mission result.
+    on_tick(ctx, state, target) can observe a policy-specific transition; it must
+    not replace the owned driving task. Normal return clears that task without
+    pausing; uncertain transport is never replayed or followed by task cleanup.
+    """
+    target_handle, target_model = _identity(target)
+    _bounds(speed=(speed, 1, 60), arrival_radius=(arrival_radius, 1, 50),
+            timeout=(timeout, 1, 600), no_progress_timeout=(no_progress_timeout, .2, 120),
+            minimum_health=(minimum_health, 1, 10000), check_interval=(check_interval, .05, 2))
+    if isinstance(min_distance, bool) or not isinstance(min_distance, int) or not 0 <= min_distance <= 100:
+        raise ValueError("min_distance must be an integer between 0 and 100 metres.")
+    if isinstance(driving_style, bool) or not isinstance(driving_style, int) or not 0 <= driving_style <= 2147483647:
+        raise ValueError("driving_style must be a nonnegative signed integer bitmask.")
+    query = ('''/* gta-use:follow-target */
+        var target=Entity.FromHandle(%d);
+        if(target==null || !target.Exists() || target.Model.Hash!=%d || P.CurrentVehicle==null) return null;
+        var ped=target as Ped;
+        return new {position=target.Position, velocity=target.Velocity, health=target.Health,
+            dead=target.IsDead, relative=P.CurrentVehicle.GetPositionOffset(target.Position),
+            vehicle=ped==null ? 0 : Function.Call<int>(Hash.GET_VEHICLE_PED_IS_IN,ped.Handle,false)};
+    ''') % (target_handle, target_model)
+    driver = _Driver(ctx, minimum_health)
+    started = progress_at = window_at = time.monotonic()
+    best, window_gap = math.inf, None
+    try:
+        while time.monotonic() - started < timeout:
+            state, p, v = driver.observe()
+            if p is None:
+                return dict(outcome="transition", state=state)
+            if target_handle in (driver.identity[0], driver.identity[2]):
+                ctx.uncertain("Cannot follow the player's own actor or current vehicle.")
+            observed = ctx.game.command(query)
+            if observed is None:
+                ctx.uncertain("Follow target identity changed or disappeared.")
+            observed.update(handle=target_handle, model=target_model,
+                            distance=math.dist(_point(p["entity"]["position"]), _point(observed["position"])))
+            if observed["dead"]:
+                return dict(outcome="target-dead", state=state, target=observed)
+            if on_tick is not None and on_tick(ctx, state, observed):
+                return dict(outcome="policy", state=state, target=observed)
+            gap, now = observed["distance"], time.monotonic()
+            if gap <= arrival_radius:
+                ctx.progress("Reached moving entity approach radius", target=observed)
+                return dict(outcome="near-target", state=state, target=observed, elapsed=now-started)
+            if not driver.owns_task:
+                ctx.game.action("resume")
+                ctx.game.native("TASK_VEHICLE_FOLLOW", driver.identity[0], driver.identity[2],
+                                target_handle, _float(speed), driving_style, min_distance)
+                driver.owns_task = True
+                ctx.log("follow-start", target=target, speed=speed, minDistance=min_distance)
+            if gap < best - 2:
+                if math.isfinite(best):
+                    ctx.progress("Moving entity approach closing", target=observed)
+                best, progress_at = min(best, gap), now
+            if window_gap is None:
+                window_gap = gap
+            if now - window_at >= min(5, no_progress_timeout / 2):
+                if window_gap - gap > 2:
+                    progress_at = now
+                    ctx.progress("Moving entity approach closing over recent window", before=window_gap, after=gap)
+                window_gap, window_at = gap, now
+            if now - progress_at >= no_progress_timeout:
+                ctx.log("follow-no-effect", target=observed, state=state)
+                ctx.uncertain("Following did not close the gap; inspect the route or approach offset.")
+            time.sleep(check_interval)
+        ctx.uncertain("Following exceeded its overall deadline.")
+    except UncertainOutcome:
+        driver.uncertain = True
+        raise
+    finally:
+        driver.close()

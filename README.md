@@ -31,6 +31,12 @@ help. Their traces informed compact inspection, aim/cover feedback, continuous
 driving and bounded pursuit. The report separates completion, elapsed time,
 retries and assistance; it does not claim reliable autonomous campaign play.
 
+A later [Father/Son development run](docs/father-son-evaluation.md) reached
+Mission Passed and saved progress through normal gameplay. It required eight
+mission failures and extensive policy debugging; the report separates its nine
+hours of elapsed time from 53 minutes in recorded Python runs. Its findings
+informed moving-actor following and scripted-boarding/task-conflict guidance.
+
 The repository skill at [.agents/skills/gta-use](.agents/skills/gta-use/SKILL.md)
 covers operation and supervised Python policies. See [bridge profiling](docs/bridge-performance.md)
 for reproducible live latency, CPU, allocation and process-memory measurements.

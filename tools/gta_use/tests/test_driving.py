@@ -40,9 +40,16 @@ class DrivingWorld(ObservedGame):
                                                             health=t["health"], vehicle=t["vehicle"])
                 if len(self.targets) > 1:
                     self.targets.popleft()
+            if step["op"] == "command" and "gta-use:follow-target" in step["code"]:
+                t = self.targets[0]
+                value = None if t.get("missing") else dict(position=dict(x=0, y=t["y"], z=t.get("z", 0)),
+                    velocity=dict(x=0,y=10,z=0), relative=t.get("relative", dict(x=0,y=20,z=0)),
+                    health=t["health"], dead=t["health"] <= 0, vehicle=t["vehicle"])
+                if len(self.targets) > 1:
+                    self.targets.popleft()
             if step["op"] == "native":
                 name, args = step["name"], step["args"]
-                if self.lost and name in ("TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE", "TASK_VEHICLE_MISSION"):
+                if self.lost and name in ("TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE", "TASK_VEHICLE_MISSION", "TASK_VEHICLE_FOLLOW"):
                     return dict(id=envelope["id"], session=self.session, ok=False, uncertain=True, error="Lost drive receipt")
                 if name == "DOES_ENTITY_EXIST":
                     value = True
@@ -262,3 +269,82 @@ def run(ctx):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertGreaterEqual(sum(r["op"]=="state" for r in self.game.requests), 5)
         self.assertTrue(any(e["event"] == "progress" and e["evidence"]["session"]["cutscenePlaying"] for e in self.events()))
+
+
+    def test_follow_approaches_scripted_actor_without_requiring_a_vehicle_seat(self):
+        result, outcome = self.exercise([scene(), scene(20,20), scene(47,18)], targets=[
+            dict(y=50,health=150,vehicle=0),dict(y=55,health=150,vehicle=0),dict(y=50,z=2,health=150,vehicle=0)], code="""from gta_use.driving import follow_entity
+def run(ctx):
+    r=follow_entity(ctx,dict(handle=30,model=46),speed=35,min_distance=0,
+                    arrival_radius=4,timeout=3,check_interval=.05)
+    ctx.checkpoint("approach",**r)
+""")
+        self.assertEqual(0,result.returncode,result.stderr)
+        evidence=outcome["evidence"]
+        self.assertEqual("near-target",evidence["outcome"])
+        self.assertEqual(0,evidence["target"]["vehicle"],"Scripted boarding is not normal seated occupancy.")
+        self.assertAlmostEqual(13**.5,evidence["target"]["distance"])
+        tasks=self.natives()
+        self.assertEqual(["TASK_VEHICLE_FOLLOW","CLEAR_PED_TASKS"],[n["name"] for n in tasks])
+        self.assertEqual([10,20,30,{"type":"float","value":35},786469,0],tasks[0]["args"])
+
+    def test_follow_constant_gap_stops_instead_of_treating_road_travel_as_progress(self):
+        result,outcome=self.exercise([scene()],targets=[dict(y=50,health=150,vehicle=0)],code="""from gta_use.driving import follow_entity
+def run(ctx):
+    follow_entity(ctx,dict(handle=30,model=46),timeout=2,no_progress_timeout=.2,check_interval=.05)
+""")
+        self.assertEqual(1,result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertTrue(any(e["event"]=="follow-no-effect" for e in self.events()))
+        self.assertEqual(["TASK_VEHICLE_FOLLOW","CLEAR_PED_TASKS"],[n["name"] for n in self.natives()])
+
+    def test_follow_policy_can_end_on_observed_scripted_boarding_without_claiming_mission_success(self):
+        result,outcome=self.exercise([scene(),scene(20)],targets=[dict(y=50,health=150,vehicle=0),
+            dict(y=21,health=150,vehicle=0,relative=dict(x=0,y=1,z=2))],code="""from gta_use.driving import follow_entity
+def run(ctx):
+    def observe(ctx,state,target):
+        return abs(target['relative']['y'])<2
+    r=follow_entity(ctx,dict(handle=30,model=46),on_tick=observe,timeout=2,check_interval=.05)
+    ctx.checkpoint("boarding-needs-inspection",**r)
+""")
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertEqual("policy",outcome["evidence"]["outcome"])
+        self.assertTrue(outcome["evidence"]["state"]["session"]["missionActive"])
+        self.assertEqual("CLEAR_PED_TASKS",self.natives()[-1]["name"])
+
+    def test_follow_mission_takeover_preserves_mission_tasks(self):
+        transition=scene(20);transition['session'].update(playerControl=False,cutscenePlaying=True)
+        result,outcome=self.exercise([scene(),transition],code="""from gta_use.driving import follow_entity
+def run(ctx):
+    ctx.checkpoint("takeover",**follow_entity(ctx,dict(handle=30,model=46),timeout=2,check_interval=.05))
+""")
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertEqual("transition",outcome['evidence']['outcome'])
+        self.assertEqual(["TASK_VEHICLE_FOLLOW"],[n['name'] for n in self.natives()])
+
+    def test_follow_changed_target_stops_owned_drive_without_reusing_handle(self):
+        result,outcome=self.exercise([scene()],targets=[dict(y=50,health=150,vehicle=0),dict(missing=True)],code="""from gta_use.driving import follow_entity
+def run(ctx):
+    follow_entity(ctx,dict(handle=30,model=46),timeout=2,check_interval=.05)
+""")
+        self.assertEqual(1,result.returncode)
+        self.assertTrue(outcome['paused'])
+        self.assertEqual(["TASK_VEHICLE_FOLLOW","CLEAR_PED_TASKS"],[n['name'] for n in self.natives()])
+        self.assertTrue(any('identity changed' in e.get('error','') for e in self.events()))
+
+    def test_follow_lost_task_receipt_stops_without_replay_or_task_cancellation(self):
+        result,outcome=self.exercise([scene()],lost=True,code="""from gta_use.driving import follow_entity
+def run(ctx):
+    follow_entity(ctx,dict(handle=30,model=46),timeout=2,check_interval=.05)
+""")
+        self.assertEqual(1,result.returncode)
+        self.assertTrue(outcome['paused'])
+        self.assertEqual(["TASK_VEHICLE_FOLLOW"],[n['name'] for n in self.natives()])
+
+    def test_follow_rejects_invalid_distance_before_submitting_game_input(self):
+        result,_=self.exercise([scene()],code="""from gta_use.driving import follow_entity
+def run(ctx):
+    follow_entity(ctx,dict(handle=30,model=46),min_distance=1.5)
+""")
+        self.assertEqual(1,result.returncode)
+        self.assertFalse(self.natives())
