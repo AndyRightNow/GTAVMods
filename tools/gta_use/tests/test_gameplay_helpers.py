@@ -347,6 +347,25 @@ def run(ctx):
         steps = [s for r in self.game.requests for s in r.get("steps", [])]
         self.assertFalse([s for s in steps if s["op"] == "native"], "Firing must not clear or replace the driving task.")
 
+    def test_unavailable_vehicle_clip_allows_one_gated_burst_and_measures_actual_effect(self):
+        unavailable = scene(car=20)
+        unavailable["sections"]["weapons"]["ammoInClip"] = None
+        result, outcome = self.vehicle_fire(observations=[unavailable, scene(car=20, ammo=12)])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(1, len(self.aims()))
+        self.assertTrue(self.aims()[0]["requireAimTarget"])
+        self.assertEqual(3, outcome["evidence"]["ammoSpent"])
+        self.assertTrue(outcome["evidence"]["damaged"])
+
+    def test_observed_empty_vehicle_clip_with_reserve_ammo_withholds_the_burst(self):
+        empty = scene(car=20)
+        empty["sections"]["weapons"]["ammoInClip"] = 0
+        result, outcome = self.vehicle_fire(observations=[empty])
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("not-ready", outcome["evidence"]["outcome"])
+        self.assertFalse(self.aims())
+        self.assertFalse(self.commands("vehicle-fire-target"))
+
     def test_vehicle_aim_acceptance_without_ammo_or_damage_is_not_reported_as_effect(self):
         result, outcome = self.vehicle_fire(observations=[scene(car=20)], hp=150)
         self.assertEqual(0, result.returncode, result.stderr)

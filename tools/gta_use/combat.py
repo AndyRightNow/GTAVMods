@@ -102,7 +102,10 @@ def fire_from_vehicle(ctx, target, *, bone=31086, burst_ms=1100, warmup_ms=200,
     if (not p or not car or not p["inVehicle"] or session["pauseMenu"] or session["cutscenePlaying"]
             or not session["playerControl"] or p["entity"]["health"] < minimum_health):
         ctx.uncertain("Vehicle firing interrupted by health, seat, control or menu transition.")
-    if session.get("phoneCall") or p["reloading"] or not weapon["ammoInClip"] or not weapon["totalAmmo"]:
+    # A vehicle weapon can report an unavailable clip before ordinary aiming.
+    # Unknown is not empty: one gated burst may establish effect when total ammo
+    # is present. A measured empty clip still belongs to the reload policy.
+    if session.get("phoneCall") or p["reloading"] or weapon["ammoInClip"] == 0 or not weapon["totalAmmo"]:
         return dict(outcome="not-ready", state=before)
     # Obtain fresh target position and identity together; a previous pursuit pack
     # is not sufficient after another action has advanced the simulation.

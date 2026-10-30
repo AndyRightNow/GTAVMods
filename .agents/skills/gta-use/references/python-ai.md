@@ -176,6 +176,17 @@ request. The bridge caches repeated source within its 128-compilation session
 budget; they do not add a durable request store or a second scheduler.
 
 
+### Unavailable ammunition observations
+
+`weapons.ammoInClip: null` means the engine did not provide a clip count;
+it does not mean zero. In Marriage Counseling the holstered vehicle pistol
+reported null while total ammo was 450. A policy that used `if not ammoInClip`
+repeated reloads without shooting and exposed the player to incoming fire.
+Reload only for an observed zero, with a bounded wait and fresh observation.
+`fire_from_vehicle` permits one target-gated burst when clip count is unknown
+and total ammunition is present; assess ammo spent and damage before repeating.
+An unknown clip does not establish that shooting will work.
+
 ## Scripted boarding and vehicle task conflicts
 
 Use `entities.observe_entity(game, observed_target, relative_to=observed_vehicle)`
