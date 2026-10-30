@@ -88,6 +88,29 @@ observation/behavior is understood. The SDK is in
 [segment.py](../../../../tools/gta_use/segment.py), and supervision in
 [__main__.py](../../../../tools/gta_use/__main__.py).
 
+## Physical key fallback
+
+Use ordinary controls/tasks first. If a verified interaction ignores simulated
+control values, use `ctx.game.hold_key("H", 2500)` after resuming. This holds one
+actual key for 1..5000 ms in foreground GTA under the current controller lease.
+The Rust service releases on the deadline, focus loss, failed lease verification
+or normal shutdown; Python cancellation does not leave an indefinite hold. Fatal
+service/OS termination cannot guarantee key release. Chords and overlapping holds
+are rejected, and an already held user key is preserved.
+
+Inspect the game after delivery: a released-key receipt is not objective success.
+On an uncertain response, never automatically replay. Keep the hold shorter than
+the runner observation deadline. This is not a pause-menu recovery API: lease
+validation needs game ticks, which save/failure menus may suspend. Use normal
+computer-use UI there, then acquire a fresh supervised lease after returning.
+
+Pulling Favors exposed this distinction: injected H-bound controls read as pressed
+but did not release the tow hook. One actual 2.5-second H hold released it and
+produced Mission Passed. The engine's internal reason is unverified. For towing,
+verify the hooked entity during travel, approach a gate through its opening, and
+stop on the actual drop-off prompt rather than forcing a coordinate past a wall.
+Do not replace the interaction with attachment/detachment natives.
+
 ## Compose reusable SDK operations
 
 Prefer these bounded helpers to copying native/C# loops into each mission. They
@@ -125,6 +148,13 @@ burst = fire_from_cover(ctx, target_entity, allies=[companion_entity])
 if burst["outcome"] == "fired" and burst["damaged"]:
     ctx.log("tactical-outcome", target=burst["target"], health=burst["after"])
 ```
+
+When walking into an observed mission entrance/contact, use
+`navigate_to(..., allow_transition=True)` to accept the expected control takeover.
+Check `result.get("outcome") == "transition"` and call `wait_for_control` before
+reading the next objective. The result has `arrived=False`: a cutscene does not
+prove arrival or mission completion. The default still stops on control loss;
+menus, missing/changed players, health failures and vehicle entry remain stops.
 
 Vehicle entry uses native timeout `-1`; Python owns the deadline. A finite native
 entry timeout can warp the ped even without an explicit warp flag. Do not restore

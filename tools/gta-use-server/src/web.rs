@@ -31,6 +31,8 @@ struct Service {
     python: PathBuf,
     child: Arc<Mutex<Option<tokio::process::Child>>>,
     shutdown: watch::Receiver<bool>,
+    keyboard: Arc<Mutex<()>>,
+    keyboard_device: Arc<dyn crate::keyboard::Device>,
 }
 struct Failure(StatusCode, String);
 impl IntoResponse for Failure {
@@ -64,16 +66,34 @@ fn identifier(id: &str) -> Result<()> {
 }
 
 pub fn app(link: Link, token: String, python: PathBuf, shutdown: watch::Receiver<bool>) -> Router {
+    app_with_keyboard(
+        link,
+        token,
+        python,
+        shutdown,
+        Arc::new(crate::keyboard::WindowsKeyboard),
+    )
+}
+fn app_with_keyboard(
+    link: Link,
+    token: String,
+    python: PathBuf,
+    shutdown: watch::Receiver<bool>,
+    device: Arc<dyn crate::keyboard::Device>,
+) -> Router {
     let state = Service {
         link,
         bearer: format!("Bearer {token}"),
         python,
         child: Arc::new(Mutex::new(None)),
         shutdown,
+        keyboard: Arc::new(Mutex::new(())),
+        keyboard_device: device,
     };
     Router::new()
         .route("/v1/session", get(session))
         .route("/v1/request", post(request))
+        .route("/v1/keyboard", post(keyboard))
         .route("/v1/files/{*path}", get(artifact))
         .route("/v1/batches/{id}", get(batch))
         .route("/v1/jobs", post(start_job))
@@ -112,6 +132,20 @@ async fn session(State(s): State<Service>) -> Result<Json<Value>> {
 }
 async fn request(State(s): State<Service>, bytes: Bytes) -> Result<Json<Value>> {
     Ok(Json(s.link.dispatch(decode(bytes)?).await?))
+}
+async fn keyboard(State(s): State<Service>, bytes: Bytes) -> Result<Json<Value>> {
+    let _exclusive = s
+        .keyboard
+        .try_lock()
+        .map_err(|_| invalid("A keyboard hold is already running."))?;
+    let result = crate::keyboard::hold(
+        &s.link,
+        decode(bytes)?,
+        s.keyboard_device.clone(),
+        s.shutdown.clone(),
+    )
+    .await?;
+    Ok(Json(result))
 }
 async fn artifact(State(s): State<Service>, Path(relative): Path<String>) -> Result<Response> {
     let root = s.link.directory()?.canonicalize()?;
@@ -263,6 +297,7 @@ async fn schema() -> Json<Value> {
     Json(
         json!({"openapi":"3.1.0","info":{"title":"GTA use","version":"1"},"paths":{
             "/v1/session":{"get":{"summary":"Current game session","responses":{"200":{"description":"Discovery"}}}},
+            "/v1/keyboard":{"post":{"summary":"Hold one foreground GTA keyboard key for 1..5000 ms using the current controller lease; releases on deadline, focus loss or shutdown","responses":{"200":{"description":"Key release receipt; observe game outcome separately"}}}},
             "/v1/request":{"post":{"summary":"Versioned bridge request; discover operations with op=describe","responses":{"200":{"description":"Correlated receipt"}}}},
             "/v1/ws":{"get":{"summary":"WebSocket requests and filtered state subscriptions","responses":{"101":{"description":"Upgrade"}}}}
         }}),

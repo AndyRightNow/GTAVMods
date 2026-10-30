@@ -42,6 +42,20 @@ correlated WebSocket requests, artifact downloads, externally readable batch res
 Python job start/status/cancellation and a compact OpenAPI discovery document.
 See [GTA use](gta-use.md) for the operation and state contracts.
 
+`POST /v1/keyboard` accepts `{session, token, key, ms}` with the current game
+controller token in the body and the existing service bearer header. The Python
+SDK exposes `game.hold_key(key, milliseconds)`. One key is held for 1..5000 ms;
+keys include letters/digits, arrows, Enter, Escape, Space, Tab, left Shift/Control,
+Insert/Delete/Home/End/PageUp/PageDown and F1..F12. No chords are accepted.
+The service checks the foreground GTA PID and current game lease before key-down,
+then monitors focus/shutdown every 20 ms and rechecks the lease every 500 ms.
+Revalidation has a 200 ms deadline. Overlapping holds and already-held user keys
+are rejected. A drop guard attempts key-up on cancellation; normal completion,
+focus/lease loss and service shutdown also release it. Abrupt OS termination or
+fatal service abort cannot guarantee release. Delivery receipts establish key
+release only; callers must observe the game effect and never replay lost receipts.
+Paused game menus that suspend SHVDNE cannot authorize new keyboard holds.
+
 The Rust runtime uses two executor threads and at most four blocking workers.
 Accepted TCP connections disable Nagle coalescing for interactive control traffic.
 One actor serializes complete Windows pipe exchanges. Disconnecting the caller

@@ -29,6 +29,9 @@ impl Scene {
         Self::start_with_rearm_delay(Duration::ZERO).await
     }
     async fn start_with_rearm_delay(rearm_delay: Duration) -> Self {
+        Self::start_device(rearm_delay, Arc::new(crate::keyboard::WindowsKeyboard)).await
+    }
+    async fn start_device(rearm_delay: Duration, device: Arc<dyn crate::keyboard::Device>) -> Self {
         let root = tempfile::tempdir_in(
             std::env::var_os("GTA_USE_TEST_ROOT")
                 .map(PathBuf::from)
@@ -46,7 +49,13 @@ impl Scene {
         let journal = Arc::new(Journal::new(root.path().join("service.jsonl")).unwrap());
         let link = Link::start(root.path().into(), 1, journal);
         let (shutdown_sender, shutdown) = watch::channel(false);
-        let app = app(link, "scenario-token".into(), "python.exe".into(), shutdown);
+        let app = app_with_keyboard(
+            link,
+            "scenario-token".into(),
+            "python.exe".into(),
+            shutdown,
+            device,
+        );
         let http = tokio::spawn(async move {
             axum::serve(
                 listener,
@@ -463,4 +472,156 @@ async fn websocket_control_is_correlated_while_a_filtered_subscription_is_active
     assert_eq!(receipt["type"], "response");
     assert_eq!(receipt["id"], request["id"]);
     ws.close(None).await.unwrap();
+}
+
+#[derive(Default)]
+struct KeyboardObservation {
+    focus_lost: std::sync::atomic::AtomicBool,
+    physical_held: std::sync::atomic::AtomicBool,
+    events: std::sync::Mutex<Vec<(u16, bool)>>,
+}
+impl crate::keyboard::Device for KeyboardObservation {
+    fn reserve(&self, _: u32) -> std::io::Result<Box<dyn Send>> {
+        Ok(Box::new(()))
+    }
+    fn foreground(&self, process: u32) -> bool {
+        process == 1 && !self.focus_lost.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    fn held(&self, _: u16) -> bool {
+        self.physical_held.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    fn send(&self, key: u16, down: bool) -> std::io::Result<()> {
+        self.events.lock().unwrap().push((key, down));
+        Ok(())
+    }
+}
+fn keyboard_request(s: &Scene, ms: u64) -> reqwest::RequestBuilder {
+    s.client.post(format!("{}/v1/keyboard",s.url)).bearer_auth("scenario-token")
+        .json(&json!({"session":"session-one","token":"11111111111111111111111111111111","key":"H","ms":ms}))
+}
+async fn accept_keyboard_lease(s: &mut Scene, ok: bool) {
+    let (request, reply) = timeout(Duration::from_secs(2), s.observations.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(request["op"], "lease");
+    assert_eq!(request["action"], "heartbeat");
+    assert_eq!(request["token"], "11111111111111111111111111111111");
+    reply
+        .send(json!({"id":request["id"],"session":request["session"],"ok":ok}))
+        .unwrap();
+}
+#[tokio::test]
+async fn held_game_key_releases_at_deadline_and_rejects_overlapping_holds() {
+    let device = Arc::new(KeyboardObservation::default());
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    let request = keyboard_request(&s, 180);
+    let response =
+        tokio::spawn(async move { request.send().await.unwrap().json::<Value>().await.unwrap() });
+    accept_keyboard_lease(&mut s, true).await;
+    sleep(Duration::from_millis(30)).await;
+    assert_eq!(keyboard_request(&s, 20).send().await.unwrap().status(), 400);
+    let receipt = response.await.unwrap();
+    assert_eq!(receipt["released"], true);
+    assert!(receipt["elapsedMs"].as_u64().unwrap() >= 180);
+    assert_eq!(
+        *device.events.lock().unwrap(),
+        vec![(0x48, true), (0x48, false)]
+    );
+}
+#[tokio::test]
+async fn focus_loss_releases_the_key_before_its_requested_duration() {
+    let device = Arc::new(KeyboardObservation::default());
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    let request = keyboard_request(&s, 3000);
+    let response =
+        tokio::spawn(async move { request.send().await.unwrap().json::<Value>().await.unwrap() });
+    accept_keyboard_lease(&mut s, true).await;
+    sleep(Duration::from_millis(30)).await;
+    device
+        .focus_lost
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let receipt = timeout(Duration::from_secs(1), response)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(receipt["error"].as_str().unwrap().contains("lost focus"));
+    assert_eq!(
+        *device.events.lock().unwrap(),
+        vec![(0x48, true), (0x48, false)]
+    );
+}
+#[tokio::test]
+async fn a_rejected_lease_never_sends_keyboard_input() {
+    let device = Arc::new(KeyboardObservation::default());
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    let request = keyboard_request(&s, 80);
+    let response = tokio::spawn(async move { request.send().await.unwrap() });
+    accept_keyboard_lease(&mut s, false).await;
+    assert_eq!(response.await.unwrap().status(), 400);
+    assert!(device.events.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn a_physically_held_key_is_preserved_without_injection_or_release() {
+    let device = Arc::new(KeyboardObservation::default());
+    device
+        .physical_held
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    let request = keyboard_request(&s, 80);
+    let response = tokio::spawn(async move { request.send().await.unwrap() });
+    accept_keyboard_lease(&mut s, true).await;
+    assert_eq!(response.await.unwrap().status(), 400);
+    assert!(device.events.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn shutdown_releases_a_held_key_without_waiting_for_the_game() {
+    let device = Arc::new(KeyboardObservation::default());
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    let request = keyboard_request(&s, 3000);
+    let response = tokio::spawn(async move { request.send().await.unwrap() });
+    accept_keyboard_lease(&mut s, true).await;
+    sleep(Duration::from_millis(30)).await;
+    s._shutdown.send(true).unwrap();
+    assert_eq!(
+        timeout(Duration::from_secs(1), response)
+            .await
+            .unwrap()
+            .unwrap()
+            .status(),
+        400
+    );
+    assert_eq!(
+        *device.events.lock().unwrap(),
+        vec![(0x48, true), (0x48, false)]
+    );
+}
+#[tokio::test]
+async fn lost_lease_during_hold_releases_without_resending_key_down() {
+    let device = Arc::new(KeyboardObservation::default());
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    let request = keyboard_request(&s, 3000);
+    let response = tokio::spawn(async move { request.send().await.unwrap() });
+    accept_keyboard_lease(&mut s, true).await;
+    accept_keyboard_lease(&mut s, false).await;
+    assert_eq!(response.await.unwrap().status(), 400);
+    assert_eq!(
+        *device.events.lock().unwrap(),
+        vec![(0x48, true), (0x48, false)]
+    );
+}
+#[tokio::test]
+async fn excessive_key_hold_is_rejected_before_contacting_the_game() {
+    let device = Arc::new(KeyboardObservation::default());
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    assert_eq!(
+        keyboard_request(&s, 5001).send().await.unwrap().status(),
+        400
+    );
+    assert!(device.events.lock().unwrap().is_empty());
+    assert!(
+        timeout(Duration::from_millis(50), s.observations.recv())
+            .await
+            .is_err()
+    );
 }

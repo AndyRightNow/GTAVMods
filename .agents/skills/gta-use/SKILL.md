@@ -54,6 +54,8 @@ For short on-foot access with bounded climb/vault recovery, use
 `gta_use.navigation.navigate_to`; explicit nearby edge attempts use
 `climb_toward`. Unarmed exchanges use `combat.melee_burst`. Their contracts and
 observed limits are in Python AI.
+For interactions that ignore simulated controls, `game.hold_key` provides a
+bounded foreground keyboard fallback under the current lease; see Python AI.
 For mission scripting, read [Python AI](references/python-ai.md) and consult
 [world state](references/world-state.md) for the fields your policy consumes.
 Python AI also documents reusable vehicle access, settled cover, muzzle-safe

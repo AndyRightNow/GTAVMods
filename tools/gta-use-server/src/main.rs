@@ -1,3 +1,4 @@
+mod keyboard;
 mod storage;
 mod transport;
 mod web;
@@ -22,6 +23,7 @@ impl Drop for Handle {
 fn main() {
     if let Err(error) = run() {
         use std::io::Write;
+        eprintln!("{error}");
         let args: Vec<_> = std::env::args_os().collect();
         if let (Some(root), Some(process)) = (args.get(1), args.get(2)) {
             let path = PathBuf::from(root)

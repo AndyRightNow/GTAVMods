@@ -221,6 +221,44 @@ def run(ctx):
         self.assertTrue(outcome["paused"])
         self.assertEqual(["TASK_FOLLOW_NAV_MESH_TO_COORD"], [n["name"] for n in self.natives()])
 
+    def test_expected_cutscene_at_contact_returns_transition_without_clearing_mission_tasks(self):
+        takeover = observation(2)
+        takeover["session"].update(playerControl=False, cutscenePlaying=True)
+        result, outcome = self.exercise([[takeover]], options=", allow_transition=True")
+        self.assertEqual(0, result.returncode)
+        self.assertFalse(outcome["evidence"]["arrived"])
+        self.assertEqual("transition", outcome["evidence"]["outcome"])
+        self.assertTrue(outcome["evidence"]["state"]["session"]["cutscenePlaying"])
+        self.assertEqual(["TASK_FOLLOW_NAV_MESH_TO_COORD"], [n["name"] for n in self.natives()])
+
+    def test_unexpected_control_loss_still_stops_for_inspection(self):
+        takeover = observation(2)
+        takeover["session"]["playerControl"] = False
+        result, outcome = self.exercise([[takeover]])
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertFalse(any(e["event"] == "checkpoint" for e in self.events()))
+        self.assertEqual(["TASK_FOLLOW_NAV_MESH_TO_COORD"], [n["name"] for n in self.natives()])
+
+    def test_health_failure_during_takeover_still_stops_without_clearing_mission_tasks(self):
+        takeover = observation(2)
+        takeover["session"].update(playerControl=False, cutscenePlaying=True)
+        takeover["sections"]["player"]["entity"]["health"] = 90
+        result, outcome = self.exercise([[takeover]], options=", allow_transition=True")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertIn("health or water", (self.root / "run/stderr.log").read_text())
+        self.assertEqual(["TASK_FOLLOW_NAV_MESH_TO_COORD"], [n["name"] for n in self.natives()])
+
+    def test_allow_transition_does_not_accept_a_pause_menu_as_mission_progress(self):
+        menu = observation(2)
+        menu["session"].update(playerControl=False, pauseMenu=True)
+        result, outcome = self.exercise([[menu]], options=", allow_transition=True")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertFalse(any(e["event"] == "checkpoint" for e in self.events()))
+        self.assertEqual(["TASK_FOLLOW_NAV_MESH_TO_COORD"], [n["name"] for n in self.natives()])
+
     def test_lost_climb_receipt_is_not_replayed_or_followed_by_more_movement(self):
         result, outcome = self.exercise([[observation()]], uncertain_climb=True)
         self.assertEqual(1, result.returncode)

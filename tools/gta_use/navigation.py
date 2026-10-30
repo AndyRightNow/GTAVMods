@@ -94,8 +94,13 @@ def climb_toward(ctx, facing, *, timeout=7, minimum_health=100, check_interval=.
 
 def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="navmesh", radius=.75,
                 timeout=60, stall_timeout=2.5, max_climbs=3, climb_timeout=7,
-                minimum_health=100, move_blend_ratio=2.5, check_interval=.2):
+                minimum_health=100, move_blend_ratio=2.5, check_interval=.2, allow_transition=False):
     """Run a short route, climbing nearby obstacles only when progress stalls.
+
+    With allow_transition=True, an expected control/cutscene takeover after
+    starting the route returns arrived=False and outcome="transition". It never
+    clears mission-owned tasks or treats the takeover as arrival/completion.
+    The caller must inspect the next objective or wait for control.
 
     Returns observed arrival data; it does not create a mission checkpoint or
     pause on success. Explicit waypoints should describe the intended route,
@@ -104,6 +109,8 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="nav
     Use direct mode only for observed short crossings: each leg is limited to
     30 m and may use the same bounded obstacle recovery instead of a navmesh detour.
     """
+    if not isinstance(allow_transition, bool):
+        raise ValueError("allow_transition must be a boolean.")
     points = [_point(p) for p in (*waypoints, destination)]
     if not 1 <= len(points) <= 32 or not isinstance(parkour, bool):
         raise ValueError("Use at most 32 route points and a boolean parkour option.")
@@ -124,13 +131,20 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="nav
     uncertain = False
     climbs = 0
 
+    class MissionTransition(Exception):
+        def __init__(self, state):
+            self.state = state
+
     def observe(**extra):
         nonlocal identity, owns_task
         state = ctx.check(sections=["player", *( ["probes"] if extra else [])], **extra)
         player = state["sections"].get("player")
         session = state["session"]
-        if (not player or not session["playerControl"] or session["cutscenePlaying"]
-                or session["pauseMenu"] or player["inVehicle"]):
+        control_transition = not session["playerControl"] or session["cutscenePlaying"]
+        expected = allow_transition and owns_task
+        if control_transition:
+            owns_task = False
+        if not player or session["pauseMenu"] or player["inVehicle"]:
             owns_task = False  # Do not clear a task installed by a mission transition.
             ctx.uncertain("Navigation interrupted by player/control/vehicle or menu transition.")
         observed_identity = (player["entity"]["handle"], player["entity"]["model"])
@@ -140,6 +154,10 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="nav
         identity = observed_identity
         if player["entity"]["health"] < minimum_health or player["swimming"]:
             ctx.uncertain("Navigation stopped for health or water recovery.")
+        if control_transition:
+            if expected:
+                raise MissionTransition(state)
+            ctx.uncertain("Navigation interrupted by unexpected control or cutscene transition.")
         if time.monotonic() >= deadline:
             ctx.uncertain("Navigation exceeded its overall deadline.")
         return state, player, _point(player["entity"]["position"])
@@ -289,6 +307,8 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="nav
                 direct_best = math.dist(position, goal)
         return {"arrived": True, "position": dict(zip(("x", "y", "z"), position)),
                 "remaining": math.dist(position, points[-1]), "waypoints": len(points), "climbAttempts": climbs}
+    except MissionTransition as transition:
+        return dict(arrived=False, outcome="transition", state=transition.state, climbAttempts=climbs)
     except UncertainOutcome:
         uncertain = True
         raise

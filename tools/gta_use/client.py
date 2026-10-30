@@ -106,6 +106,21 @@ class Client:
     def native(self, name, *arguments, returns="void"):
         return self.action("native", name=name, args=list(arguments), returns=returns)
 
+    def hold_key(self, key, milliseconds=1000):
+        """Hold one actual keyboard key in foreground GTA, then release it.
+
+        Requires this client's current controller lease. The Rust service owns
+        the finite hold even if Python stops; focus/lease loss releases early.
+        Use when a verified interaction ignores simulated control values.
+        Delivery is not proof that a game interaction completed. Never replay a
+        lost receipt without inspecting the game first.
+        """
+        try:
+            return self.http("POST", "/v1/keyboard", dict(session=self.session,
+                token=self.token, key=key, ms=milliseconds))
+        except (httpx.TransportError, BridgeError) as error:
+            raise UncertainOutcome("Keyboard hold did not complete reliably; inspect before retrying.") from error
+
     def lease(self, action, milliseconds=5000):
         return self.request("lease", action=action, token=self.token, ms=milliseconds)
 
