@@ -62,3 +62,10 @@ without clearing mission-owned tasks or claiming arrival. The default remains
 conservative; missing/changed player, menus, vehicle entry and health/water risks
 still stop. Automated scenarios cover these boundaries; the new opt-in behavior
 requires separate live contact validation.
+
+After a closed-game package deployment and cold Story restart, the installed
+HTTP endpoint was verified through `ctx.game.hold_key("UP", 150)`. It returned a
+154 ms hold/release receipt and visibly opened Franklin's phone. Evidence:
+`keyboard-http-live-001/002-keyboard-http-phone-inspect-after.png`, with SDK source
+hashes, installed Rust binary hash, action receipt and final confirmed pause in
+that run. The new save resumed normally at the impound yard.
