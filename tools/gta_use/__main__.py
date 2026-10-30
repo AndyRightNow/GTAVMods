@@ -134,6 +134,8 @@ def main():
     selection = describe.add_mutually_exclusive_group()
     selection.add_argument("--command", dest="command_name")
     selection.add_argument("--control", help="Case-insensitive substring of GTA.Control names.")
+    helpers = commands.add_parser("helpers", help="List Python SDK helpers offline, or show matching signatures and contracts.")
+    helpers.add_argument("query", nargs="?", help="Case-insensitive helper/module name substring.")
     inspection = commands.add_parser("inspect", help="Read bridge status and a filtered world pack without taking control.")
     inspection.add_argument("--profile", choices=("minimal", "walking", "driving", "combat", "full"), default="minimal")
     inspection.add_argument("--sections", nargs="+", help="Explicit section names replace profile defaults.")
@@ -150,6 +152,14 @@ def main():
         command.add_argument("--process", type=int)
     commands.add_parser("_child", help=argparse.SUPPRESS).add_argument("script")
     args = parser.parse_args()
+    if args.command == "helpers":
+        from .catalogue import describe_helpers
+        try:
+            result = describe_helpers(args.query)
+        except ValueError as error:
+            parser.error(str(error))
+        print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+        return 0
     if args.command == "run":
         return supervise(args)
     if args.command == "_child":

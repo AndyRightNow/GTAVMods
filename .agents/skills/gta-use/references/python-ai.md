@@ -30,6 +30,11 @@ def run(ctx):
                    health=entity["health"])
 ```
 
+A character-switch request must be followed by the requested player model/identity
+observation. `wait_for_control` can return the old character while switching is
+mission-locked; control availability alone does not establish a successful switch.
+Stop after a bounded no-effect attempt and inspect the current mission prompt.
+
 `ctx.checkpoint(...)` records evidence; it does **not** exit the function or pause.
 Use `return` immediately afterward when it ends a segment, especially inside a
 loop. The supervisor pauses only after the function exits. Accidentally continuing
@@ -119,6 +124,21 @@ Do not replace the interaction with attachment/detachment natives.
 
 ## Compose reusable SDK operations
 
+Look up the shipped signature before composing a helper:
+
+```powershell
+& $gtaPython -m gta_use helpers
+& $gtaPython -m gta_use helpers navigation.navigate_to
+& $gtaPython -m gta_use helpers combat
+```
+
+The query prints imports, signatures and docstrings without connecting to GTA.
+Do not transfer argument names between helpers: `navigate_to` uses `radius` and
+`move_blend_ratio`; `drive_to` uses `radius`, `speed` and `arrival_speed`.
+A synchronous `Client` must be closed in `finally`; it is not a context manager.
+Inside a supervised policy, use the runner-owned `ctx.game`.
+
+
 Prefer these bounded helpers to copying native/C# loops into each mission. They
 use the current `ctx` lease and observations, never start another controller, and
 do not checkpoint or pause on success. Policy code chooses objectives, targets,
@@ -186,6 +206,10 @@ Reload only for an observed zero, with a bounded wait and fresh observation.
 `fire_from_vehicle` permits one target-gated burst when clip count is unknown
 and total ammunition is present; assess ammo spent and damage before repeating.
 An unknown clip does not establish that shooting will work.
+After leaving a vehicle, inspect the selected weapon again: the game may select
+Unarmed. If necessary, select a verified already-owned weapon, then observe the
+new loadout. Reload cannot turn Unarmed into a firearm. Do not grant weapons or
+ammunition to satisfy a combat precondition.
 
 ## Scripted boarding and vehicle task conflicts
 

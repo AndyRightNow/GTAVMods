@@ -59,6 +59,10 @@ For short on-foot access with bounded climb/vault recovery, use
 observed limits are in Python AI.
 For interactions that ignore simulated controls, `game.hold_key` provides a
 bounded foreground keyboard fallback under the current lease; see Python AI.
+Before writing a policy, use `python -m gta_use helpers` for the compact SDK list
+and `python -m gta_use helpers navigate_to` (or another name/module) for actual
+Python signatures and full contracts. This works offline and takes no game lease.
+Use `describe` for bridge commands; its schema is not the Python helper signature.
 For mission scripting, read [Python AI](references/python-ai.md) and consult
 [world state](references/world-state.md) for the fields your policy consumes.
 Python AI also documents reusable vehicle access, settled cover, muzzle-safe
