@@ -89,7 +89,7 @@ $testRecords = @($records | Where-Object { $_.IsTestProject -eq 'true' })
 if ($testRecords.Count -ne 1) { throw 'The build expects exactly one test assembly inventory.' }
 $testDirectory = Split-Path -Parent $testRecords[0].TargetPath
 $production = @($records | Where-Object { $_.IsTestProject -ne 'true' })
-foreach ($required in @('Thor', 'ModUtils', 'DeveloperConsole')) {
+foreach ($required in @('Thor', 'ModUtils', 'GameBridge')) {
     if (@($production | Where-Object { $_.AssemblyName -eq $required }).Count -ne 1) {
         throw "Required production assembly is missing: $required"
     }
@@ -203,7 +203,13 @@ foreach ($record in $production) {
                 if ($annotated -ne $exempt) {
                     throw "Primitive annotation and reviewed manifest disagree: $key"
                 }
-                if (-not $exempt -and $record.AssemblyName -ne 'GameBridge') {
+                # Assembly consolidation must not let agent orchestration bypass
+                # the typed engine contracts. Nested/lambda types inherit the
+                # declaring namespace rather than acquiring a blanket DLL exemption.
+                $owner = $type
+                while ($null -ne $owner.DeclaringType) { $owner = $owner.DeclaringType }
+                $engineContract = $record.AssemblyName -eq 'GameBridge' -and $owner.Namespace -eq 'GTAVMods.Game'
+                if (-not $exempt -and -not $engineContract) {
                     foreach ($instruction in $method.Body.Instructions) {
                         if ($instruction.Operand -isnot [Mono.Cecil.MethodReference]) { continue }
                         $targetType = $instruction.Operand.DeclaringType.FullName

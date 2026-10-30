@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
-    [string]$DotNet = 'dotnet'
+    [string]$DotNet = 'dotnet',
+    [string]$Uv = 'uv',
+    [string]$Cargo = 'cargo'
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
@@ -9,8 +11,18 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 & (Join-Path $PSScriptRoot 'Restore-Dependencies.ps1')
 Push-Location $repoRoot
 try {
+    & (Join-Path $PSScriptRoot 'Build-Rust.ps1') -Cargo $Cargo
+    & $Uv sync --frozen --python 3.14
+    if ($LASTEXITCODE -ne 0) { throw 'uv could not prepare the locked Python 3.14 agent environment.' }
+    & $Uv run --frozen --no-sync python -c 'import sys; print(sys.executable)' | Set-Content -LiteralPath (Join-Path $repoRoot '.python-path') -Encoding UTF8
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot locate the uv-prepared Python interpreter.' }
+    & $Uv run --frozen --no-sync python -m unittest discover -s tools/gta_use/tests -p 'test_*.py' -v
+    if ($LASTEXITCODE -ne 0) { throw 'Python policy scenarios against the Rust server failed.' }
     & (Join-Path $PSScriptRoot 'tests/Test-CoverageGate.ps1')
     & (Join-Path $PSScriptRoot 'tests/Test-BuildInputManifest.ps1')
+    & (Join-Path $PSScriptRoot 'tests/Test-DiagnosticsCollection.ps1')
+    & (Join-Path $PSScriptRoot 'tests/Test-StoryStartup.ps1')
+    & (Join-Path $PSScriptRoot 'tests/Test-AgentServiceInstallation.ps1')
     $coverageRoot = Join-Path $repoRoot 'artifacts/coverage'
     $runName = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N')
     $runDirectory = Join-Path $coverageRoot $runName

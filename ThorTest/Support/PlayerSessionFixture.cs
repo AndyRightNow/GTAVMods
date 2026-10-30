@@ -76,7 +76,6 @@ namespace GTAVMods.Tests.Support
             if (holding) Game.ApplyWeaponObservation(10, WeaponHash.Hammer, 20);
             configure?.Invoke(Game);
             Controller = ThorComposition.Create(Game.Services, audio ?? Audio, Log.Writer, random ?? new Random(seed),
-                Thor.Thor.ReadConsoleOpen,
                 useProductionDiagnostics ? new Func<long>(Thor.Thor.ReadDroppedRecords) : () => Log.Writer.DroppedRecords,
                 ThorSessionInfo.Capture(Log.Writer.FilePath),
                 useProductionDiagnostics ? null : milliseconds ?? (() => Log.Clock.ElapsedMilliseconds), timestamp, frequency, tuning);

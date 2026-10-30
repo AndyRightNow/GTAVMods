@@ -19,13 +19,17 @@ ThorTest/
 │   │   ├── FlightHoverTests.cs
 │   │   ├── MeleeAerialAttackTests.cs
 │   │   └── GrabReleaseTests.cs
-│   ├── ConsoleOperations/
-│   │   ├── OpenCloseControlsTests.cs
-│   │   ├── TypingClipboardHistoryTests.cs
-│   │   ├── CommandsExpressionsShortcutsTests.cs
-│   │   ├── PlayerWorldToolsTests.cs
-│   │   └── DrawingOutputTests.cs
+│   ├── AgentOperations/
+│   │   ├── TurnBasedPlayTests.cs
+│   │   ├── CommandExecutionTests.cs
+│   │   ├── TransportRecoveryTests.cs
+│   │   ├── InspectionAndPersistenceTests.cs
+│   │   ├── WorldStateDecisionTests.cs
+│   │   ├── ReactiveControlTests.cs
+│   │   ├── AgentServiceTests.cs
+│   │   └── ExternalClientTests.cs
 │   ├── ModLifecycle/
+│   │   ├── AgentReloadTests.cs
 │   │   ├── StartupCompatibilityTests.cs
 │   │   ├── EnableDisableTests.cs
 │   │   ├── CharacterChangeDeathTests.cs
@@ -41,10 +45,12 @@ ThorTest/
 │   │   ├── AngleRotationTests.cs
 │   │   └── PlaneShapeTests.cs
 │   ├── ParsingAndFormatting/
-│   │   ├── CommandTextTests.cs
+│   │   ├── AgentProtocolTests.cs
+│   │   ├── NativeRequestTests.cs
 │   │   ├── AnimationNameTimingTests.cs
 │   │   └── DiagnosticVersionTextTests.cs
 │   └── ValidationAndGameValues/
+│       ├── NativeScalarTests.cs
 │       ├── RequiredInputDurationTests.cs
 │       ├── GameObjectIdentifierTests.cs
 │       └── RuntimeCompatibilityTests.cs
@@ -57,6 +63,14 @@ frame updates and lifecycle events. Only external game, device, storage and host
 boundaries are replaced. `PureFunctions` covers deterministic helpers with
 explicit inputs and results; stateful module tests do not belong there.
 
+The Python segment scenarios live in `tools/gta_use/tests`. They run the shipped
+Rust executable, real HTTP/WebSockets, named pipes and separate Python scripts,
+replacing only the external game boundary. `AgentServiceTests` launches the
+packaged Rust server, runs an external Python client and checkpoint policy, and verifies service
+restart and managed reload. Rust transport scenarios in
+`tools/gta-use-server/src/scenarios.rs` exercise real loopback HTTP/WebSockets
+and Windows named pipes, including cancellation without replay.
+
 Choose a case's home by its primary player expectation. For example, throwing
 despite a missing animation belongs under hammer throwing, while pausing after
 an allocation failure and recovering with Ctrl+A+O belongs under lifecycle
@@ -68,7 +82,7 @@ place; contract assertions stay inside the behavior that relies on them.
 Keep helpers local to a behavior class when only that class uses them. Shared
 fixtures, boundary fakes and scenario setup belong under `Support`; do not put
 test methods there or move mod decisions into fakes. The assembly remains
-nonparallel because console registration and some culture/clock scenarios use
+nonparallel because console streams and some culture/clock scenarios use
 process-wide state.
 
 Gameplay scenarios supply their own [tuning profile](../Thor/Tuning/README.md)

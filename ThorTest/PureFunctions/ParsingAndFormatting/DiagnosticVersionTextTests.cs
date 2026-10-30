@@ -1,6 +1,6 @@
 using ADModUtils;
 using Control = GTA.Control;
-using DeveloperConsole;
+
 using GTA.Native;
 using GTA;
 using GTAVMods.Tests.Support;
@@ -20,12 +20,6 @@ namespace GTAVMods.Tests.PureFunctions.ParsingAndFormatting
     public class DiagnosticVersionTextTests
     {
         private sealed class UnavailableDiagnostic { public override string ToString() => null; }
-
-        [TestMethod]
-        public void PublishedVersionFormattingDistinguishesDevelopmentBuilds() {
-            Assert.AreEqual("DEV", ConsoleSettings.DisplayVersion("9.9.9.9"));
-            Assert.AreEqual("1.2.3", ConsoleSettings.DisplayVersion("1.2.3"));
-        }
 
         [TestMethod]
         public void JsonPreservesEscapedTextNumericTypesAndNonFiniteObservations()

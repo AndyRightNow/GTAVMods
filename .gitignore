@@ -324,3 +324,7 @@ ASALocalRun/
 *.nvuser
 .deps/
 .dotnet/
+.python-path
+.runtime-root
+.rust-server-path
+**/target/

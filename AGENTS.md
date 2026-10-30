@@ -10,7 +10,7 @@ The installation verified on **2026-10-20** used:
 
 | Item | Verified value |
 | --- | --- |
-| Repository on this PC | `C:\Users\Helen\repositories\GTAVMods` |
+| Repository on this PC (moved 2026-10-30) | `D:\repositories\GTAVMods` |
 | Game on this PC | `D:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced` |
 | Game executable | `GTA5_Enhanced.exe`, **1.0.1158.16** |
 | Script Hook V | **v3889.0 / 1158.13**, released July 15, 2026 |
@@ -44,21 +44,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build.ps1
 ```
 
 If `dotnet` is not on PATH, pass `-DotNet 'C:\path\to\dotnet.exe'`. The portable
-SDK used on this PC is at
-`C:\Users\Helen\Documents\Codex\2026-10-20\c\work\tooling\dotnet\dotnet.exe`;
-check that it still exists before using it. Use process-scoped execution-policy
+SDK is now at `<repo>/.dotnet/dotnet.exe`;
+check that it still exists before using it. `scripts/Build-Local.ps1` selects the
+repo-local .NET, Rust/LLVM, uv, Python and cache paths after a checkout move.
+Use process-scoped execution-policy
 options; do not change the machine's PowerShell policy.
 
 `Build.ps1` verifies the pinned SHVDNE API download, restores locked NuGet
-packages, builds Release, runs the tests and creates
+packages, prepares Python 3.14 with uv sync --frozen, builds Release, runs the tests and creates
 `artifacts/GTAVMods-Enhanced.zip`. The .NET 10 SDK builds the project; it does
 not replace the game's .NET Framework 4.8 runtime. Builds must not deploy files
-into the game or install assemblies into the GAC.
+into the game or install assemblies into the GAC. Pass -Uv to select an explicit uv executable. After deploying a package with GTA closed, run Install-AgentService.ps1 once to prepare scripts/GtaUse; the bridge then starts and supervises the packaged Rust server automatically. Python is retained for the SDK and supervised policies. See docs/gta-use.md.
 
 - Run the build/test/package workflow after code or dependency changes. For a
   documentation-only edit, check the documented commands and `git diff --check`.
 - The shared build requires 100% executable line and branch coverage for Thor,
-  ModUtils, DeveloperConsole and GameBridge. See `docs/coverage-gate.md` before
+  ModUtils and GameBridge. See `docs/coverage-gate.md` before
   changing coverage collection or the reviewed primitive boundary. Tests execute
   the production behavior against deterministic game observations; GTA natives,
   rendering, physics, actual keyboard delivery and audible playback still need
@@ -67,7 +68,7 @@ into the game or install assemblies into the GAC.
   `artifacts` contents. Keep dependency caches, game archives, keys, saves,
   account files and gameplay logs out of commits.
 - Intentional NuGet updates require `dotnet restore GTAVMods.sln --force-evaluate`
-  and review of all five `packages.lock.json` files.
+  and review of all four `packages.lock.json` files.
 - A SHVDNE update also requires reviewing the release, updating the version and
   both checksums in `scripts/Restore-Dependencies.ps1`, updating compatibility
   checks, rebuilding and repeating live testing.
@@ -164,7 +165,10 @@ into the game or install assemblies into the GAC.
 5. Build the package, extract it into a fresh staging directory, and merge its
    **`scripts`** directory into the game root after making backups. Keep all
    packaged dependency DLLs together, including `Thor.dll`, `ModUtils.dll` and
-   `DeveloperConsole.dll`. The three WAV files belong in `scripts/Thor/`.
+   the unified `GameBridge.dll`. Back up and remove obsolete
+   `scripts/DeveloperConsole.dll` and `scripts/AgentBridge.dll` when upgrading;
+   leaving them loads the old F8 console or a duplicate bridge script.
+   The three WAV files belong in `scripts/Thor/`.
    Do not copy only `Thor.dll`, and do not deploy the ZIP root as `scripts`.
    SHV, SHVDNE, OpenRPF and DirectStorageFix are separate installations and are
    not bundled in the mod ZIP.
@@ -246,10 +250,10 @@ normal code updates do not require reinstalling it.
    modded setup. If using the imported save, verify Franklin loads at his house.
 4. Inspect the new `ScriptHookV.log`, `ScriptHookVDotNet.log`,
    `DirectStorageFix.log` and newest `scripts/Logs/Thor-*.jsonl`. Confirm
-   `Thor.Thor` and both production console scripts start without load errors.
+   `Thor.Thor` and `GTAVMods.Agent.BridgeScript` start without load errors.
    Check timestamps and session IDs; an old log is not evidence of this run.
 5. Confirm custom hammer geometry, engraved textures and lightning in daylight.
-   Exercise recall, catch, throw and drop, then open both consoles separately.
+   Exercise recall, catch, throw and drop, then exercise the external bridge.
    Press F9 to capture the current state and inspect the resulting log record.
 6. Test Insert reload for cleanup of objects, ropes, cameras and audio. After
    runtime/plugin changes, also exit fully and test a fresh game process:
@@ -262,7 +266,7 @@ normal code updates do not require reinstalling it.
 | Throw / throw and fly | Aim + T / Aim + U |
 | Drop / follow camera / whirl | Y / R / Z |
 | Flight movement | X, W, Sprint, depending on state |
-| Mod console / SHVDNE console | F8 / F4 |
+| External agent console / SHVDNE console | `scripts/Invoke-Gta.ps1` / F4 |
 | Diagnostic snapshot / script reload | F9 / Insert |
 
 Thor starts enabled and changes gameplay, health and weapons. Use a backed-up
@@ -280,7 +284,15 @@ complete; never ship automatic teleport/camera test harnesses.
   counts. Snapshots occur every five seconds and performance summaries every ten.
   Files rotate near 5 MiB and retain the newest ten per log directory.
 - Keep logging bounded: record transitions, throttle recurring errors, and avoid
-  disk writes on every frame or logging text entered into the F8 console.
+  disk writes on every frame. Individual agent actions are ephemeral: no request/
+  response receipt files, replay cache or durable flush. Diagnostics and console
+  output use bounded asynchronous file logging; batch, screenshot and supervised
+  policy evidence lives under the checkout's ignored `artifacts/gta-use/Bridge`.
+  `Install-AgentService.ps1` records the runtime root in the installed
+  `scripts/GtaUse/.runtime-root`; service upgrade backups use that root's
+  `Backups` directory. See
+  `docs/gta-use.md` for protocol and controls. Do not retain an in-memory console
+  history or diagnostic archive.
   Logging failures must not crash gameplay.
 - On a managed exception Thor logs the failure and pauses; Ctrl+A+O retries.
   Missing audio is logged once per clip without stopping gameplay.

@@ -31,7 +31,6 @@ namespace Thor
         private readonly GameplayDiagnostics diagnostics;
         private readonly IEventLog log;
         private readonly Action disposePathfinder;
-        private readonly Func<bool> consoleOpen;
         private readonly Func<long> timestamp;
         private readonly long frequency;
         private readonly ThorSessionInfo session;
@@ -40,7 +39,7 @@ namespace Thor
         private bool disabled, showCompatibilityNotice, needsRecovery;
 
         public ThorController(GameServices game, IThorAbility ability, GameplayDiagnostics diagnostics,
-            IEventLog log, Action disposePathfinder, Func<bool> consoleOpen, Func<long> timestamp, long frequency,
+            IEventLog log, Action disposePathfinder, Func<long> timestamp, long frequency,
             ThorSessionInfo session, Func<long> droppedRecords)
         {
             this.game = game;
@@ -48,7 +47,6 @@ namespace Thor
             this.diagnostics = diagnostics;
             this.log = log;
             this.disposePathfinder = disposePathfinder;
-            this.consoleOpen = consoleOpen;
             this.timestamp = timestamp;
             this.frequency = frequency;
             this.session = session;
@@ -108,7 +106,6 @@ namespace Thor
 
         public void KeyDown(KeyEventArgs args)
         {
-            if (consoleOpen()) return;
             Keys key = args.KeyCode;
             if (key == Keys.H || key == Keys.T || key == Keys.U || key == Keys.Y || key == Keys.Z || key == Keys.R || key == Keys.F9)
                 log.Throttled("INFO", "input." + key, 250, "control", args.Control, "shift", args.Shift, "gameTime", game.Host.GameTime);
@@ -118,7 +115,14 @@ namespace Thor
                 catch (Exception error) { log.Event("WARN", "diagnostics.exception", "exception", error.ToString()); }
             }
             if (!args.Control || !game.Input.IsKeyPressed(Keys.A)) return;
-            if (key == Keys.O && disabled)
+            if (key == Keys.O) SetEnabled(true, "Ctrl+A+O");
+            else if (key == Keys.F) SetEnabled(false, "Ctrl+A+F");
+        }
+
+        /// <summary>External agents use the same cleanup/recovery path as the player shortcut.</summary>
+        public void SetEnabled(bool enabled, string reason = "external-agent")
+        {
+            if (enabled && disabled)
             {
                 if (!TryCleanup(ability.RemoveAbility) || (needsRecovery && !TryCleanup(ability.ResetWeapon)))
                 {
@@ -128,13 +132,13 @@ namespace Thor
                 }
                 needsRecovery = false;
                 disabled = false;
-                log.Event("INFO", "ability.enabled", "reason", "Ctrl+A+O");
+                log.Event("INFO", "ability.enabled", "reason", reason);
                 game.Host.Notify("The Thor ability has been turned on.");
             }
-            else if (key == Keys.F && !disabled)
+            else if (!enabled && !disabled)
             {
                 disabled = true;
-                log.Event("INFO", "ability.disabled", "reason", "Ctrl+A+F");
+                log.Event("INFO", "ability.disabled", "reason", reason);
                 needsRecovery = !TryCleanup(ability.RemoveAbility);
                 int ped = game.Host.PlayerPed;
                 if (ped != 0 && game.Entities.Exists(ped) && !game.Entities.IsDead(ped))
@@ -167,7 +171,7 @@ namespace Thor
     public static class ThorComposition
     {
         public static ThorController Create(GameServices game, IAudioPlaybackFactory audio, IEventLog log, Random random,
-            Func<bool> consoleOpen, Func<long> droppedRecords, ThorSessionInfo session,
+            Func<long> droppedRecords, ThorSessionInfo session,
             Func<long> milliseconds = null, Func<long> timestamp = null, long frequency = 0,
             GameplayTuning tuning = null)
         {
@@ -181,31 +185,31 @@ namespace Thor
             var clock = Stopwatch.StartNew();
             var diagnostics = new GameplayDiagnostics(game, log, milliseconds ?? (() => clock.ElapsedMilliseconds), droppedRecords);
             return new ThorController(game, ability, diagnostics, log, pathfinder.Dispose,
-                consoleOpen, timestamp ?? Stopwatch.GetTimestamp, frequency == 0 ? Stopwatch.Frequency : frequency, session, droppedRecords);
+                timestamp ?? Stopwatch.GetTimestamp, frequency == 0 ? Stopwatch.Frequency : frequency, session, droppedRecords);
         }
     }
 
     public sealed class Thor : Script
     {
         private readonly ThorController controller;
+        public static ThorController Current;
         [GamePrimitive]
         public Thor()
         {
             var game = GtaRuntime.Create(new GtaHost(), new GtaInput(),
                 new GtaEntities(new GtaEntityLifetimeBindings()), new GtaPeds(), new GtaWeapons(),
                 new GtaWorld(new GtaWorldQueries()), new GtaCameras(new GtaCameraLifetimeBindings()),
-                new GtaRopes(new GtaRopeLifetimeBindings()), new GtaNative(), new GtaArgumentMarshaller(), new GtaOutputs());
+                new GtaRopes(new GtaRopeLifetimeBindings()), new GtaNative(), new ScalarArgumentMarshaller(new GtaArgumentMarshaller()), new GtaOutputs());
             controller = ThorComposition.Create(game, new NAudioPlaybackFactory(), Logger.Default,
-                new Random(), new Func<bool>(ReadConsoleOpen), new Func<long>(ReadDroppedRecords),
+                new Random(), new Func<long>(ReadDroppedRecords),
                 ThorSessionInfo.Capture(Logger.LogFilePath));
+            Current = controller;
             Tick += OnTick;
             KeyDown += OnKeyDown;
             Aborted += OnAborted;
             Interval = 0;
-            this.RegisterConsoleScript(new DeveloperConsole.DeveloperConsole.OnConsoleAttached(Logger.Init));
             controller.Start();
         }
-        public static bool ReadConsoleOpen() => DeveloperConsole.DeveloperConsole.Instance?.IsOpen == true;
         public static long ReadDroppedRecords() => Logger.DroppedRecords;
         [GamePrimitive] private void OnTick(object sender, EventArgs args) => controller.Tick();
         [GamePrimitive] private void OnKeyDown(object sender, KeyEventArgs args) => controller.KeyDown(args);

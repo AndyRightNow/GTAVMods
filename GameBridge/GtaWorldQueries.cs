@@ -7,7 +7,7 @@ namespace GTAVMods.Game
     /// <remarks>Used by GtaWorld to assemble measured RayHit results. Position is in world metres.</remarks>
     public interface IWorldQueryBindings
     {
-        void Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity,
+        void Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity, ShapeTestOptions options,
             out bool didHit, out int entity, out Vector3 position);
         void Capsule(Vector3 from, Vector3 to, float radius, IntersectFlags flags,
             out bool didHit, out int entity, out Vector3 position);
@@ -16,12 +16,14 @@ namespace GTAVMods.Game
     public sealed class GtaWorldQueries : IWorldQueryBindings
     {
         [GamePrimitive]
-        public void Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity,
+        public void Raycast(Vector3 from, Vector3 to, IntersectFlags flags, int ignoreEntity, ShapeTestOptions options,
             out bool didHit, out int entity, out Vector3 position)
         {
-            var result = World.Raycast(from, to, flags, Entity.FromHandle(ignoreEntity));
+            var test = ShapeTest.StartExpensiveSyncTestLOSProbe(from, to, flags, Entity.FromHandle(ignoreEntity), options);
+            test.GetResult(out ShapeTestResult result);
+            result.TryGetHitEntity(out Entity hitEntity);
             didHit = result.DidHit;
-            entity = GameHandles.Of(result.HitEntity);
+            entity = GameHandles.Of(hitEntity);
             position = result.HitPosition;
         }
 

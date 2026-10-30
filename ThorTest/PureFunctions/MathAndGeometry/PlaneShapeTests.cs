@@ -1,5 +1,5 @@
 using ADModUtils;
-using DeveloperConsole;
+
 using GTA.Math;
 using GTA.Native;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -14,36 +14,6 @@ namespace GTAVMods.Tests.PureFunctions.MathAndGeometry
     [TestClass, TestCategory("PureFunction")]
     public class PlaneShapeTests
     {
-        [TestMethod]
-        public void CuboidCornersUseEveryBoundaryCombinationWithoutDuplicatingVertices() {
-            var center = new Vector3(10, 20, 30);
-            var corners = Rectangle3D.CreateCorners(center, new Vector3(-1,-2,-3), new Vector3(1,2,3));
-            Assert.AreEqual(8, corners.Count);
-            Assert.AreEqual(8, corners.Values.Distinct().Count());
-            foreach (var corner in corners) {
-                Assert.AreEqual(center + new Vector3(corner.Key[0] == '0' ? -1 : 1,
-                    corner.Key[1] == '0' ? -2 : 2, corner.Key[2] == '0' ? -3 : 3), corner.Value);
-            }
-        }
-
-        [TestMethod]
-        public void QuaternionRotationReturnsQuarterTurnAroundCenterWithoutMutatingInput() {
-            var center = new Vector3(10,20,30);
-            var corners = Rectangle3D.CreateCorners(center, new Vector3(-1,-2,-3), new Vector3(1,2,3));
-            var original = corners.ToDictionary(c => c.Key, c => c.Value);
-            var rotated = Rectangle3D.RotateCorners(corners, center, new Quaternion(0,0,(float)Math.Sqrt(.5),(float)Math.Sqrt(.5)));
-            CollectionAssert.AreEquivalent(original.Keys.ToArray(), rotated.Keys.ToArray(),
-                "Rotation must retain every corner, including its label.");
-            foreach (var corner in rotated) {
-                var prior = original[corner.Key] - center;
-                var expected = center + new Vector3(-prior.Y, prior.X, prior.Z);
-                Assert.AreEqual(expected.X, corner.Value.X, .00001);
-                Assert.AreEqual(expected.Y, corner.Value.Y, .00001);
-                Assert.AreEqual(expected.Z, corner.Value.Z, .00001);
-                Assert.AreEqual(original[corner.Key], corners[corner.Key]);
-            }
-        }
-
         [TestMethod]
         public void PlaneProjectsSignedCoordinatesAndIgnoresNormalDisplacement()
         {

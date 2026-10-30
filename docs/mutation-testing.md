@@ -12,7 +12,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-Mutations.ps1
 
 Pass `-DotNet 'C:\path\to\dotnet.exe'` when using a portable SDK. The runner installs
 Stryker.NET **5.0.0** into `.deps/mutation-tools/5.0.0`, restores locked dependencies,
-and analyzes GameBridge, ModUtils, Thor and DeveloperConsole. It uses the Standard
+and analyzes GameBridge, ModUtils and Thor. It uses the Standard
 mutation set and two test workers. It does not upload reports.
 
 `-Assembly ModUtils -Mutate '**/Utilities.cs'` narrows an investigation.

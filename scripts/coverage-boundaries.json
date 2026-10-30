@@ -2,146 +2,6 @@
   "schemaVersion": 1,
   "bindings": [
     {
-      "assembly": "DeveloperConsole",
-      "method": "GTA.Math.Vector3 DeveloperConsole.LiveCommandEnvironment::get_Position()",
-      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Boolean DeveloperConsole.LiveCommandEnvironment::get_IsInVehicle()",
-      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Int16 DeveloperConsole.WindowsKeyboardNative::KeyState(System.Int32)",
-      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Int32 DeveloperConsole.LiveCommandEnvironment::get_PlayerHandle()",
-      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Int32 DeveloperConsole.LiveConsolePlatform::get_GameTime()",
-      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Int32 DeveloperConsole.WindowsKeyboardNative::get_CurrentProcess()",
-      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Int32 DeveloperConsole.WindowsKeyboardNative::ToUnicode(System.UInt32,System.Byte[],System.Text.StringBuilder)",
-      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Int32 DeveloperConsole.WindowsKeyboardNative::WindowProcess(System.IntPtr)",
-      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.IntPtr DeveloperConsole.WindowsKeyboardNative::ForegroundWindow()",
-      "reason": "Direct Windows keyboard/window/process observation; modifier construction and foreground interpretation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Object DeveloperConsole.LiveCommandEnvironment::get_Character()",
-      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Object DeveloperConsole.LiveCommandEnvironment::get_Player()",
-      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Object DeveloperConsole.LiveCommandEnvironment::get_Vehicle()",
-      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Single DeveloperConsole.LiveConsolePlatform::get_Height()",
-      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Single DeveloperConsole.LiveConsolePlatform::get_Width()",
-      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.String DeveloperConsole.LiveCommandEnvironment::get_PlayerName()",
-      "reason": "Direct SHVDNE player observation; token alias selection, null policy and evaluation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.String DeveloperConsole.WindowsClipboardNative::Read()",
-      "reason": "Direct Windows clipboard read/write only; STA ownership, joining and error propagation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.DefaultCommands::.ctor()",
-      "reason": "SHVDNE Script constructor registering the covered console callback."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::.ctor()",
-      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::OnAborted(System.Object,System.EventArgs)",
-      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::OnKeyDown(System.Object,System.Windows.Forms.KeyEventArgs)",
-      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::OnKeyUp(System.Object,System.Windows.Forms.KeyEventArgs)",
-      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.DeveloperConsoleScript::OnTick(System.Object,System.EventArgs)",
-      "reason": "SHVDNE Script lifecycle wiring and event forwarding; all console behavior remains in the covered console model."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.LiveConsolePlatform::DrawRectangle(System.Drawing.Point,System.Drawing.Size,System.Drawing.Color)",
-      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.LiveConsolePlatform::DrawText(System.String,System.Drawing.Point,System.Single,System.Drawing.Color,GTA.UI.Font)",
-      "reason": "Direct SHVDNE screen/time property or rendering call; layout, chunking, colors and timing remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.ScriptRegistration::.ctor(GTA.Script,DeveloperConsole.DeveloperConsole/OnConsoleAttached)",
-      "reason": "SHVDNE abort-event wiring/forwarding; register and unregister collection behavior remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.ScriptRegistration::OnAborted(System.Object,System.EventArgs)",
-      "reason": "SHVDNE abort-event wiring/forwarding; register and unregister collection behavior remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void DeveloperConsole.WindowsClipboardNative::Write(System.String)",
-      "reason": "Direct Windows clipboard read/write only; STA ownership, joining and error propagation remain covered."
-    },
-    {
-      "assembly": "DeveloperConsole",
-      "method": "System.Void ScriptExtender::RegisterConsoleScript(GTA.Script,DeveloperConsole.DeveloperConsole/OnConsoleAttached)",
-      "reason": "Registers the SHVDNE Script lifecycle binding; the registration collection behavior remains covered."
-    },
-    {
       "assembly": "GameBridge",
       "method": "GTA.Math.Quaternion GTAVMods.Game.GtaEntities::Quaternion(System.Int32)",
       "reason": "Direct SHVDNE entity/blip property or native operation with caller-supplied handles and values."
@@ -194,7 +54,7 @@
     {
       "assembly": "GameBridge",
       "method": "GTA.Native.InputArgument GTAVMods.Game.GtaArgumentMarshaller::Convert(System.Object)",
-      "reason": "SHVDNE InputArgument constructor resolves the native runtime; argument iteration and ordering remain covered in NativeInvoker."
+      "reason": "SHVDNE object conversion pins strings and reads native references. Scalar conversion, iteration and ordering remain measured."
     },
     {
       "assembly": "GameBridge",
@@ -208,8 +68,8 @@
     },
     {
       "assembly": "GameBridge",
-      "method": "System.Void GTAVMods.Game.GtaWorldQueries::Raycast(GTA.Math.Vector3,GTA.Math.Vector3,GTA.IntersectFlags,System.Int32,System.Boolean&,System.Int32&,GTA.Math.Vector3&)",
-      "reason": "Direct SHVDNE raycast invocation and output transport; measured GtaWorld assembles RayHit and tests terrain/zero/miss semantics. Handle null conversion is measured in GameHandles."
+      "method": "System.Void GTAVMods.Game.GtaWorldQueries::Raycast(GTA.Math.Vector3,GTA.Math.Vector3,GTA.IntersectFlags,System.Int32,GTA.ShapeTestOptions,System.Boolean&,System.Int32&,GTA.Math.Vector3&)",
+      "reason": "Direct synchronous SHVDNE shape-test invocation with caller-selected collision options and output transport; measured GtaWorld assembles RayHit and tests physical fence/terrain/zero/miss semantics. Handle null conversion is measured in GameHandles."
     },
     {
       "assembly": "GameBridge",
@@ -730,6 +590,66 @@
       "assembly": "Thor",
       "method": "System.Void Thor.Thor::OnTick(System.Object,System.EventArgs)",
       "reason": "SHVDNE Script lifecycle construction/event forwarding; composition, start, tick, key and cleanup behavior remain covered."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Agent.BridgeScript::.ctor()",
+      "reason": "Direct SHVDNE lifecycle composition and event forwarding only; transport, commands, scheduling, diagnostics and cleanup are measured through agent gameplay scenarios."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Agent.BridgeScript::OnTick(System.Object,System.EventArgs)",
+      "reason": "Direct SHVDNE lifecycle composition and event forwarding only; transport, commands, scheduling, diagnostics and cleanup are measured through agent gameplay scenarios."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Agent.BridgeScript::OnAborted(System.Object,System.EventArgs)",
+      "reason": "Direct SHVDNE lifecycle composition and event forwarding only; transport, commands, scheduling, diagnostics and cleanup are measured through agent gameplay scenarios."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "GTA.Blip[] GTAVMods.Game.GtaAgentQueries::Blips()",
+      "reason": "Direct SHVDNE blip enumeration. Limit selection, handle mapping and observation content remain measured in AgentWorld."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.IntPtr GTAVMods.Game.NativeWindowCaptureApi::get_Window()",
+      "reason": "Direct Windows window/pixel operation only. Foreground checks, failures, dimensions and bitmap lifetime are measured through external-agent screenshot scenarios."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.IntPtr GTAVMods.Game.NativeWindowCaptureApi::get_Foreground()",
+      "reason": "Direct Windows window/pixel operation only. Foreground checks, failures, dimensions and bitmap lifetime are measured through external-agent screenshot scenarios."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.NativeWindowCaptureApi::ReadRectangle(System.IntPtr,GTAVMods.Game.ClientRectangle&)",
+      "reason": "Direct Windows window/pixel operation only. Foreground checks, failures, dimensions and bitmap lifetime are measured through external-agent screenshot scenarios."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.NativeWindowCaptureApi::ToScreen(System.IntPtr,System.Drawing.Point&)",
+      "reason": "Direct Windows window/pixel operation only. Foreground checks, failures, dimensions and bitmap lifetime are measured through external-agent screenshot scenarios."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.NativeWindowCaptureApi::Copy(System.Drawing.Graphics,System.Drawing.Point,System.Drawing.Size)",
+      "reason": "Direct Windows window/pixel operation only. Foreground checks, failures, dimensions and bitmap lifetime are measured through external-agent screenshot scenarios."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaOutputs::AmmoInClip(System.Int32,System.UInt32,System.Int32&)",
+      "reason": "Raw native output pointer allocation and copy. State selection, validity, structure and geometry remain measured."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Boolean GTAVMods.Game.GtaOutputs::AimTarget(System.Int32,System.Int32&)",
+      "reason": "Raw native output pointer allocation and copy. State selection, validity, structure and geometry remain measured."
+    },
+    {
+      "assembly": "GameBridge",
+      "method": "System.Void GTAVMods.Game.GtaOutputs::StreetNames(System.Single,System.Single,System.Single,System.UInt32&,System.UInt32&)",
+      "reason": "Raw native output pointer allocation and copy. State selection, validity, structure and geometry remain measured."
     }
   ]
 }

@@ -136,7 +136,7 @@ namespace GTAVMods.Tests.PlayerIntegration.HammerActions
             }
             Assert.IsFalse(f.Game.Calls.Any(call => call.Name == "world.marker"));
             CollectionAssert.AreEqual(new object[] { new Vector3(21, -23, 11), new Vector3(107, -23, 11),
-                IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.Vehicles | IntersectFlags.Map, 0 },
+                IntersectFlags.Objects | IntersectFlags.Peds | IntersectFlags.Vehicles | IntersectFlags.Map, 0, ShapeTestOptions.Default },
                 f.Game.Calls.First(call => call.Name == "world.raycast").Arguments);
             Assert.IsTrue(f.Game.Native.Calls.Any(call => call.Hash == Hash.SHOW_HUD_COMPONENT_THIS_FRAME));
             for (int id = 61; id <= 61 + tuning.Ability.MaxTargets; id++)

@@ -25,6 +25,30 @@ $assets = Join-Path $stage 'Enhanced-Mjolnir-assets'
 New-Item -ItemType Directory -Path $assets -Force | Out-Null
 Copy-Item -Path (Join-Path $repoRoot 'Thor/resources/enhanced/*') -Destination $assets
 Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Collect-Diagnostics.ps1') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Invoke-Gta.ps1') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Install-AgentService.ps1') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $repoRoot 'scripts/Get-AgentRuntimeDirectory.ps1') -Destination $stage
+$agent = Join-Path $scripts 'GtaUse'
+$null = New-Item -ItemType Directory -Path (Join-Path $agent 'tools/gta_use') -Force
+Copy-Item -LiteralPath (Join-Path $artifactRoot 'rust/release/gta-use-server.exe') -Destination $agent
+$rustNotices = (Get-Content -LiteralPath (Join-Path $artifactRoot 'rust/notices-path.txt') -Raw).Trim()
+Copy-Item -LiteralPath $rustNotices -Destination (Join-Path $agent 'rust-notices') -Recurse
+foreach ($name in @('pyproject.toml', 'uv.lock', '.python-version')) {
+    Copy-Item -LiteralPath (Join-Path $repoRoot $name) -Destination $agent
+}
+Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tools/gta_use') -Filter '*.py' -File |
+    Copy-Item -Destination (Join-Path $agent 'tools/gta_use')
+$exampleDirectory = Join-Path $agent 'tools/gta_use/examples'
+$null = New-Item -ItemType Directory -Path $exampleDirectory
+# Live policy imports may leave interpreter caches beside the examples. Package
+# portable source only, never machine-specific bytecode or gameplay artifacts.
+Get-ChildItem -LiteralPath (Join-Path $repoRoot 'tools/gta_use/examples') -Filter '*.py' -File |
+    Copy-Item -Destination $exampleDirectory
+$guides = Join-Path $stage 'docs'
+New-Item -ItemType Directory -Path $guides -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/gta-use.md'), (Join-Path $repoRoot 'docs/world-state.md') -Destination $guides
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/rust-service.md'), (Join-Path $repoRoot 'docs/bridge-performance.md') -Destination $guides
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/continuous-repossession.md') -Destination $guides
 $zip = Join-Path $artifactRoot 'GTAVMods-Enhanced.zip'
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
 Write-Host "Package: $zip"

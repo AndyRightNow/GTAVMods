@@ -270,19 +270,12 @@
         "resolved": "4.5.0",
         "contentHash": "okurQJO6NRE/apDIP23ajJ0hpiNmJ+f0BwOlB/cSqTLQlw5upkf+5+96+iG2Jw40G1fCVCyPz/FhIABUjMR+RQ=="
       },
-      "developerconsole": {
-        "type": "Project",
-        "dependencies": {
-          "GameBridge": "[1.0.0, )"
-        }
-      },
       "gamebridge": {
         "type": "Project"
       },
       "modutils": {
         "type": "Project",
         "dependencies": {
-          "DeveloperConsole": "[1.0.0, )",
           "GameBridge": "[1.0.0, )",
           "NAudio": "[2.4.0, )"
         }
@@ -290,7 +283,7 @@
       "thor": {
         "type": "Project",
         "dependencies": {
-          "DeveloperConsole": "[1.0.0, )",
+          "GameBridge": "[1.0.0, )",
           "ModUtils": "[1.0.0, )"
         }
       }

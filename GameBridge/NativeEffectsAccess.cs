@@ -37,15 +37,4 @@ namespace GTAVMods.Game
                 position.X, position.Y, position.Z, rotationDegrees.X, rotationDegrees.Y, rotationDegrees.Z, scale, 0, 0, 0);
     }
 
-    public sealed class NativeDrawingAccess : IDrawingAccess
-    {
-        private readonly INativeInvoker native;
-        public NativeDrawingAccess(INativeInvoker native) { this.native = native; }
-        public void DrawLine(Vector3 start, Vector3 end, Color color)
-            => native.Call(Hash.DRAW_LINE, start.X, start.Y, start.Z, end.X, end.Y, end.Z, color.R, color.G, color.B, color.A);
-        public void DrawBox(Vector3 minimum, Vector3 maximum, Color color)
-            => native.Call(Hash.DRAW_BOX, minimum.X, minimum.Y, minimum.Z, maximum.X, maximum.Y, maximum.Z, color.R, color.G, color.B, color.A);
-        public void DrawPoly(Vector3 first, Vector3 second, Vector3 third, Color color)
-            => native.Call(Hash.DRAW_POLY, first.X, first.Y, first.Z, second.X, second.Y, second.Z, third.X, third.Y, third.Z, color.R, color.G, color.B, color.A);
-    }
 }
