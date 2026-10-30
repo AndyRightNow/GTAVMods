@@ -659,3 +659,18 @@ included animals; naive pursuit and a navmesh shortcut failed. Later isolated
 tests verified vehicle-seat fire and a low-fence climb, with evidence limits in
 the evaluation report. Verify each mechanic in the current scene instead of
 assuming native task acceptance proves success.
+
+### Marker height and vehicle-exit recovery
+
+Blip positions are not necessarily standing-ped destinations. A ground-level
+marker can be roughly one metre below the player's entity origin. Navigation
+compares full 3D distance; inspect ground height and the observed standing offset
+before using a tight arrival radius. Preserve the intended level on stairs,
+bridges and roofs. At Franklin's Chop contact, a ground-checked short approach
+around the parked truck triggered the cutscene; the direct marker route stalled.
+
+A supervisor timeout can pause the world while leaving a persistent native task
+installed. Reobserve occupancy before choosing the next action. If an old vehicle
+entry completes after resume, use or exit the actual vehicle; do not assume the
+new target was acquired. Replace only a task the policy owns, and preserve
+mission tasks on a control transition.

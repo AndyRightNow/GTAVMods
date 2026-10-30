@@ -60,8 +60,10 @@ Entering Tonya's contact cutscene also exposed an overly strict navigation stop.
 `navigate_to(..., allow_transition=True)` can now return an explicit transition
 without clearing mission-owned tasks or claiming arrival. The default remains
 conservative; missing/changed player, menus, vehicle entry and health/water risks
-still stop. Automated scenarios cover these boundaries; the new opt-in behavior
-requires separate live contact validation.
+still stop. Automated scenarios cover these boundaries. The opt-in behavior was then
+verified at Franklin's next mission contact (`franklin-door-001`): navigation
+returned `arrived=false, outcome=transition`, and the 84.9-second Chop opening
+cutscene ran to its next objective without task cleanup.
 
 After a closed-game package deployment and cold Story restart, the installed
 HTTP endpoint was verified through `ctx.game.hold_key("UP", 150)`. It returned a
