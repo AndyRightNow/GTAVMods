@@ -214,7 +214,12 @@ namespace GTAVMods.Game
         // Enhanced can retain the previous vehicle handle after the ped has left it.
         // Never interpret that handle alone as current occupancy.
         private int CurrentVehicle(int player) => game.Peds.IsInVehicle(player) ? native.Call<int>(Hash.GET_VEHICLE_PED_IS_IN, player, false) : 0;
-        private object Camera(StateContext c) => new { position = Vector(game.Cameras.GameplayPosition), direction = Vector(game.Cameras.GameplayDirection), rotation = Vector(game.Cameras.GameplayRotation) };
+        private object Camera(StateContext c) => new {
+            position = Vector(game.Cameras.GameplayPosition), direction = Vector(game.Cameras.GameplayDirection), rotation = Vector(game.Cameras.GameplayRotation),
+            rendered = new { position = Vector(native.Call<Vector3>(Hash.GET_FINAL_RENDERED_CAM_COORD)),
+                rotation = Vector(native.Call<Vector3>(Hash.GET_FINAL_RENDERED_CAM_ROT, 2)),
+                fov = native.Call<float>(Hash.GET_FINAL_RENDERED_CAM_FOV) }
+        };
         private object Entity(int handle, StateContext c, int type = 0)
         {
             int model = game.Entities.ModelHash(handle);

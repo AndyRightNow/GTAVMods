@@ -29,9 +29,12 @@ impl Scene {
         Self::start_with_rearm_delay(Duration::ZERO).await
     }
     async fn start_with_rearm_delay(rearm_delay: Duration) -> Self {
-        Self::start_device(rearm_delay, Arc::new(crate::keyboard::WindowsKeyboard)).await
+        Self::start_device(rearm_delay, Arc::new(crate::physical_input::WindowsInput)).await
     }
-    async fn start_device(rearm_delay: Duration, device: Arc<dyn crate::keyboard::Device>) -> Self {
+    async fn start_device(
+        rearm_delay: Duration,
+        device: Arc<dyn crate::physical_input::Device>,
+    ) -> Self {
         let root = tempfile::tempdir_in(
             std::env::var_os("GTA_USE_TEST_ROOT")
                 .map(PathBuf::from)
@@ -49,7 +52,7 @@ impl Scene {
         let journal = Arc::new(Journal::new(root.path().join("service.jsonl")).unwrap());
         let link = Link::start(root.path().into(), 1, journal);
         let (shutdown_sender, shutdown) = watch::channel(false);
-        let app = app_with_keyboard(
+        let app = app_with_input(
             link,
             "scenario-token".into(),
             "python.exe".into(),
@@ -479,8 +482,9 @@ struct KeyboardObservation {
     focus_lost: std::sync::atomic::AtomicBool,
     physical_held: std::sync::atomic::AtomicBool,
     events: std::sync::Mutex<Vec<(u16, bool)>>,
+    moves: std::sync::Mutex<Vec<(i32, i32)>>,
 }
-impl crate::keyboard::Device for KeyboardObservation {
+impl crate::physical_input::Device for KeyboardObservation {
     fn reserve(&self, _: u32) -> std::io::Result<Box<dyn Send>> {
         Ok(Box::new(()))
     }
@@ -489,6 +493,10 @@ impl crate::keyboard::Device for KeyboardObservation {
     }
     fn held(&self, _: u16) -> bool {
         self.physical_held.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    fn move_mouse(&self, dx: i32, dy: i32) -> std::io::Result<()> {
+        self.moves.lock().unwrap().push((dx, dy));
+        Ok(())
     }
     fn send(&self, key: u16, down: bool) -> std::io::Result<()> {
         self.events.lock().unwrap().push((key, down));
@@ -618,6 +626,148 @@ async fn excessive_key_hold_is_rejected_before_contacting_the_game() {
         keyboard_request(&s, 5001).send().await.unwrap().status(),
         400
     );
+    assert!(device.events.lock().unwrap().is_empty());
+    assert!(
+        timeout(Duration::from_millis(50), s.observations.recv())
+            .await
+            .is_err()
+    );
+}
+
+fn mouse_request(s: &Scene, mut data: Value) -> reqwest::RequestBuilder {
+    data["session"] = json!("session-one");
+    data["token"] = json!("11111111111111111111111111111111");
+    s.client
+        .post(format!("{}/v1/mouse", s.url))
+        .bearer_auth("scenario-token")
+        .json(&data)
+}
+#[tokio::test]
+async fn photo_shutter_releases_without_moving_the_camera_or_overlapping_keyboard() {
+    for (button, code) in [("left", 1), ("right", 2), ("middle", 4)] {
+        let device = Arc::new(KeyboardObservation::default());
+        let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+        let request = mouse_request(&s, json!({"button":button,"ms":180}));
+        let response =
+            tokio::spawn(
+                async move { request.send().await.unwrap().json::<Value>().await.unwrap() },
+            );
+        accept_keyboard_lease(&mut s, true).await;
+        sleep(Duration::from_millis(30)).await;
+        assert_eq!(keyboard_request(&s, 20).send().await.unwrap().status(), 400);
+        assert_eq!(
+            mouse_request(&s, json!({"dx":3,"dy":0}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            400
+        );
+        let receipt = response.await.unwrap();
+        assert_eq!(receipt["released"], true);
+        assert!(receipt["elapsedMs"].as_u64().unwrap() >= 180);
+        assert_eq!(
+            *device.events.lock().unwrap(),
+            vec![(code, true), (code, false)]
+        );
+        assert!(device.moves.lock().unwrap().is_empty());
+    }
+}
+#[tokio::test]
+async fn relative_camera_motion_is_one_signed_delta_with_no_button_or_absolute_position() {
+    let device = Arc::new(KeyboardObservation::default());
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    let request = mouse_request(&s, json!({"dx":-12,"dy":7}));
+    let response =
+        tokio::spawn(async move { request.send().await.unwrap().json::<Value>().await.unwrap() });
+    accept_keyboard_lease(&mut s, true).await;
+    assert_eq!(
+        response.await.unwrap(),
+        json!({"dx":-12,"dy":7,"submitted":true})
+    );
+    assert_eq!(*device.moves.lock().unwrap(), vec![(-12, 7)]);
+    assert!(device.events.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn mouse_inputs_preserve_user_buttons_and_reject_background_or_unowned_game() {
+    for cause in ["focus", "user", "lease", "shutdown"] {
+        for input in [json!({"dx":8,"dy":-2}), json!({"button":"left","ms":80})] {
+            let device = Arc::new(KeyboardObservation::default());
+            device
+                .focus_lost
+                .store(cause == "focus", std::sync::atomic::Ordering::SeqCst);
+            device
+                .physical_held
+                .store(cause == "user", std::sync::atomic::Ordering::SeqCst);
+            let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+            let request = mouse_request(&s, input);
+            if cause == "shutdown" {
+                s._shutdown.send(true).unwrap();
+            }
+            let response = tokio::spawn(async move { request.send().await.unwrap() });
+            if cause != "shutdown" {
+                accept_keyboard_lease(&mut s, cause != "lease").await;
+            }
+            assert_eq!(response.await.unwrap().status(), 400, "{cause}");
+            assert!(device.events.lock().unwrap().is_empty(), "{cause}");
+            assert!(device.moves.lock().unwrap().is_empty(), "{cause}");
+        }
+    }
+}
+#[tokio::test]
+async fn interrupted_mouse_hold_releases_once_and_never_repeats_the_shutter() {
+    for cause in ["focus", "shutdown", "lease"] {
+        let device = Arc::new(KeyboardObservation::default());
+        let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+        let request = mouse_request(&s, json!({"button":"left","ms":3000}));
+        let response = tokio::spawn(async move { request.send().await.unwrap() });
+        accept_keyboard_lease(&mut s, true).await;
+        sleep(Duration::from_millis(30)).await;
+        match cause {
+            "focus" => device
+                .focus_lost
+                .store(true, std::sync::atomic::Ordering::SeqCst),
+            "shutdown" => {
+                s._shutdown.send(true).unwrap();
+            }
+            _ => accept_keyboard_lease(&mut s, false).await,
+        }
+        assert_eq!(
+            timeout(Duration::from_secs(1), response)
+                .await
+                .unwrap()
+                .unwrap()
+                .status(),
+            400,
+            "{cause}"
+        );
+        assert_eq!(
+            *device.events.lock().unwrap(),
+            vec![(1, true), (1, false)],
+            "{cause}"
+        );
+        assert!(device.moves.lock().unwrap().is_empty());
+    }
+}
+#[tokio::test]
+async fn ambiguous_or_unbounded_mouse_input_is_rejected_before_game_contact() {
+    let device = Arc::new(KeyboardObservation::default());
+    let mut s = Scene::start_device(Duration::ZERO, device.clone()).await;
+    for data in [
+        json!({"dx":2049,"dy":0}),
+        json!({"dx":0,"dy":-2049}),
+        json!({"dx":1.5,"dy":0}),
+        json!({"dx":true,"dy":0}),
+        json!({"dx":0}),
+        json!({"button":"other","ms":80}),
+        json!({"button":"left","ms":0}),
+        json!({"button":"left","ms":5001}),
+        json!({"button":"left","ms":80,"dx":0}),
+        json!({"dx":0,"dy":0,"ms":80}),
+    ] {
+        assert_eq!(mouse_request(&s, data).send().await.unwrap().status(), 400);
+    }
+    assert!(device.moves.lock().unwrap().is_empty());
     assert!(device.events.lock().unwrap().is_empty());
     assert!(
         timeout(Duration::from_millis(50), s.observations.recv())

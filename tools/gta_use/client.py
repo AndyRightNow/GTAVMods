@@ -121,6 +121,33 @@ class Client:
         except (httpx.TransportError, BridgeError) as error:
             raise UncertainOutcome("Keyboard hold did not complete reliably; inspect before retrying.") from error
 
+    def move_mouse(self, dx, dy):
+        """Submit one relative mouse delta to foreground GTA under this lease.
+
+        Each integer axis is bounded to -2048..2048. Positive is right/down;
+        camera response depends on game sensitivity and mode, not image pixels.
+        No absolute cursor placement, button press, focus change or resume occurs.
+        Observe the rendered camera/UI after a small delta before scaling up.
+        An already held mouse button prevents movement. Never replay lost input.
+        """
+        return self._mouse_input(dx=dx, dy=dy)
+
+    def hold_mouse(self, button="left", milliseconds=100):
+        """Hold left/right/middle for 1..5000 ms without moving the pointer.
+
+        Foreground, lease, exclusive input and automatic release rules match
+        hold_key. This can operate scripted cameras reading raw input. A release
+        receipt does not prove a photo, shot or interaction occurred.
+        """
+        return self._mouse_input(button=button, ms=milliseconds)
+
+    def _mouse_input(self, **arguments):
+        try:
+            return self.http("POST", "/v1/mouse", dict(session=self.session,
+                token=self.token, **arguments))
+        except (httpx.TransportError, BridgeError) as error:
+            raise UncertainOutcome("Mouse input did not complete reliably; inspect before retrying.") from error
+
     def lease(self, action, milliseconds=5000):
         return self.request("lease", action=action, token=self.token, ms=milliseconds)
 

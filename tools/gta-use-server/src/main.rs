@@ -1,4 +1,4 @@
-mod keyboard;
+mod physical_input;
 mod storage;
 mod transport;
 mod web;

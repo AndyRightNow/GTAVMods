@@ -15,7 +15,7 @@ measured capture time. The default `minimal` profile reads only the player.
 | `nearby` | Distance-sorted entity nodes, relative right/forward/up and bearing, type counts, truncation, ped human/animal classification, weapons, relationships, combat and current vehicle handle; optional visibility |
 | `navigation` | Zone/street/crossing, GPS route availability/length, routed targets, waypoint and map markers with world/relative positions |
 | `probes` | Bounded physical collision ray fan with hit/miss, range, direction, position, hit distance and entity; includes collidable glass and see-through fences, excludes noncollidable objects; entity zero can mean terrain |
-| `camera` | Position, direction and rotation |
+| `camera` | Gameplay position/direction/rotation; `rendered` position, rotation (ZXY order 2) and FOV for the actual displayed view |
 
 Entity records preserve the numeric `model` hash and include `modelName` when
 the selected section knows the entity is a ped or vehicle and SHVDNE recognizes
@@ -92,3 +92,10 @@ For example, this live-verified extension supplies cutscene progress on demand:
 '@
 & $gta state -StateJson '{"sections":["player","cutscene.timeline"]}'
 ```
+
+The original `camera.position`, `direction` and `rotation` fields describe the
+normal gameplay camera. Scripted lenses (such as mission camera glasses) can
+move independently. Use `camera.rendered.position`, `.rotation` and `.fov` when
+checking what the screenshot shows or whether relative mouse input moved it.
+These are read-only final rendered camera native observations; they neither
+change nor assume ownership of a mission camera. Omit `camera` to avoid the work.

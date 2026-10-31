@@ -150,6 +150,24 @@ verify the hooked entity during travel, approach a gate through its opening, and
 stop on the actual drop-off prompt rather than forcing a coordinate past a wall.
 Do not replace the interaction with attachment/detachment natives.
 
+### Scripted lenses and physical mouse input
+
+Camera glasses and similar mission interfaces can ignore injected Look/Attack
+controls. Use `ctx.game.move_mouse(dx, dy)` for a small relative movement, and
+`ctx.game.hold_mouse("left", 100)` for one shutter press without pointer movement.
+These require resumed foreground GTA and the current lease. They share the
+keyboard's bounded hold, focus/lease checks and automatic release. Inspect the
+result; never replay an uncertain request. Delta values are signed integers
+(-2048..2048), positive right/down, not absolute screenshot coordinates. Camera
+sensitivity changes the visible effect. Ordinary UI `click_at` is a different
+control path and should not be used to aim a raw-input camera.
+
+Read `state['sections']['camera']['rendered']` for the actual displayed position,
+rotation and FOV. The original camera fields remain the gameplay camera and can
+stay unchanged while a scripted lens turns. Do not use that stale view to judge
+whether a mouse action worked. Camera input does not prove the mission accepted
+a photo: inspect the feedback/objective before advancing.
+
 ## Compose reusable SDK operations
 
 Look up the shipped signature before composing a helper:

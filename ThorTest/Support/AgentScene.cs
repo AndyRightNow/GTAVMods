@@ -68,6 +68,9 @@ namespace GTAVMods.Tests.Support
             Game.World.Nearby = (position, radius) => new[] { 10, 20, 30 };
             Game.Native.Returns(Hash.GET_MISSION_FLAG, true);
             Game.Native.Returns(Hash.IS_CUTSCENE_ACTIVE, false);
+            Game.Native.Returns(Hash.GET_FINAL_RENDERED_CAM_COORD, new Vector3(1, 2, 4));
+            Game.Native.Returns(Hash.GET_FINAL_RENDERED_CAM_ROT, new Vector3(0, 0, 90));
+            Game.Native.Returns(Hash.GET_FINAL_RENDERED_CAM_FOV, 50f);
             Game.Native.Returns(Hash.IS_CUTSCENE_PLAYING, false);
             Game.Native.Returns(Hash.HAS_CUTSCENE_FINISHED, false);
             Game.Native.Returns(Hash.GET_CUTSCENE_TIME, 0);

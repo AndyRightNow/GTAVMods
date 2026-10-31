@@ -63,6 +63,32 @@ class RunnerScenarios(unittest.TestCase):
         self.assertTrue((self.root / "run/result.json").exists(), result.stdout + result.stderr)
         return result, json.loads((self.root / "run/result.json").read_text())
 
+    def test_physical_camera_input_without_foreground_game_stops_policy_without_retry(self):
+        # The external game boundary is this non-window test process. The real
+        # Rust service must reject focus before sending any Windows input.
+        result, outcome = self.run_script("""def run(ctx):
+    ctx.check(sections=['player'])
+    ctx.game.move_mouse(-12, 7)
+    ctx.game.hold_mouse('left', 100)
+    raise AssertionError('Input must not proceed past rejected focus')
+""")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        error = (self.root / "run/stderr.log").read_text()
+        self.assertIn("foreground process", error)
+        self.assertIn("Mouse input did not complete reliably", error)
+        self.assertNotIn("AssertionError", error)
+
+    def test_invalid_mouse_button_duration_stops_supervised_shutter_before_game_input(self):
+        result, outcome = self.run_script("""def run(ctx):
+    ctx.check(sections=['player'])
+    ctx.game.hold_mouse('left', 5001)
+    raise AssertionError('Invalid shutter duration must stop the policy')
+""")
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertIn("1..5000", (self.root / "run/stderr.log").read_text())
+
     def test_checkpoint_requires_observation_and_writes_source_logs_state_and_final_result(self):
         result, outcome = self.run_script('''def run(ctx):
     state = ctx.check(sections=["player"])

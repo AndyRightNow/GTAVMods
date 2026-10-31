@@ -60,6 +60,36 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
 
         [TestMethod]
+        public void ScriptedPhotoCameraReportsRenderedViewWithoutConfusingTheGameplayCamera()
+        {
+            using (var s = new AgentScene())
+            {
+                s.Game.Native.Returns(Hash.IS_PLAYER_CONTROL_ON, false);
+                s.Game.Native.Returns(Hash.GET_FINAL_RENDERED_CAM_COORD, new Vector3(-630, -237, 39));
+                s.Game.Native.Returns(Hash.GET_FINAL_RENDERED_CAM_ROT, new Vector3(15, 0, -70));
+                s.Game.Native.Returns(Hash.GET_FINAL_RENDERED_CAM_FOV, 40f);
+                Read(s, ("sections", new[] { "player" }));
+                Assert.IsFalse(s.Game.Native.Calls.Any(c => c.Hash == Hash.GET_FINAL_RENDERED_CAM_COORD),
+                    "Player-only observations must not query camera state.");
+                var before = Object(Sections(Read(s, ("sections", new[] { "camera" })))["camera"]);
+                var rendered = Object(before["rendered"]);
+                Assert.AreEqual(-630, Object(rendered["position"])["x"]);
+                Assert.AreEqual(39, Object(rendered["position"])["z"]);
+                Assert.AreEqual(15, Object(rendered["rotation"])["x"]);
+                Assert.AreEqual(-70, Object(rendered["rotation"])["z"]);
+                Assert.AreEqual(40, rendered["fov"]);
+                // The engine observes the scripted lens turning; gameplay camera stays put.
+                s.Game.Native.Returns(Hash.GET_FINAL_RENDERED_CAM_ROT, new Vector3(19, 0, -63));
+                var after = Object(Sections(Read(s, ("sections", new[] { "camera" })))["camera"]);
+                Assert.AreEqual(19, Object(Object(after["rendered"])["rotation"])["x"]);
+                Assert.AreEqual(-63, Object(Object(after["rendered"])["rotation"])["z"]);
+                Assert.AreEqual(Protocol.Encode(before["rotation"]), Protocol.Encode(after["rotation"]));
+                Assert.IsTrue(s.Game.Native.Calls.Where(c => c.Hash == Hash.GET_FINAL_RENDERED_CAM_ROT)
+                    .All(c => (int)c.Arguments[0] == 2), "Rendered rotation uses GTA's documented ZXY order.");
+            }
+        }
+
+        [TestMethod]
         public void CoverEntryAndAimOnlyPeekRemainDistinguishableAfterPauseClearsTransientAimFlags()
         {
             using (var s = new AgentScene())

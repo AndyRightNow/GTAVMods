@@ -56,6 +56,18 @@ fatal service abort cannot guarantee release. Delivery receipts establish key
 release only; callers must observe the game effect and never replay lost receipts.
 Paused game menus that suspend SHVDNE cannot authorize new keyboard holds.
 
+`POST /v1/mouse` uses the same authentication and shared input reservation.
+Send `{session, token, dx, dy}` for one relative delta (integer axes -2048..2048),
+or `{session, token, button, ms}` for a left/right/middle hold (1..5000 ms).
+The SDK exposes `game.move_mouse(dx, dy)` and `game.hold_mouse(button, milliseconds)`.
+Button holds do not move the pointer. Movement does not press buttons and is
+rejected while a mouse button is already held. Keyboard and mouse input cannot
+overlap. A click's receipt proves release, not that a photo or interaction succeeded.
+Relative deltas follow the [Windows MOUSEINPUT contract](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-mouseinput);
+GTA sensitivity/camera mode determines the visible rotation. Start small and
+observe `camera.rendered` plus the screen. These endpoints never focus or resume
+the game, change settings, cache/replay actions, or flush per-action files.
+
 The Rust runtime uses two executor threads and at most four blocking workers.
 Accepted TCP connections disable Nagle coalescing for interactive control traffic.
 One actor serializes complete Windows pipe exchanges. Disconnecting the caller

@@ -58,7 +58,9 @@ For short on-foot access with bounded climb/vault recovery, use
 `climb_toward`. Unarmed exchanges use `combat.melee_burst`. Their contracts and
 observed limits are in Python AI.
 For interactions that ignore simulated controls, `game.hold_key` provides a
-bounded foreground keyboard fallback under the current lease; see Python AI.
+bounded foreground keyboard fallback under the current lease. Scripted lenses
+can use `game.move_mouse` and `game.hold_mouse`; see Python AI for rendered-camera
+observations and input limits.
 Before writing a policy, use `python -m gta_use helpers` for the compact SDK list
 and `python -m gta_use helpers navigate_to` (or another name/module) for actual
 Python signatures and full contracts. This works offline and takes no game lease.
