@@ -48,7 +48,7 @@ def climb_toward(ctx, facing, *, timeout=7, minimum_health=100, check_interval=.
         return not state["session"]["playerControl"] or state["session"]["cutscenePlaying"]
 
     def settled(p):
-        return not any(p[k] for k in ("climbing", "vaulting", "jumping", "falling", "inAir", "ragdoll"))
+        return not p.get("climbingLadder", False) and not any(p[k] for k in ("climbing", "vaulting", "jumping", "falling", "inAir", "ragdoll"))
 
     state, player, before = observe()
     if transition(state) or not settled(player) or player["inCover"]:
@@ -158,6 +158,9 @@ def navigate_to(ctx, destination, *, waypoints=(), parkour=True, route_mode="nav
             if expected:
                 raise MissionTransition(state)
             ctx.uncertain("Navigation interrupted by unexpected control or cutscene transition.")
+        if player.get("climbingLadder", False):
+            owns_task = False  # Preserve attachment; ordinary climb flags may all be false.
+            ctx.uncertain("Navigation reached a ladder; inspect its direction and continue with climb_ladder.")
         if time.monotonic() >= deadline:
             ctx.uncertain("Navigation exceeded its overall deadline.")
         return state, player, _point(player["entity"]["position"])
@@ -406,3 +409,112 @@ def follow_on_foot(ctx, target, *, offset=None, move_blend_ratio=3, stopping_ran
     finally:
         if owns_task and not uncertain:
             ctx.game.native("CLEAR_PED_TASKS", identity[0])
+
+
+def climb_ladder(ctx, facing=None, *, direction="up", timeout=25, stall_timeout=5,
+                 minimum_height_change=1, minimum_health=100, check_interval=.2,
+                 input_ms=350, settle_for=.8):
+    """Mount an observed ladder, hold directional input, and verify a stable exit.
+
+    Approach the visible ladder end before calling; facing is a nearby point
+    toward it. Omit facing only when already attached. Up and down use ordinary
+    movement controls, never position changes. Requires a signed height change
+    and a stable landing after the ladder flag clears. Returns a transition if
+    the mission takes control. Unknown outcomes stop without replaying the mount
+    or clearing the animation; all controls are bounded.
+    """
+    if direction not in ("up", "down"):
+        raise ValueError("Ladder direction must be up or down.")
+    _bounds(timeout=(timeout, 1, 90), stall_timeout=(stall_timeout, .2, 15),
+            minimum_height_change=(minimum_height_change, .1, 30),
+            minimum_health=(minimum_health, 1, 10000), check_interval=(check_interval, .05, 1),
+            settle_for=(settle_for, .2, 3))
+    if isinstance(input_ms, bool) or not isinstance(input_ms, int) or not 50 <= input_ms <= 750:
+        raise ValueError("Ladder input_ms must be an integer from 50 through 750.")
+    point = _point(facing) if facing is not None else None
+    sign = 1 if direction == "up" else -1
+    identity = None
+    deadline = time.monotonic() + timeout
+
+    def observe():
+        nonlocal identity
+        state = ctx.check(sections=["player"])
+        player, session = state["sections"].get("player"), state["session"]
+        if not player or session["pauseMenu"] or player["inVehicle"]:
+            ctx.uncertain("Ladder interrupted by a missing player, menu or vehicle transition.")
+        current = _identity(player["entity"])
+        if identity is not None and current != identity:
+            ctx.uncertain("Player identity changed during ladder traversal.")
+        identity = current
+        if player["entity"]["dead"] or player["entity"]["health"] < minimum_health or player["swimming"]:
+            ctx.uncertain("Ladder stopped for health or water recovery.")
+        position = _point(player["entity"]["position"])
+        return state, player, position
+
+    def transition(state):
+        return not state["session"]["playerControl"] or state["session"]["cutscenePlaying"]
+
+    def attached(player):
+        # Older installed bridges lack this additive field. No C# compilation is needed.
+        if "climbingLadder" in player:
+            return player["climbingLadder"]
+        return bool(ctx.game.native("GET_IS_TASK_ACTIVE", identity[0], 1, returns="bool"))
+
+    def settled(player):
+        return not any(player[k] for k in ("climbing", "vaulting", "jumping", "falling", "inAir", "ragdoll"))
+
+    state, player, before = observe()
+    if transition(state) or player["inCover"]:
+        ctx.uncertain("Start ladder traversal controllable, on foot and out of cover.")
+    mounted = attached(player)
+    if not mounted:
+        if not settled(player) or point is None:
+            ctx.uncertain("Approach a visible ladder end and provide its facing point before mounting.")
+        if not .2 <= math.hypot(point[0]-before[0], point[1]-before[1]) <= 5 or abs(point[2]-before[2]) > 8:
+            raise ValueError("Ladder facing point must be within 5 m horizontally and 8 m vertically.")
+    ctx.game.action("resume")
+    if not mounted:
+        ctx.game.native("TASK_TURN_PED_TO_FACE_COORD", identity[0], *map(_float, point), 650)
+        turn_end = time.monotonic() + .85
+        while time.monotonic() < turn_end:
+            time.sleep(check_interval)
+            state, player, position = observe()
+            if transition(state):
+                return dict(outcome="transition", state=state)
+        angle = (math.degrees(math.atan2(point[0]-position[0], point[1]-position[1]))
+                 + player["entity"]["rotation"]["z"] + 180) % 360 - 180
+        if not settled(player) or abs(angle) > 35:
+            ctx.uncertain("Ladder approach did not settle facing the observed end.")
+        ctx.game.native("TASK_CLIMB_LADDER", identity[0], True)
+    best = sign * before[2]
+    moved_at = time.monotonic()
+    stable_since = None
+    stable_anchor = before
+    while time.monotonic() < deadline:
+        state, player, position = observe()
+        if transition(state):
+            return dict(outcome="transition", state=state)
+        on_ladder = attached(player)
+        mounted = mounted or on_ladder
+        now = time.monotonic()
+        if sign * position[2] > best + .15:
+            best, moved_at = sign * position[2], now
+            ctx.progress("Observed ladder traversal", direction=direction, position=position)
+        change = sign * (position[2] - before[2])
+        if mounted and not on_ladder and settled(player) and change >= minimum_height_change:
+            if stable_since is None or math.dist(position, stable_anchor) > .08:
+                stable_since, stable_anchor = now, position
+            elif now - stable_since >= settle_for:
+                result = dict(outcome="arrived", direction=direction, position=dict(zip(("x", "y", "z"), position)),
+                              heightChange=position[2]-before[2], state=state)
+                ctx.log("ladder-exit-observed", direction=direction, position=result["position"], heightChange=result["heightChange"])
+                return result
+        else:
+            stable_since = None
+        if now - moved_at > stall_timeout:
+            ctx.uncertain("Ladder stalled before a verified stable exit; inspect before retrying.")
+        if on_ladder:
+            ctx.game.action("controls", ms=input_ms, inputs=[dict(control="MoveUpDown", value=-float(sign))])
+        else:
+            time.sleep(check_interval)
+    ctx.uncertain("Ladder traversal exceeded its overall deadline.")

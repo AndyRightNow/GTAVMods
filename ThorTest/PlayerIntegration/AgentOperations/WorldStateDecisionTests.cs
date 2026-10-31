@@ -248,6 +248,25 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
 
         [TestMethod]
+        public void LadderObservationPreventsTreatingAnAttachedPlayerAsStandingAtTheDestination()
+        {
+            using (var s = new AgentScene())
+            {
+                s.Batch(Step("resume"), Step("native", ("name", "TASK_CLIMB_LADDER"), ("args", new object[] { 10, true })));
+                s.Frame(); s.Frame();
+                s.Game.Native.Queries[Hash.GET_IS_TASK_ACTIVE] = a => (int)a[0] == 10 && (int)a[1] == 1;
+                var attached = Object(Sections(Read(s))["player"]);
+                Assert.AreEqual(true, attached["climbingLadder"]);
+                Assert.AreEqual(false, attached["climbing"]);
+                Assert.AreEqual(false, attached["inAir"]);
+                s.Game.Native.Returns(Hash.GET_IS_TASK_ACTIVE, false);
+                Assert.AreEqual(false, Object(Sections(Read(s))["player"])["climbingLadder"]);
+                Assert.AreEqual(1, s.Game.Native.Calls.Count(c => c.Hash == Hash.TASK_CLIMB_LADDER), "Observing the exit must not replay the mount.");
+                Assert.AreEqual(0, s.Game.Native.Calls.Count(c => c.Hash == Hash.CLEAR_PED_TASKS), "Inspection must preserve the ladder animation.");
+            }
+        }
+
+        [TestMethod]
         public void FenceClimbDecisionReportsOngoingTraversalWhenTheEngineDoesNotMarkThePlayerInAir()
         {
             using (var s = new AgentScene())

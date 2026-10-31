@@ -55,7 +55,8 @@ when ordinary seat flags do not describe a scripted companion. Their contracts a
 For a moving on-foot companion or confirmed pursuit, use `navigation.follow_on_foot`.
 For short on-foot access with bounded climb/vault recovery, use
 `gta_use.navigation.navigate_to`; explicit nearby edge attempts use
-`climb_toward`. Unarmed exchanges use `combat.melee_burst`. Their contracts and
+`climb_toward`. Visible ladders use `climb_ladder` after approaching the correct
+end; navigation must preserve ladder attachment. Unarmed exchanges use `combat.melee_burst`. Their contracts and
 observed limits are in Python AI.
 For interactions that ignore simulated controls, `game.hold_key` provides a
 bounded foreground keyboard fallback under the current lease. Scripted lenses

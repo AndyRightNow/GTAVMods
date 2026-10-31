@@ -31,6 +31,12 @@ help. Their traces informed compact inspection, aim/cover feedback, continuous
 driving and bounded pursuit. The report separates completion, elapsed time,
 retries and assistance; it does not claim reliable autonomous campaign play.
 
+[Casing the Jewel Store](docs/casing-evaluation.md) also reached Mission Passed
+and was saved through normal gameplay. Its assisted development run exposed
+scripted-camera input and ladder-observation gaps, now addressed by relative
+mouse controls, rendered-camera state and bounded ladder traversal. The report
+separates two mission starts, paused investigation and actual runner time.
+
 A later [Father/Son development run](docs/father-son-evaluation.md) reached
 Mission Passed and saved progress through normal gameplay. It required eight
 mission failures and extensive policy debugging; the report separates its nine

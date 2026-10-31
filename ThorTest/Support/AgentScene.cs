@@ -90,6 +90,7 @@ namespace GTAVMods.Tests.Support
             Game.Native.Returns(Hash.IS_PED_SWIMMING, false);
             Game.Native.Returns(Hash.IS_PED_HUMAN, true);
             Game.Native.Returns(Hash.IS_PED_CLIMBING, false);
+            Game.Native.Returns(Hash.GET_IS_TASK_ACTIVE, false); // Default scene player has no ladder task.
             Game.Native.Returns(Hash.IS_PED_VAULTING, false);
             Game.Native.Returns(Hash.IS_PED_JUMPING, false);
             Game.Native.Returns(Hash.IS_PED_FALLING, false);

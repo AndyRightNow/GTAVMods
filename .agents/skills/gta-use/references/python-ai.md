@@ -197,6 +197,7 @@ routes and recovery tactics. A lost action receipt propagates without replay.
 | `vehicles.recover_upright(ctx)` | Bounded ordinary steering, followed by observed wheels-on-ground; never rotates or teleports the car. |
 | `navigation.follow_on_foot(ctx, target, on_tick=...)` | One persistent normal task toward an observed actor; checks current identities, health, route movement and bounded separation. Returns on cutscene, target death/boarding or a caller predicate. Use for companion following or a confirmed on-foot pursuit; a stationary target/obstacle stops for inspection. |
 | `navigation.climb_toward(ctx, facing)` | One natural turn and normal climb at a caller-observed nearby edge, including a stationary vehicle/roof approach. Returns `climbed`, `landed`, `no-effect` or `transition`; inspect the final position. It does not move to the facing point or prove route arrival. |
+| `navigation.climb_ladder(ctx, facing, direction="up")` | Mount a visible nearby ladder and supply bounded ordinary movement input until a stable exit with signed height progress. Use `direction="down"` to descend; omit `facing` only when already attached. Stops on stalls, identity/health changes or unknown outcomes; preserves mission takeover. |
 | `combat.melee_burst(ctx, target)` | One unarmed Aim/light-punch exchange with fresh identity, range, facing and health checks. Reports observed damage; returns immediately on mission takeover. Caller owns bounded retries, defense and recovery. |
 | `combat.take_cover(ctx)` | One cover tap, then waits for settled cover; does not toggle during entry. Requires an observed suitable cover location. |
 | `combat.fire_from_cover(ctx, target, allies=...)` | One aim-only peek, current muzzle/companion geometry check and gated burst. Reports `not-ready`, `withheld` or `fired`, ammo and observed target-health change. Policy owns reload, healing waits, angle recovery and enemy selection. |
@@ -838,3 +839,25 @@ at the distracted dog and ordinary Context at the boxcar. A delivered key from
 outside the interaction range did not advance the objective; that alone did not
 show a bridge input defect. See the [Chop evaluation](../../../../docs/chop-evaluation.md)
 for the failed traces, live helper verification and assistance limits.
+
+### Ladders and trustworthy roof waypoints
+
+`player.climbingLadder` is separate from `climbing`, `inAir` and `falling`. All
+three ordinary flags can be false while the player is still attached to a ladder.
+`navigate_to` preserves that attachment and stops for an explicit ladder decision;
+use `climb_ladder(ctx, direction="down")` to continue an observed descent. Before
+mounting, approach the visible ladder end and supply a nearby facing point. A
+successful native mount can leave the player stationary until movement is held.
+The helper supplies that input, bounds time and progress, and waits for the exit
+animation and position to settle. Its compatibility fallback uses a native read
+when an older installed bridge lacks the new field.
+
+Do not turn every sampled movement position into a return waypoint. A sample may
+be on a rung, midway through a dismount, or over a parapet; a vertical ray can hit
+a roof appliance instead of the walking surface. Record settled landings and
+identify the connecting stairs, ladder or climb. For a short roof route, ordinary
+navmesh walking can go around large equipment; reserve direct routing for an
+observed clear crossing. A visible AC unit can also be a normal stepping climb,
+so inspect the whole structure rather than repeatedly attempting a nonexistent
+ladder. These distinctions resolved the Casing rooftop return without changing
+position, health, mission state or geometry.

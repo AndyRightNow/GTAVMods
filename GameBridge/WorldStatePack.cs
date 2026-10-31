@@ -90,6 +90,7 @@ namespace GTAVMods.Game
             walking = game.Peds.IsWalking(c.Player), running = game.Peds.IsRunning(c.Player), sprinting = game.Peds.IsSprinting(c.Player),
             ragdoll = game.Peds.IsRagdoll(c.Player), inAir = game.Entities.IsInAir(c.Player),
             climbing = native.Call<bool>(Hash.IS_PED_CLIMBING, c.Player), vaulting = native.Call<bool>(Hash.IS_PED_VAULTING, c.Player),
+            climbingLadder = native.Call<bool>(Hash.GET_IS_TASK_ACTIVE, c.Player, 1), // CTaskClimbLadder, matching SHVDNE IsClimbingLadder.
             jumping = native.Call<bool>(Hash.IS_PED_JUMPING, c.Player), falling = native.Call<bool>(Hash.IS_PED_FALLING, c.Player),
             swimming = native.Call<bool>(Hash.IS_PED_SWIMMING, c.Player),
             inCover = native.Call<bool>(Hash.IS_PED_IN_COVER, c.Player, false),

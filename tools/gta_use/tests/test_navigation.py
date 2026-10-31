@@ -97,6 +97,14 @@ def run(ctx):
     def events(self):
         return [json.loads(line) for line in (self.root / "run/events.jsonl").read_text().splitlines()]
 
+    def test_route_reaching_ladder_preserves_attachment_instead_of_clearing_at_target(self):
+        result, outcome = self.exercise([[observation(4, climbingLadder=True)]])
+        self.assertEqual(1, result.returncode)
+        self.assertTrue(outcome["paused"])
+        self.assertIn("continue with climb_ladder", (self.root / "run/stderr.log").read_text())
+        self.assertFalse(any(n["name"] == "CLEAR_PED_TASKS" for n in self.natives()))
+        self.assertFalse(any(e["event"] == "checkpoint" for e in self.events()))
+
     def test_open_route_reaches_observed_waypoints_without_jumping_or_recompiling(self):
         result, outcome = self.exercise([[observation(), observation(2)], [observation(3), observation(4)]],
                                        options=", waypoints=[{'x':0,'y':2,'z':0}]")
