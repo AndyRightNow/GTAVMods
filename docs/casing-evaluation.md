@@ -86,8 +86,12 @@ query fallback without compiling C# for each observation.
 
 The initial extracted helper descended a construction ladder live in 6.30 seconds,
 with a 2.54 m height change and an independently inspected standing-at-bottom
-image. The final native/state-field revision still needs its separate live check;
-the earlier run is not proof of that exact source revision. Automated scenarios
+image. The final revision subsequently resumed an already attached yacht ladder
+in `yacht-ladder-helper-001/` during Daddy's Little Girl: 6.31 seconds, 2.30 m
+height gain, and an independently inspected standing-on-deck screenshot. That
+verifies continued traversal and dismount, not a native mount from water.
+The verified navigation.py SHA-256 is
+`02570ee095102504807dc1a4870c0f8e36fb1f2a136beb9639bfec6b2eb7aeb4`. Automated scenarios
 cover ascent/descent, false exit heights, failed mounts, stalls, uncertain receipts,
 identity/health changes, mission takeover and preservation of ladder attachment.
 
@@ -101,6 +105,6 @@ geometry. The physical-mouse heartbeat under concurrent capture remains a record
 follow-up; it is not claimed fixed here.
 
 The full build/package workflow passed 136 Python scenarios, 20 Rust tests and
-348 C# integration tests, with 100% executable line and branch coverage for
+348 C# tests, with 100% executable line and branch coverage for
 GameBridge, ModUtils and Thor. The four changed installed files were backed up
 with hashes and deployed only after GTA exited.

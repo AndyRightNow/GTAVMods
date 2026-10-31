@@ -470,6 +470,19 @@ def run(ctx):
         steps = [s for r in self.game.requests for s in r.get("steps", []) if s["op"] != "pause"]
         self.assertEqual([dict(op="resume"), dict(op="controls", ms=500, inputs=[dict(control="VehicleMoveLeftRight",value=1)])], steps)
 
+    def test_boat_reported_on_wheels_but_inverted_still_requires_steering_recovery(self):
+        rolled=scene(car=20)
+        rolled['sections']['vehicle'].update(onAllWheels=True,upsideDown=True)
+        rolled['sections']['vehicle']['entity']['rotation']['y']=85
+        result,outcome=self.exercise("""from gta_use.vehicles import recover_upright
+def run(ctx):
+    state=recover_upright(ctx,attempts=1)
+    ctx.checkpoint('upright-boat',vehicle=state['sections']['vehicle'])
+""",[rolled,scene(car=20)])
+        self.assertEqual(0,result.returncode,result.stderr)
+        self.assertFalse(outcome['evidence']['vehicle']['upsideDown'])
+        self.assertEqual(1,len(self.inputs()), 'Contradictory wheel telemetry must not bypass recovery.')
+
     def click_ui(self, *, button="left", observations=None, cursor=None, accepted=True, lost=None):
         return self.exercise('''from gta_use.ui import click_at
 def run(ctx):

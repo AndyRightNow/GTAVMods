@@ -194,7 +194,7 @@ routes and recovery tactics. A lost action receipt propagates without replay.
 | --- | --- |
 | `vehicles.acquire_vehicle(ctx, desired=None, passenger=False, companion=None)` | Ordinary entry/carjacking; verifies the actual driver seat. `desired` and `companion` are observed `{handle, model}` entities. Prefers ordinary road cars/bikes/vans, then stationary vehicles and distance; `preferred_classes` customizes ranking and `desired` selects a required vehicle. Accepts a passenger seat already occupied by the identified companion. Stops if a different vehicle must first be exited. |
 | `vehicles.leave_vehicle(ctx)` | Brakes when driving, requests ordinary exit without automatic blocked-door warping, waits for an on-foot observation. |
-| `vehicles.recover_upright(ctx)` | Bounded ordinary steering, followed by observed wheels-on-ground; never rotates or teleports the car. |
+| `vehicles.recover_upright(ctx)` | Bounded ordinary steering, followed by observed wheels-on-ground and not-upside-down; never rotates or teleports the vehicle. Boats can report both flags true, so wheels alone are insufficient. |
 | `navigation.follow_on_foot(ctx, target, on_tick=...)` | One persistent normal task toward an observed actor; checks current identities, health, route movement and bounded separation. Returns on cutscene, target death/boarding or a caller predicate. Use for companion following or a confirmed on-foot pursuit; a stationary target/obstacle stops for inspection. |
 | `navigation.climb_toward(ctx, facing)` | One natural turn and normal climb at a caller-observed nearby edge, including a stationary vehicle/roof approach. Returns `climbed`, `landed`, `no-effect` or `transition`; inspect the final position. It does not move to the facing point or prove route arrival. |
 | `navigation.climb_ladder(ctx, facing, direction="up")` | Mount a visible nearby ladder and supply bounded ordinary movement input until a stable exit with signed height progress. Use `direction="down"` to descend; omit `facing` only when already attached. Stops on stalls, identity/health changes or unknown outcomes; preserves mission takeover. |
@@ -205,6 +205,8 @@ routes and recovery tactics. A lost action receipt propagates without replay.
 | `combat.muzzle_clear(game, target, allies=...)` | Current 3D muzzle ray and ally clearance for custom firing policies; aim/peek first. Supply every identified companion. |
 | `driving.intercept_vehicle(ctx, rider, vehicle, rider_model=..., vehicle_model=..., waypoints=...)` | Persistent interception route then moving pursuit; defaults to chase. `engagement="ram"` explicitly opts into ordinary collision damage. Rider separation is an observation, not mission completion. |
 | `driving.follow_entity(ctx, target)` | One persistent normal vehicle-follow task toward a moving ped, object or vehicle. Validates observed `{handle, model}`, driver identity and recent gap closure. Returns `near-target`, `policy`, `target-dead` or `transition`; proximity does not establish boarding. |
+| `driving.boat_to(ctx, destination, waypoints=...)` | Normal boat task with shore avoidance, passage waypoints and observed stopped arrival. Bounds physical stalls and repeated routes; engine pathfinding can still choose a wrong branch or strike docks. |
+| `driving.steer_water_route(ctx, waypoints)` | Ordinary continuous throttle/steering along caller-observed clear water gates. Returns `passed` while moving; releases controls without braking or pausing. Includes driver/boat identity, health, stall and approach deadlines. This is a steering controller, not an obstacle planner. |
 | `driving.wait_for_control(ctx, stable_for=2)` | Requires control to remain available for the requested interval, restarting that interval if a cutscene returns. |
 | `ctx.capture("stage-name", state=state)` | Retains a numbered screenshot and evidence in the run directory. `allow_unavailable=True` may skip only a foreground-window rejection, never uncertain transport. |
 
@@ -861,3 +863,35 @@ observed clear crossing. A visible AC unit can also be a normal stepping climb,
 so inspect the whole structure rather than repeatedly attempting a nonexistent
 ladder. These distinctions resolved the Casing rooftop return without changing
 position, health, mission state or geometry.
+
+
+## Water travel and pursuits
+
+Confirm surface swimming before a long swim. `player.swimmingUnderwater` and
+`underwaterTimeRemaining` distinguish a surface route from a drowning risk.
+Older bridges can query `IS_PED_SWIMMING_UNDER_WATER` with the ped handle and
+`GET_PLAYER_UNDERWATER_TIME_REMAINING` with the **player index**. A coordinate
+at water level does not force an already submerged swimmer to surface. Observe
+actual resurfacing and recovered breath before continuing. Water ladder mounts
+may need the gameplay camera aligned with the visible ladder plus ordinary
+forward input; the successful yacht mount was not a verified native mount.
+
+Choose water routes from current geometry and the map, with explicit entrance
+and channel-center points. Boat GoTo once turned upstream inside a canal despite
+a downstream goal; Flee crossed the tunnel quickly but later circled a dead end.
+Do not keep resubmitting either task without route progress. `steer_water_route`
+can follow a known clear channel continuously, but cannot see docks, banks,
+buoys or other boats. Use screenshots/probes before extending an uncertain leg.
+Map water polygons alone do not resolve floating piers. Reduce speed before a
+sharp bend, include clearance around the end of each pier, and inspect a collision
+or stalled hull. Normal reverse and steering can free a hull; never use position,
+rotation or force-beaching edits to recover it.
+
+Do not combine a player aim/fire loop with an AI boat task that suppresses firing.
+Clear the task before ordinary steering plus gated drive-by fire; verify ammo and
+target damage. Staying stationary under pursuit fire is not a defensive tactic.
+A successful escape needs the actual objective/dialogue/marker transition.
+At an observed shore-return objective, use a slow final normal approach and
+preserve mission takeover. Scripted endings can have `playerControl=false` while
+all cutscene flags/time remain inactive: use a bounded scene observation window,
+not a movement watchdog that falsely labels this as a navigation stall.

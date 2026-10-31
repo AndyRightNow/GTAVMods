@@ -191,7 +191,7 @@ def recover_upright(ctx, *, attempts=12, minimum_health=100):
         if identity is not None and current != identity:
             ctx.uncertain("Vehicle identity changed during steering recovery.")
         identity = current
-        if vehicle["onAllWheels"]:
+        if vehicle["onAllWheels"] and not vehicle["upsideDown"]:
             if attempt:
                 ctx.progress("Observed vehicle back on wheels", vehicle=vehicle["entity"])
             return state

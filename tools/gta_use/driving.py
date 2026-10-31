@@ -390,3 +390,182 @@ def follow_entity(ctx, target, *, speed=28, min_distance=5, arrival_radius=10,
         raise
     finally:
         driver.close()
+
+
+def boat_to(ctx, destination, *, waypoints=(), speed=28, radius=8,
+            waypoint_radius=18, timeout=300, stall_timeout=8,
+            route_progress_timeout=40, minimum_health=100,
+            driving_style=ALERTED, check_interval=.25, on_tick=None):
+    """Navigate a boat through observed water waypoints to a stopped arrival.
+
+    Normal TASK_BOAT_MISSION navigation retains shore avoidance. Intermediate
+    points are passage gates, not stops: choose them inside the water channel,
+    beyond an entrance, with clearance for the hull. Destination Z must describe
+    the observed water surface. The engine decides the route; this is not a
+    straight-line steering controller or a guarantee against grounding.
+
+    Requires the observed boat driver. Returns arrived, transition or policy.
+    on_tick(ctx, state) may end the route for an objective/companion decision.
+    Do not shoot beneath this task when it suppresses normal player firing.
+    Stall, repeated-route and total deadlines are independent. No task replay or
+    cleanup follows an uncertain receipt, changed identity or mission takeover.
+    """
+    goal = _point(destination)
+    points = [_point(p) for p in waypoints] + [goal]
+    if len(points) > 65:
+        raise ValueError("Use at most 64 intermediate water waypoints.")
+    _bounds(speed=(speed, 1, 50), radius=(radius, 2, 30),
+            waypoint_radius=(waypoint_radius, 3, 60), timeout=(timeout, 1, 1800),
+            stall_timeout=(stall_timeout, .2, 120),
+            route_progress_timeout=(route_progress_timeout, .2, 180),
+            minimum_health=(minimum_health, 1, 10000), check_interval=(check_interval, .05, 2))
+    if isinstance(driving_style, bool) or not isinstance(driving_style, int) or not 0 <= driving_style <= 2147483647:
+        raise ValueError("driving_style must be a nonnegative signed integer bitmask.")
+    driver = _Driver(ctx, minimum_health)
+    started = time.monotonic()
+    try:
+        state, p, v = driver.observe()
+        if p is None:
+            return dict(outcome="transition", state=state)
+        if not ctx.game.native("IS_THIS_MODEL_A_BOAT", v["entity"]["model"], returns="bool"):
+            ctx.uncertain("Water navigation requires an observed boat.")
+        position = _point(p["entity"]["position"])
+        anchor, moved, advanced = position, started, started
+        cells = {tuple(round(x / 8) for x in position[:2])}
+        index, submitted, best = 0, -1, math.inf
+        ctx.game.action("resume")
+        while time.monotonic() - started < timeout:
+            state, p, v = driver.observe()
+            if p is None:
+                return dict(outcome="transition", state=state)
+            if on_tick is not None and on_tick(ctx, state):
+                return dict(outcome="policy", state=state)
+            position = _point(p["entity"]["position"])
+            remaining = math.dist(position, points[index])
+            now = time.monotonic()
+            final = index == len(points) - 1
+            if not final and remaining <= waypoint_radius:
+                ctx.progress("Passed water waypoint", index=index, remaining=remaining)
+                index += 1
+                best, advanced = math.inf, now
+                remaining = math.dist(position, points[index])
+                final = index == len(points) - 1
+            if final and remaining <= radius and v["speed"] <= 1.5:
+                ctx.progress("Stopped at water destination", remaining=remaining, speed=v["speed"])
+                return dict(outcome="arrived", remaining=remaining, elapsed=now-started, state=state)
+            if submitted != index:
+                ctx.game.native("TASK_BOAT_MISSION", driver.identity[0], driver.identity[2], 0, 0,
+                                *map(_float, points[index]), 4, _float(speed), driving_style,
+                                _float(radius * .5 if final else 1), 7)
+                driver.owns_task = True
+                submitted = index
+                ctx.log("boat-route", index=index, destination=points[index], final=final, speed=speed)
+            if math.dist(position, anchor) > 2:
+                anchor, moved = position, now
+            cell = tuple(round(x / 8) for x in position[:2])
+            if remaining < best - 4 or (cell not in cells and len(cells) < 2048):
+                # First observation establishes a baseline, not movement.
+                if math.isfinite(best):
+                    ctx.progress("Observed water route progress", index=index, remaining=remaining, speed=v["speed"])
+                    advanced = now
+                best = min(best, remaining)
+                cells.add(cell)
+            if now - moved >= stall_timeout:
+                ctx.log("boat-stalled", state=state, index=index, remaining=remaining)
+                ctx.uncertain("Boat stopped making physical progress; inspect water clearance.")
+            if now - advanced >= route_progress_timeout:
+                ctx.uncertain("Boat repeated its route without progress; inspect the exit and choose a new route.")
+            time.sleep(check_interval)
+        ctx.uncertain("Water navigation exceeded its overall deadline.")
+    except UncertainOutcome:
+        driver.uncertain = True
+        raise
+    finally:
+        driver.close()
+
+
+def steer_water_route(ctx, waypoints, *, speed=24, turn_speed=12, radius=7,
+                      timeout=180, stall_timeout=5, progress_timeout=20,
+                      minimum_health=100, steering_angle=18, damping=.012,
+                      check_interval=.12, on_tick=None):
+    """Steer a boat through an explicitly observed, clear water route.
+
+    Uses ordinary throttle and steering rather than an engine pathfinding task.
+    Points are passage gates; returns passed while still moving, transition on
+    mission takeover, or policy when on_tick(ctx, state) is truthy. It releases
+    held controls on normal exit but does not brake or pause. The caller owns
+    route choice, obstacle clearance, destination braking and objective checks.
+
+    This is NOT obstacle avoidance. Include the center of narrow entrances and
+    bends; do not draw a straight line across banks, piers or unseen geometry.
+    Existing player tasks are cleared once when taking over the observed driver.
+    Physical stall, failure to approach a gate, health and total deadlines stop
+    the run. Unknown receipts stop without replay or further input cleanup.
+    """
+    points = [_point(p)[:2] for p in waypoints]
+    if not 1 <= len(points) <= 128:
+        raise ValueError("Use between 1 and 128 water route points.")
+    _bounds(speed=(speed, 1, 50), turn_speed=(turn_speed, 1, speed), radius=(radius, 2, 40),
+            timeout=(timeout, 1, 1800), stall_timeout=(stall_timeout, .2, 120),
+            progress_timeout=(progress_timeout, .2, 180), minimum_health=(minimum_health, 1, 10000),
+            steering_angle=(steering_angle, 5, 90), damping=(damping, 0, .1),
+            check_interval=(check_interval, .05, .5))
+    driver = _Driver(ctx, minimum_health)
+    started = time.monotonic()
+    holding, uncertain = False, False
+    try:
+        state, p, v = driver.observe()
+        if p is None:
+            return dict(outcome="transition", state=state)
+        if not ctx.game.native("IS_THIS_MODEL_A_BOAT", v["entity"]["model"], returns="bool"):
+            ctx.uncertain("Water steering requires an observed boat.")
+        ctx.game.action("resume")
+        ctx.game.native("CLEAR_PED_TASKS", driver.identity[0])
+        index, best = 0, math.inf
+        anchor = _point(p["entity"]["position"])[:2]
+        moved = advanced = started
+        previous_heading = previous_time = None
+        while time.monotonic() - started < timeout:
+            state, p, v = driver.observe()
+            if p is None:
+                return dict(outcome="transition", state=state)
+            if on_tick is not None and on_tick(ctx, state):
+                return dict(outcome="policy", state=state)
+            position, now = _point(p["entity"]["position"])[:2], time.monotonic()
+            remaining = math.dist(position, points[index])
+            if remaining <= radius:
+                ctx.progress("Passed steering route gate", index=index, position=position)
+                index += 1
+                if index == len(points):
+                    return dict(outcome="passed", elapsed=now-started, state=state)
+                best, advanced = math.inf, now
+                remaining = math.dist(position, points[index])
+            if remaining < best - 2:
+                if math.isfinite(best):
+                    ctx.progress("Approaching water route gate", index=index, remaining=remaining)
+                best, advanced = remaining, now
+            if math.dist(position, anchor) > 2:
+                anchor, moved = position, now
+            if now - moved >= stall_timeout:
+                ctx.uncertain("Water steering stalled; inspect hull and channel clearance.")
+            if now - advanced >= progress_timeout:
+                ctx.uncertain("Water steering did not approach its gate; inspect the route.")
+            heading = v["entity"]["rotation"]["z"]
+            target = math.degrees(math.atan2(-(points[index][0]-position[0]), points[index][1]-position[1]))
+            error = (target-heading+180) % 360-180
+            rate = 0 if previous_heading is None else ((heading-previous_heading+180) % 360-180) / max(.05, now-previous_time)
+            steer = max(-1, min(1, -error/steering_angle+rate*damping))
+            limit = speed if abs(error) < 15 else turn_speed
+            throttle = (1 if abs(error) < 45 else .5) if v["speed"] <= limit else 0
+            ctx.game.set_inputs([dict(control="VehicleAccelerate", value=throttle),
+                                 dict(control="VehicleMoveLeftRight", value=steer)], ttl_ms=1800)
+            holding = True
+            previous_heading, previous_time = heading, now
+            time.sleep(check_interval)
+        ctx.uncertain("Water steering exceeded its overall deadline.")
+    except UncertainOutcome:
+        uncertain = True
+        raise
+    finally:
+        if holding and not uncertain:
+            ctx.game.release_inputs()

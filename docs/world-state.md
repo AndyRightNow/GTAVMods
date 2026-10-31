@@ -8,7 +8,7 @@ measured capture time. The default `minimal` profile reads only the player.
 
 | Section | Decision data |
 | --- | --- |
-| `player` | Handle/model, coordinates, velocity, heading, health/max health, armor, actual vehicle occupancy, movement, climbing/vaulting/jumping/falling, `climbingLadder` attachment, cover/entry/peek/facing side, reload, swimming and height above ground |
+| `player` | Handle/model, coordinates, velocity, heading, health/max health, armor, actual vehicle occupancy, movement, climbing/vaulting/jumping/falling, `climbingLadder` attachment, cover/entry/peek/facing side, reload, swimming, `swimmingUnderwater`, `underwaterTimeRemaining` (seconds from the player-index native), and height above ground |
 | `vehicle` | Current vehicle, speed, engine/body health, driveability, wheels/rollover, engine, driver and passenger counts; null on foot |
 | `weapons` | Selected weapon/hash, total ammo, clip ammo/capacity, shooting/readiness/reloading, aiming and observed aim target |
 | `inventory` | Owned known SHVDNE weapons and ammo; opt-in enumeration, excluded from combat defaults |

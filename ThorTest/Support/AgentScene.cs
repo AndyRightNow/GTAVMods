@@ -88,6 +88,8 @@ namespace GTAVMods.Tests.Support
             Game.Native.Returns(Hash.IS_MESSAGE_BEING_DISPLAYED, false);
             Game.Native.Returns(Hash.GET_PED_ARMOUR, 25);
             Game.Native.Returns(Hash.IS_PED_SWIMMING, false);
+            Game.Native.Returns(Hash.IS_PED_SWIMMING_UNDER_WATER, false);
+            Game.Native.Returns(Hash.GET_PLAYER_UNDERWATER_TIME_REMAINING, 16.5f);
             Game.Native.Returns(Hash.IS_PED_HUMAN, true);
             Game.Native.Returns(Hash.IS_PED_CLIMBING, false);
             Game.Native.Returns(Hash.GET_IS_TASK_ACTIVE, false); // Default scene player has no ladder task.

@@ -47,6 +47,10 @@ agent sandbox; an empty list there does not prove GTA exited. Use the host's
 verified PID and normal scoped execution approval when required. Never dump
 `service-<PID>.json`, which contains a bearer credential.
 
+Use `driving.boat_to` for normal water navigation or `driving.steer_water_route`
+for ordinary steering through explicitly observed clear water gates. Both require
+route and obstacle judgment; see the water-travel guidance in Python AI.
+
 Use `gta_use.driving.drive_to` for road travel, `pursue_vehicle` for rider pursuit,
 and `follow_entity` for moving actors or vehicles, including scripted boarding.
 `entities.observe_entity` reads identity-checked attachment and relative-pose evidence

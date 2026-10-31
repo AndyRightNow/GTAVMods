@@ -93,6 +93,8 @@ namespace GTAVMods.Game
             climbingLadder = native.Call<bool>(Hash.GET_IS_TASK_ACTIVE, c.Player, 1), // CTaskClimbLadder, matching SHVDNE IsClimbingLadder.
             jumping = native.Call<bool>(Hash.IS_PED_JUMPING, c.Player), falling = native.Call<bool>(Hash.IS_PED_FALLING, c.Player),
             swimming = native.Call<bool>(Hash.IS_PED_SWIMMING, c.Player),
+            swimmingUnderwater = native.Call<bool>(Hash.IS_PED_SWIMMING_UNDER_WATER, c.Player),
+            underwaterTimeRemaining = native.Call<float>(Hash.GET_PLAYER_UNDERWATER_TIME_REMAINING, game.Host.PlayerHandle),
             inCover = native.Call<bool>(Hash.IS_PED_IN_COVER, c.Player, false),
             goingIntoCover = native.Call<bool>(Hash.IS_PED_GOING_INTO_COVER, c.Player),
             aimingFromCover = native.Call<bool>(Hash.IS_PED_AIMING_FROM_COVER, c.Player),

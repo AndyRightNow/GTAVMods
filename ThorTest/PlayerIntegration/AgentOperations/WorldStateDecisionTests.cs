@@ -248,6 +248,31 @@ namespace GTAVMods.Tests.PlayerIntegration.AgentOperations
         }
 
         [TestMethod]
+        public void SwimmingObservationDistinguishesSubmergedBreathLossFromSurfaceTravel()
+        {
+            using (var s = new AgentScene())
+            {
+                s.Game.Native.Returns(Hash.IS_PED_SWIMMING, true);
+                s.Game.Native.Queries[Hash.IS_PED_SWIMMING_UNDER_WATER] = a => (int)a[0] == 10;
+                s.Game.Native.Queries[Hash.GET_PLAYER_UNDERWATER_TIME_REMAINING] = a => (int)a[0] == 1 ? 2.75f : -1f;
+                var submerged = Object(Sections(Read(s, ("sections", new[] { "player" })))["player"]);
+                Assert.AreEqual(true, submerged["swimming"]);
+                Assert.AreEqual(true, submerged["swimmingUnderwater"]);
+                Assert.AreEqual(2.75, Convert.ToDouble(submerged["underwaterTimeRemaining"]), .001,
+                    "Breath belongs to the player index, not the ped handle; a low value permits surfacing before drowning.");
+                // The next engine observation establishes resurfacing, not command acceptance.
+                s.Game.Native.Returns(Hash.IS_PED_SWIMMING_UNDER_WATER, false);
+                s.Game.Native.Returns(Hash.GET_PLAYER_UNDERWATER_TIME_REMAINING, 13.25f);
+                var surfaced = Object(Sections(Read(s, ("sections", new[] { "player" })))["player"]);
+                Assert.AreEqual(true, surfaced["swimming"]);
+                Assert.AreEqual(false, surfaced["swimmingUnderwater"]);
+                Assert.AreEqual(13.25, Convert.ToDouble(surfaced["underwaterTimeRemaining"]), .001);
+                Assert.AreEqual(0, s.Game.Native.Calls.Count(c => c.Hash == Hash.CLEAR_PED_TASKS),
+                    "Reading breathing state must preserve the player's swimming task.");
+            }
+        }
+
+        [TestMethod]
         public void LadderObservationPreventsTreatingAnAttachedPlayerAsStandingAtTheDestination()
         {
             using (var s = new AgentScene())
