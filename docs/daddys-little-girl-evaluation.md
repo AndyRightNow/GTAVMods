@@ -66,8 +66,10 @@ and a different route were still required.
 Player observations now include `swimmingUnderwater` and
 `underwaterTimeRemaining` in seconds, using the native player index for breath.
 These distinguish submerged travel from surface swimming. Automated scenarios
-verify the contract; live verification of these newly deployed fields is recorded
-separately. Earlier direct native observations are not state-pack verification.
+verify the contract. After deployment and a cold startup, `water-deployment-resume-001`
+observed `swimmingUnderwater=false` and 16.9 seconds of breath on the pier.
+A submerged-to-surface transition using these state-pack fields remains unverified
+live; earlier direct native observations are not state-pack verification.
 
 The yacht also verified the final `climb_ladder` helper: after normal camera-aligned
 swimming mounted the ladder, the helper continued attachment and reached the deck

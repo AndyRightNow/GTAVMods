@@ -121,7 +121,9 @@ than assuming every non-controllable scene will finish automatically.
 The extracted helper also positioned the cursor correctly over Michael's phone,
 but its CursorAccept input did not open Contacts. Normal Enter did. Phone list
 navigation used arrow keys and Enter; do not retry cursor clicks merely because
-the input receipt succeeded. Cursor-driven computer interfaces and phone menus
+the input receipt succeeded. Use the discovered `PhoneCancel` control to back
+out of message details and lists; the physical keyboard endpoint does not accept
+`BACKSPACE`. Query `describe --control phone` rather than inventing control names. Cursor-driven computer interfaces and phone menus
 use different controls. After the mission, the extracted helper successfully
 opened an observed article link and closed GTA's fictional browser, with
 before/after screenshots and cursor readback retained. Right-click behavior is
